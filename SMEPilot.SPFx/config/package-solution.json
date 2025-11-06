@@ -1,0 +1,44 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "sme-pilot-client-side-solution",
+    "id": "12345678-1234-1234-1234-123456789012",
+    "version": "1.0.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "developer": {
+      "name": "SMEPilot",
+      "mpnId": "",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": ""
+    },
+    "webApiPermissionRequests": [
+      {
+        "resource": "Microsoft Graph",
+        "scope": "Sites.ReadWrite.All"
+      },
+      {
+        "resource": "Microsoft Graph",
+        "scope": "Files.ReadWrite"
+      }
+    ],
+    "metadata": {
+      "shortDescription": {
+        "default": "SMEPilot - AI-powered document enrichment for SharePoint"
+      },
+      "longDescription": {
+        "default": "Automatically enrich scratch documents with AI, making them searchable via O365 Copilot"
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    }
+  },
+  "paths": {
+    "zippedPackage": "solution/sme-pilot.sppkg"
+  }
+}
+
+

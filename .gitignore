@@ -1,0 +1,27 @@
+# Visual Studio files
+.vs/
+*.user
+*.suo
+
+# Build directories
+bin/
+obj/
+[Bb]uild/
+[Ll]og/
+
+# Azure Function local settings
+local.settings.json
+appsettings.*.json
+
+# User-specific files
+*.userosscache
+*.userprefs
+
+# Auto-generated files
+Generated_Code/
+*.dll
+*.exe
+*.pdb
+
+# Azure Functions artifacts
+*.azurefunctions/

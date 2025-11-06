@@ -1,0 +1,9 @@
+{
+  "siteId": "@{triggerOutputs()?['body/SiteId']}",
+  "driveId": "@{triggerOutputs()?['body/DriveId']}",
+  "itemId": "@{triggerOutputs()?['body/Id']}",
+  "fileName": "@{triggerOutputs()?['body/Name']}",
+  "uploaderEmail": "@{triggerOutputs()?['body/CreatedBy/User/Email']}",
+  "tenantId": "YOUR-TENANT-ID-HERE"
+}
+

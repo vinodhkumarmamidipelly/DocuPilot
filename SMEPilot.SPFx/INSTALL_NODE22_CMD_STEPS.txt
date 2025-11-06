@@ -1,0 +1,64 @@
+===========================================
+INSTALL NODE 22 VIA CMD - QUICK STEPS
+===========================================
+
+STEP 1: Open CMD as Administrator
+----------------------------------
+Right-click Command Prompt → "Run as Administrator"
+
+
+STEP 2: Install Node 22 via nvm
+----------------------------------
+nvm install 22
+
+
+STEP 3: Activate Node 22
+--------------------------
+nvm use 22
+
+
+STEP 4: Verify Installation
+------------------------------
+node --version
+npm --version
+
+Expected output:
+  v22.x.x
+  10.x.x
+
+
+STEP 5: If nvm use fails (spaces in username)
+-----------------------------------------------
+REM Set PATH manually for current CMD session:
+set PATH=C:\Users\Vinod Kumar\AppData\Local\nvm\v22.21.1;%PATH%
+set PATH=C:\Users\Vinod Kumar\AppData\Local\nvm\v22.21.1\node_modules\npm\bin;%PATH%
+
+REM Then verify:
+node --version
+
+
+STEP 6: Navigate to Project
+-----------------------------
+cd D:\CodeBase\DocuPilot\SMEPilot.SPFx
+
+
+STEP 7: Let me know when done!
+-------------------------------
+Once node --version shows v22.x.x, I'll upgrade SPFx!
+
+
+===========================================
+QUICK COPY-PASTE (Run in CMD):
+===========================================
+
+nvm install 22
+nvm use 22
+node --version
+
+IF nvm use fails, run:
+set PATH=C:\Users\Vinod Kumar\AppData\Local\nvm\v22.21.1;%PATH%
+set PATH=C:\Users\Vinod Kumar\AppData\Local\nvm\v22.21.1\node_modules\npm\bin;%PATH%
+node --version
+
+===========================================
+

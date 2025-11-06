@@ -1,0 +1,85 @@
+===========================================
+SPFx UPGRADE - QUICK START (CMD)
+===========================================
+
+STEP 1: Verify Node 22
+-----------------------
+node --version
+(Should show: v22.x.x)
+
+If not, run:
+nvm use 22
+OR
+set PATH=C:\Users\Vinod Kumar\AppData\Local\nvm\v22.21.1;%PATH%
+
+
+STEP 2: Navigate to Project
+---------------------------
+cd D:\CodeBase\DocuPilot\SMEPilot.SPFx
+
+
+STEP 3: Clean
+-------------
+npx gulp clean
+
+
+STEP 4: Remove Old Packages
+----------------------------
+rmdir /s /q node_modules
+del package-lock.json
+
+
+STEP 5: Install New Packages
+-----------------------------
+npm install --legacy-peer-deps
+(Wait 3-5 minutes)
+
+
+STEP 6: Verify Installation
+-----------------------------
+npm list @microsoft/sp-core-library
+(Should show: 1.21.1)
+
+
+STEP 7: Test Build
+------------------
+npm run build
+(Wait 1-2 minutes)
+
+
+STEP 8: Production Build
+------------------------
+npx gulp bundle --ship
+(Wait 30 seconds)
+
+
+STEP 9: Check Release Folder
+------------------------------
+dir release\manifests
+(Should see .json files)
+
+
+STEP 10: Package Solution
+--------------------------
+npx gulp package-solution --ship
+(Should create: solution\sme-pilot.sppkg)
+
+
+===========================================
+ALL STEPS IN ONE (Copy-Paste):
+===========================================
+
+node --version
+cd D:\CodeBase\DocuPilot\SMEPilot.SPFx
+npx gulp clean
+rmdir /s /q node_modules
+del package-lock.json
+npm install --legacy-peer-deps
+npm list @microsoft/sp-core-library
+npm run build
+npx gulp bundle --ship
+dir release\manifests
+npx gulp package-solution --ship
+
+===========================================
+
