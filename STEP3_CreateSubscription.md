@@ -44,7 +44,7 @@
 - Copy HTTPS URL (e.g., `https://abc123.ngrok.io`)
 
 **If deployed to Azure:**
-- Use: `https://your-function-app.azurewebsites.net`
+- Use: `https://a5fb7edc07fe.ngrok-free.app`
 
 ### Step 3: Run SetupSubscription Script
 
@@ -59,7 +59,7 @@
 
 **Replace `YOUR-PUBLIC-URL`** with:
 - ngrok URL: `https://abc123.ngrok.io`
-- OR Azure URL: `https://your-function-app.azurewebsites.net`
+- OR Azure URL: `https://a5fb7edc07fe.ngrok-free.app`
 
 ---
 

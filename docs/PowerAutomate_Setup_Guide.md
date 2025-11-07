@@ -26,7 +26,7 @@ Select **"HTTP"** action (not "Call an HTTP endpoint" or "Invoke an HTTP Web Req
 ### 3.2 URI
 - Enter your Function App URL:
 ```
-https://your-function-app.azurewebsites.net/api/ProcessSharePointFile
+https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile
 ```
 
 **OR if testing locally:**

@@ -7,7 +7,11 @@ using SMEPilot.FunctionApp.Models;
 
 namespace SMEPilot.FunctionApp.Helpers
 {
-    public class CosmosHelper
+    /// <summary>
+    /// Cosmos DB implementation of embedding storage
+    /// Used for production deployments
+    /// </summary>
+    public class CosmosHelper : IEmbeddingStore
     {
         private readonly CosmosClient? _client;
         private Container? _container;

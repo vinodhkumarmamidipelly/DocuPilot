@@ -14,7 +14,16 @@ namespace SMEPilot.FunctionApp.Helpers
         public string CosmosConnectionString => Environment.GetEnvironmentVariable("Cosmos_ConnectionString");
         public string CosmosDatabase => Environment.GetEnvironmentVariable("Cosmos_Database") ?? "SMEPilotDB";
         public string CosmosContainer => Environment.GetEnvironmentVariable("Cosmos_Container") ?? "Embeddings";
+        
+        // MongoDB configuration (alternative to Cosmos DB)
+        public string MongoConnectionString => Environment.GetEnvironmentVariable("Mongo_ConnectionString");
+        public string MongoDatabase => Environment.GetEnvironmentVariable("Mongo_Database") ?? "SMEPilotDB";
+        public string MongoContainer => Environment.GetEnvironmentVariable("Mongo_Container") ?? "Embeddings";
+        
         public string EnrichedFolderRelativePath => Environment.GetEnvironmentVariable("EnrichedFolderRelativePath") ?? "/Shared Documents/ProcessedDocs";
+        
+        // Hybrid mode: Use AI only for enrichment, rule-based for sectioning
+        public bool UseHybridMode => Environment.GetEnvironmentVariable("UseHybridMode")?.ToLower() == "true";
     }
 }
 

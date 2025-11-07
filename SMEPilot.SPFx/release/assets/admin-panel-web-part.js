@@ -2,6 +2,84 @@ define(["react","react-dom","@microsoft/sp-core-library","@microsoft/sp-webpart-
 /******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
 
+/***/ 983:
+/*!******************************************************!*\
+  !*** ./lib/webparts/adminPanel/AdminPanelWebPart.js ***!
+  \******************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ 5959);
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var react_dom__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react-dom */ 8398);
+/* harmony import */ var react_dom__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react_dom__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @microsoft/sp-core-library */ 9676);
+/* harmony import */ var _microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(_microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var _microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @microsoft/sp-webpart-base */ 6642);
+/* harmony import */ var _microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(_microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var _components_AdminPanel__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./components/AdminPanel */ 4243);
+var __extends = (undefined && undefined.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        if (typeof b !== "function" && b !== null)
+            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+
+
+
+
+
+var AdminPanelWebPart = /** @class */ (function (_super) {
+    __extends(AdminPanelWebPart, _super);
+    function AdminPanelWebPart() {
+        return _super !== null && _super.apply(this, arguments) || this;
+    }
+    AdminPanelWebPart.prototype.render = function () {
+        try {
+            var element = react__WEBPACK_IMPORTED_MODULE_0__.createElement(_components_AdminPanel__WEBPACK_IMPORTED_MODULE_4__["default"], {
+                context: this.context,
+                functionAppUrl: this.properties.functionAppUrl || 'https://a5fb7edc07fe.ngrok-free.app',
+                httpClient: this.context.spHttpClient
+            });
+            // Use React 17 render
+            react_dom__WEBPACK_IMPORTED_MODULE_1__.render(element, this.domElement);
+        }
+        catch (error) {
+            console.error('Error rendering AdminPanel:', error);
+            var errorMessage = (error === null || error === void 0 ? void 0 : error.message) || (error === null || error === void 0 ? void 0 : error.toString()) || 'Unknown error';
+            var errorStack = (error === null || error === void 0 ? void 0 : error.stack) || '';
+            this.domElement.innerHTML = "\n        <div style=\"padding: 20px; border: 2px solid red; background: #fff5f5;\">\n          <h3 style=\"color: red; margin-top: 0;\">Error loading web part</h3>\n          <p><strong>Error:</strong> ".concat(errorMessage, "</p>\n          ").concat(errorStack ? "<pre style=\"font-size: 11px; overflow: auto;\">".concat(errorStack, "</pre>") : '', "\n        </div>\n      ");
+        }
+    };
+    AdminPanelWebPart.prototype.onDispose = function () {
+        react_dom__WEBPACK_IMPORTED_MODULE_1__.unmountComponentAtNode(this.domElement);
+    };
+    Object.defineProperty(AdminPanelWebPart.prototype, "dataVersion", {
+        get: function () {
+            return _microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2__.Version.parse('1.0');
+        },
+        enumerable: false,
+        configurable: true
+    });
+    return AdminPanelWebPart;
+}(_microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_3__.BaseClientSideWebPart));
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (AdminPanelWebPart);
+
+
+/***/ }),
+
 /***/ 4243:
 /*!**********************************************************!*\
   !*** ./lib/webparts/adminPanel/components/AdminPanel.js ***!
@@ -110,12 +188,26 @@ var AdminPanel = /** @class */ (function (_super) {
                         return [4 /*yield*/, this.props.httpClient.get(url, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_1__.SPHttpClient.configurations.v1)];
                     case 1:
                         response = _a.sent();
+                        if (!response.ok) {
+                            // If list doesn't exist (404), that's OK - no logs yet
+                            if (response.status === 404) {
+                                console.log('ProcessedDocs library not found - no enrichment logs yet');
+                                this.setState({
+                                    enrichmentLogs: [],
+                                    isLoading: false,
+                                    error: null
+                                });
+                                return [2 /*return*/];
+                            }
+                            throw new Error("Failed to load enrichment logs: ".concat(response.status));
+                        }
                         return [4 /*yield*/, response.json()];
                     case 2:
                         data = _a.sent();
                         this.setState({
                             enrichmentLogs: data.value || [],
-                            isLoading: false
+                            isLoading: false,
+                            error: null
                         });
                         return [3 /*break*/, 4];
                     case 3:
@@ -29653,68 +29745,19 @@ function __rewriteRelativeImportExtension(path, preserveJsx) {
 var __webpack_exports__ = {};
 // This entry need to be wrapped in an IIFE because it need to be isolated against other modules in the chunk.
 (() => {
-/*!******************************************************!*\
-  !*** ./lib/webparts/adminPanel/AdminPanelWebPart.js ***!
-  \******************************************************/
+/*!******************************************!*\
+  !*** ./lib/webparts/adminPanel/index.js ***!
+  \******************************************/
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
-/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ 5959);
-/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var react_dom__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react-dom */ 8398);
-/* harmony import */ var react_dom__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react_dom__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var _microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @microsoft/sp-core-library */ 9676);
-/* harmony import */ var _microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(_microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var _microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @microsoft/sp-webpart-base */ 6642);
-/* harmony import */ var _microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(_microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var _components_AdminPanel__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./components/AdminPanel */ 4243);
-var __extends = (undefined && undefined.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    };
-    return function (d, b) {
-        if (typeof b !== "function" && b !== null)
-            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
+/* harmony import */ var _AdminPanelWebPart__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./AdminPanelWebPart */ 983);
+// SPFx loads this module and expects the web part class as the default export
 
 
-
-
-
-var AdminPanelWebPart = /** @class */ (function (_super) {
-    __extends(AdminPanelWebPart, _super);
-    function AdminPanelWebPart() {
-        return _super !== null && _super.apply(this, arguments) || this;
-    }
-    AdminPanelWebPart.prototype.render = function () {
-        var element = react__WEBPACK_IMPORTED_MODULE_0__.createElement(_components_AdminPanel__WEBPACK_IMPORTED_MODULE_4__["default"], {
-            context: this.context,
-            functionAppUrl: this.properties.functionAppUrl || 'https://your-function-app.azurewebsites.net',
-            httpClient: this.context.spHttpClient
-        });
-        react_dom__WEBPACK_IMPORTED_MODULE_1__.render(element, this.domElement);
-    };
-    AdminPanelWebPart.prototype.onDispose = function () {
-        react_dom__WEBPACK_IMPORTED_MODULE_1__.unmountComponentAtNode(this.domElement);
-    };
-    Object.defineProperty(AdminPanelWebPart.prototype, "dataVersion", {
-        get: function () {
-            return _microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2__.Version.parse('1.0');
-        },
-        enumerable: false,
-        configurable: true
-    });
-    return AdminPanelWebPart;
-}(_microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_3__.BaseClientSideWebPart));
-/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (AdminPanelWebPart);
+// Ensure the default export is the web part class
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (_AdminPanelWebPart__WEBPACK_IMPORTED_MODULE_0__["default"]);
 
 })();
 

@@ -135,7 +135,7 @@ GET https://graph.microsoft.com/v1.0/sites/{site-id}/drives
 
 **URI**: Your Function App URL
 ```
-https://your-function-app.azurewebsites.net/api/ProcessSharePointFile
+https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile
 ```
 
 **OR if testing locally with ngrok**:

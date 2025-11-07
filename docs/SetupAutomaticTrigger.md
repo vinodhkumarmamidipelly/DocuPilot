@@ -30,7 +30,7 @@ Currently, `ProcessSharePointFile` requires **manual HTTP calls**. To make it **
 ### Option A: Azure Functions (Production)
 
 If deployed to Azure:
-- Your function URL: `https://your-function-app.azurewebsites.net/api/ProcessSharePointFile`
+- Your function URL: `https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile`
 - ✅ Already public - no extra steps needed
 
 ### Option B: Local Development (ngrok)
@@ -160,7 +160,7 @@ Once function is deployed/running:
 # Replace with your values
 $siteId = "YOUR_SITE_ID"
 $driveId = "YOUR_DRIVE_ID"  # Document library drive ID
-$notificationUrl = "https://your-function-app.azurewebsites.net/api/ProcessSharePointFile"
+$notificationUrl = "https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile"
 # OR for local: "https://abc123.ngrok.io/api/ProcessSharePointFile"
 
 $url = "http://localhost:7071/api/SetupSubscription?siteId=$siteId&driveId=$driveId&notificationUrl=$notificationUrl"

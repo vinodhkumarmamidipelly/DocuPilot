@@ -76,7 +76,7 @@ This will show:
 
 Your Function App URL is already public:
 ```
-https://your-function-app.azurewebsites.net/api/ProcessSharePointFile
+https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile
 ```
 
 ### Option B: Local Development (ngrok)
@@ -105,7 +105,7 @@ If testing locally:
 .\SetupSubscription.ps1 `
   -SiteId "onblick.sharepoint.com,12345678-1234-1234-1234-123456789012,abc123..." `
   -DriveId "b!xyz123..." `
-  -NotificationUrl "https://your-function-app.azurewebsites.net/api/ProcessSharePointFile"
+  -NotificationUrl "https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile"
 ```
 
 **OR directly call HTTP:**
@@ -113,7 +113,7 @@ If testing locally:
 ```powershell
 $siteId = "onblick.sharepoint.com,12345678-1234-1234-1234-123456789012,abc123..."
 $driveId = "b!xyz123..."
-$notificationUrl = "https://your-function-app.azurewebsites.net/api/ProcessSharePointFile"
+$notificationUrl = "https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile"
 
 $url = "http://localhost:7071/api/SetupSubscription?siteId=$siteId&driveId=$driveId&notificationUrl=$notificationUrl"
 
@@ -130,7 +130,7 @@ Connect-MgGraph -Scopes "Subscription.ReadWrite.All"
 
 # Create subscription
 $resource = "/sites/{siteId}/drives/{driveId}/root/children"
-$notificationUrl = "https://your-function-app.azurewebsites.net/api/ProcessSharePointFile"
+$notificationUrl = "https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile"
 $expiration = (Get-Date).AddDays(3)
 
 New-MgSubscription `

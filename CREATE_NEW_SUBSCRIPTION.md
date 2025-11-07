@@ -25,7 +25,7 @@ Graph API requires a **public HTTPS URL** for webhooks. You have two options:
 
 Use your Azure Function App URL:
 ```
-https://your-function-app.azurewebsites.net/api/ProcessSharePointFile
+https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile
 ```
 
 ## 🚀 Steps to Create New Subscription
@@ -58,7 +58,7 @@ https://your-function-app.azurewebsites.net/api/ProcessSharePointFile
 .\SetupSubscription.ps1 `
   -SiteId "onblick.sharepoint.com,4b82e6b5-e79c-4787-8aa8-8c4aad49e9e0,af7fd8eb-328c-45b1-b7a7-8b79d27dd516" `
   -DriveId "b!teaCS5znh0eKqIxKrUnp4OvYf6-MMrFFt6eLedJ91Ra5fXoii7EjRK7WFJxSDDf3" `
-  -NotificationUrl "https://your-function-app.azurewebsites.net/api/ProcessSharePointFile"
+  -NotificationUrl "https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile"
 ```
 
 **Replace `YOUR-NGROK-URL`** with your actual ngrok HTTPS URL.

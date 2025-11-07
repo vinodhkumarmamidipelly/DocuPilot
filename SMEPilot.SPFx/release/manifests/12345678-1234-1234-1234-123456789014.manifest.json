@@ -37,12 +37,12 @@
       "react": {
         "type": "component",
         "id": "0d910c1c-13b9-4e1c-9aa4-b008c5e42d7d",
-        "version": "18.2.0"
+        "version": "17.0.1"
       },
       "react-dom": {
         "type": "component",
         "id": "aa0a46ec-1505-43cd-a44a-93f3a5aa460a",
-        "version": "18.2.0"
+        "version": "17.0.1"
       },
       "@microsoft/sp-core-library": {
         "type": "component",

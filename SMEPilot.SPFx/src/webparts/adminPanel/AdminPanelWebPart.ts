@@ -9,18 +9,34 @@ export interface IAdminPanelWebPartProps {
   functionAppUrl: string;
 }
 
-export default class AdminPanelWebPart extends BaseClientSideWebPart<IAdminPanelWebPartProps> {
-  public render(): void {
-    const element: React.ReactElement<IAdminPanelProps> = React.createElement(
-      AdminPanel,
-      {
-        context: this.context,
-        functionAppUrl: this.properties.functionAppUrl || 'https://your-function-app.azurewebsites.net',
-        httpClient: this.context.spHttpClient
-      }
-    );
+class AdminPanelWebPart extends BaseClientSideWebPart<IAdminPanelWebPartProps> {
 
-    ReactDom.render(element, this.domElement);
+
+  public render(): void {
+    try {
+      const element: React.ReactElement<IAdminPanelProps> = React.createElement(
+        AdminPanel,
+        {
+          context: this.context,
+          functionAppUrl: this.properties.functionAppUrl || 'https://a5fb7edc07fe.ngrok-free.app',
+          httpClient: this.context.spHttpClient
+        }
+      );
+
+      // Use React 17 render
+      ReactDom.render(element, this.domElement);
+    } catch (error: any) {
+      console.error('Error rendering AdminPanel:', error);
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+      const errorStack = error?.stack || '';
+      this.domElement.innerHTML = `
+        <div style="padding: 20px; border: 2px solid red; background: #fff5f5;">
+          <h3 style="color: red; margin-top: 0;">Error loading web part</h3>
+          <p><strong>Error:</strong> ${errorMessage}</p>
+          ${errorStack ? `<pre style="font-size: 11px; overflow: auto;">${errorStack}</pre>` : ''}
+        </div>
+      `;
+    }
   }
 
   protected onDispose(): void {
@@ -31,5 +47,7 @@ export default class AdminPanelWebPart extends BaseClientSideWebPart<IAdminPanel
     return Version.parse('1.0');
   }
 }
+
+export default AdminPanelWebPart;
 
 

@@ -57,7 +57,7 @@ SMEPilot uses **Microsoft Graph API Subscriptions** for automatic file upload tr
 
 Your Function App URL:
 ```
-https://your-function-app.azurewebsites.net/api/ProcessSharePointFile
+https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile
 ```
 
 ### Option B: Local Development (ngrok)
@@ -84,7 +84,7 @@ https://your-function-app.azurewebsites.net/api/ProcessSharePointFile
 .\SetupSubscription.ps1 `
   -SiteId "onblick.sharepoint.com,12345678-1234-1234-1234-123456789012,abc123..." `
   -DriveId "b!xyz123..." `
-  -NotificationUrl "https://your-function-app.azurewebsites.net/api/ProcessSharePointFile"
+  -NotificationUrl "https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile"
 ```
 
 **Expected Response:**
@@ -102,7 +102,7 @@ https://your-function-app.azurewebsites.net/api/ProcessSharePointFile
 ```powershell
 $siteId = "onblick.sharepoint.com,12345678-1234-1234-1234-123456789012,abc123..."
 $driveId = "b!xyz123..."
-$notificationUrl = "https://your-function-app.azurewebsites.net/api/ProcessSharePointFile"
+$notificationUrl = "https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile"
 
 $encodedUrl = [System.Web.HttpUtility]::UrlEncode($notificationUrl)
 $url = "http://localhost:7071/api/SetupSubscription?siteId=$siteId&driveId=$driveId&notificationUrl=$encodedUrl"
@@ -255,7 +255,7 @@ Use production Function App URL:
 .\SetupSubscription.ps1 `
   -SiteId "..." `
   -DriveId "..." `
-  -NotificationUrl "https://your-function-app.azurewebsites.net/api/ProcessSharePointFile"
+  -NotificationUrl "https://a5fb7edc07fe.ngrok-free.app/api/ProcessSharePointFile"
 ```
 
 ### 4. Set Up Monitoring

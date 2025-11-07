@@ -13,6 +13,7 @@ using System.Text;
 using System.Collections.Concurrent;
 using System.Threading;
 using Microsoft.Graph.Models;
+using Microsoft.Graph.Models.ODataErrors;
 
 namespace SMEPilot.FunctionApp.Functions
 {
@@ -22,23 +23,56 @@ namespace SMEPilot.FunctionApp.Functions
         private readonly SimpleExtractor _extractor;
         private readonly OpenAiHelper _openai;
         private readonly Config _cfg;
-        private readonly CosmosHelper _cosmos;
+        private readonly IEmbeddingStore _embeddingStore;
+        private readonly HybridEnricher? _hybridEnricher;
         
         // In-memory semaphore to prevent concurrent processing of the same file
         private static readonly ConcurrentDictionary<string, SemaphoreSlim> _processingLocks = new ConcurrentDictionary<string, SemaphoreSlim>();
 
-        public ProcessSharePointFile(GraphHelper graph, SimpleExtractor extractor, OpenAiHelper openai, Config cfg, CosmosHelper cosmos)
+        // Add CORS headers to allow requests from SharePoint
+        private void AddCorsHeaders(HttpResponseData response, HttpRequestData request)
+        {
+            // Get origin from request header
+            if (request.Headers.TryGetValues("Origin", out var origins))
+            {
+                var origin = origins.FirstOrDefault();
+                if (!string.IsNullOrEmpty(origin))
+                {
+                    response.Headers.Add("Access-Control-Allow-Origin", origin);
+                }
+            }
+            else
+            {
+                // Default: allow all origins (for development)
+                response.Headers.Add("Access-Control-Allow-Origin", "*");
+            }
+            
+            response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
+            response.Headers.Add("Access-Control-Max-Age", "3600");
+        }
+
+        public ProcessSharePointFile(GraphHelper graph, SimpleExtractor extractor, OpenAiHelper openai, Config cfg, IEmbeddingStore embeddingStore, HybridEnricher? hybridEnricher = null)
         {
             _graph = graph;
             _extractor = extractor;
             _openai = openai;
             _cfg = cfg;
-            _cosmos = cosmos;
+            _embeddingStore = embeddingStore;
+            _hybridEnricher = hybridEnricher;
         }
 
         [Function("ProcessSharePointFile")]
-        public async Task<HttpResponseData> Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post")] HttpRequestData req)
+        public async Task<HttpResponseData> Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", "options")] HttpRequestData req)
         {
+            // Handle CORS preflight requests
+            if (req.Method == "OPTIONS")
+            {
+                var corsResp = req.CreateResponse(HttpStatusCode.OK);
+                AddCorsHeaders(corsResp, req);
+                return corsResp;
+            }
+
             try
             {
                 // Step 1: Handle Graph subscription validation handshake
@@ -70,6 +104,7 @@ namespace SMEPilot.FunctionApp.Functions
                         // Return validation token as plain text (decoded) - REQUIRED by Graph API
                         var vresp = req.CreateResponse(HttpStatusCode.OK);
                         vresp.Headers.Add("Content-Type", "text/plain; charset=utf-8");
+                        AddCorsHeaders(vresp, req);
                         await vresp.WriteStringAsync(validationToken);
                         Console.WriteLine($"✅ Validation token returned to Graph API");
                         Console.WriteLine($"=== END VALIDATION ===");
@@ -81,6 +116,7 @@ namespace SMEPilot.FunctionApp.Functions
                 if (req.Method == "GET")
                 {
                     var okResp = req.CreateResponse(HttpStatusCode.OK);
+                    AddCorsHeaders(okResp, req);
                     await okResp.WriteStringAsync("SMEPilot ProcessSharePointFile endpoint is ready");
                     return okResp;
                 }
@@ -317,6 +353,7 @@ namespace SMEPilot.FunctionApp.Functions
 
                         // Return 202 Accepted for Graph notifications (asynchronous processing)
                         var accepted = req.CreateResponse(HttpStatusCode.Accepted);
+                        AddCorsHeaders(accepted, req);
                         await accepted.WriteStringAsync(JsonConvert.SerializeObject(new
                         {
                             message = $"Processing {processedCount} file(s) from Graph notification",
@@ -336,6 +373,7 @@ namespace SMEPilot.FunctionApp.Functions
                 if (evt == null || string.IsNullOrWhiteSpace(evt.driveId) || string.IsNullOrWhiteSpace(evt.itemId))
                 {
                     var bad = req.CreateResponse(HttpStatusCode.BadRequest);
+                    AddCorsHeaders(bad, req);
                     await bad.WriteStringAsync(JsonConvert.SerializeObject(new
                     {
                         error = "Invalid event payload",
@@ -352,11 +390,13 @@ namespace SMEPilot.FunctionApp.Functions
                 if (!manualResult.Success)
                 {
                     var err = req.CreateResponse(HttpStatusCode.InternalServerError);
+                    AddCorsHeaders(err, req);
                     await err.WriteStringAsync(JsonConvert.SerializeObject(new { error = manualResult.ErrorMessage }));
                     return err;
                 }
 
                 var ok = req.CreateResponse(HttpStatusCode.OK);
+                AddCorsHeaders(ok, req);
                 await ok.WriteStringAsync(JsonConvert.SerializeObject(new { enrichedUrl = manualResult.EnrichedUrl }));
                 return ok;
             }
@@ -365,6 +405,7 @@ namespace SMEPilot.FunctionApp.Functions
                 Console.WriteLine($"ERROR in ProcessSharePointFile: {ex}");
                 Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 var res = req.CreateResponse(HttpStatusCode.InternalServerError);
+                AddCorsHeaders(res, req);
                 await res.WriteStringAsync(JsonConvert.SerializeObject(new
                 {
                     error = ex.Message,
@@ -451,44 +492,117 @@ namespace SMEPilot.FunctionApp.Functions
                 // 3. Optionally OCR images here (skipped in POC)
                 var imageOcrs = new List<string>();
 
-                // 4. Call OpenAI to get sections JSON
+                // 4. Use Hybrid Mode (Option 2: Minimal AI) or Full AI Mode
                 string fileId = Guid.NewGuid().ToString();
-                string json;
-                Console.WriteLine($"📄 [ENRICHMENT] Starting AI enrichment for file: {fileName}");
-                Console.WriteLine($"   File ID: {fileId}");
-                Console.WriteLine($"   Extracted text length: {text?.Length ?? 0} characters");
-                Console.WriteLine($"   Images extracted: {imagesBytes?.Count ?? 0}");
+                DocumentModel docModel;
                 
-                try
+                if (_cfg.UseHybridMode && _hybridEnricher != null)
                 {
-                    json = await _openai.GenerateSectionsJsonAsync(text, imageOcrs, fileId);
-                    Console.WriteLine($"✅ [ENRICHMENT] AI sectioning completed successfully");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"❌ [ENRICHMENT] AI sectioning failed: {ex.Message}");
-                    Console.WriteLine($"   Exception type: {ex.GetType().Name}");
-                    await _graph.UpdateListItemFieldsAsync(driveId, itemId, new Dictionary<string, object>
+                    // HYBRID MODE: Rule-based sectioning + AI content enrichment only
+                    Console.WriteLine($"🔧 [HYBRID MODE] Starting cost-saving enrichment for file: {fileName}");
+                    Console.WriteLine($"   File ID: {fileId}");
+                    Console.WriteLine($"   Extracted text length: {text?.Length ?? 0} characters");
+                    Console.WriteLine($"   Images extracted: {imagesBytes?.Count ?? 0}");
+                    
+                    try
                     {
-                        {"SMEPilot_Enriched", false},
-                        {"SMEPilot_Status", "ManualReview"},
-                        {"SMEPilot_EnrichedJobId", fileId}
-                    });
-                    return (false, null, $"OpenAI failed to return valid JSON: {ex.Message}");
+                        // Step 1: Rule-based sectioning (no AI cost)
+                        Console.WriteLine($"📋 [HYBRID] Step 1: Rule-based sectioning (no AI)...");
+                        docModel = _hybridEnricher.SectionDocument(text, fileName);
+                        Console.WriteLine($"✅ [HYBRID] Created {docModel.Sections.Count} sections using rule-based parsing");
+                        
+                        // Step 2: Classify document (keyword-based, no AI)
+                        var classification = _hybridEnricher.ClassifyDocument(docModel.Title, text);
+                        Console.WriteLine($"📂 [HYBRID] Document classified as: {classification}");
+                        
+                        // Step 3: AI enrichment of section content only (minimal AI usage)
+                        Console.WriteLine($"🤖 [HYBRID] Step 2: Enriching section content with AI (minimal cost)...");
+                        docModel = await _hybridEnricher.EnrichSectionsAsync(docModel, imageOcrs);
+                        Console.WriteLine($"✅ [HYBRID] Content enrichment completed");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"❌ [HYBRID] Enrichment failed: {ex.Message}");
+                        await _graph.UpdateListItemFieldsAsync(driveId, itemId, new Dictionary<string, object>
+                        {
+                            {"SMEPilot_Enriched", false},
+                            {"SMEPilot_Status", "ManualReview"},
+                            {"SMEPilot_EnrichedJobId", fileId}
+                        });
+                        return (false, null, $"Hybrid enrichment failed: {ex.Message}");
+                    }
                 }
-
-                var docModel = JsonConvert.DeserializeObject<DocumentModel>(json);
-                if (docModel == null)
+                else
                 {
-                    return (false, null, "OpenAI returned invalid JSON (post-parse)");
+                    // FULL AI MODE: Original approach (AI for sectioning + enrichment)
+                    Console.WriteLine($"🤖 [FULL AI MODE] Starting AI enrichment for file: {fileName}");
+                    Console.WriteLine($"   File ID: {fileId}");
+                    Console.WriteLine($"   Extracted text length: {text?.Length ?? 0} characters");
+                    Console.WriteLine($"   Images extracted: {imagesBytes?.Count ?? 0}");
+                    
+                    string json;
+                    try
+                    {
+                        json = await _openai.GenerateSectionsJsonAsync(text, imageOcrs, fileId);
+                        Console.WriteLine($"✅ [ENRICHMENT] AI sectioning completed successfully");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"❌ [ENRICHMENT] AI sectioning failed: {ex.Message}");
+                        Console.WriteLine($"   Exception type: {ex.GetType().Name}");
+                        await _graph.UpdateListItemFieldsAsync(driveId, itemId, new Dictionary<string, object>
+                        {
+                            {"SMEPilot_Enriched", false},
+                            {"SMEPilot_Status", "ManualReview"},
+                            {"SMEPilot_EnrichedJobId", fileId}
+                        });
+                        return (false, null, $"OpenAI failed to return valid JSON: {ex.Message}");
+                    }
+
+                    docModel = JsonConvert.DeserializeObject<DocumentModel>(json);
+                    if (docModel == null)
+                    {
+                        return (false, null, "OpenAI returned invalid JSON (post-parse)");
+                    }
                 }
 
                 // 5. Build enriched docx bytes
                 var enrichedBytes = TemplateBuilder.BuildDocxBytes(docModel, imagesBytes);
                 var enrichedName = Path.GetFileNameWithoutExtension(fileName) + "_enriched.docx";
 
-                // 6. Upload to ProcessedDocs
-                var uploaded = await _graph.UploadFileBytesAsync(driveId, _cfg.EnrichedFolderRelativePath, enrichedName, enrichedBytes);
+                // 6. Upload to ProcessedDocs (with retry for locked files)
+                DriveItem? uploaded = null;
+                int uploadRetries = 0;
+                const int maxUploadRetries = 3;
+                while (uploadRetries < maxUploadRetries)
+                {
+                    try
+                    {
+                        uploaded = await _graph.UploadFileBytesAsync(driveId, _cfg.EnrichedFolderRelativePath, enrichedName, enrichedBytes);
+                        break; // Success!
+                    }
+                    catch (ODataError ex) when (ex.Error?.Code == "notAllowed" && ex.Error?.Message?.Contains("locked") == true)
+                    {
+                        uploadRetries++;
+                        if (uploadRetries >= maxUploadRetries)
+                        {
+                            Console.WriteLine($"❌ [UPLOAD] File still locked after {maxUploadRetries} retries. Waiting 5 seconds before final attempt...");
+                            await Task.Delay(5000); // Wait 5 seconds before final attempt
+                            uploaded = await _graph.UploadFileBytesAsync(driveId, _cfg.EnrichedFolderRelativePath, enrichedName, enrichedBytes);
+                        }
+                        else
+                        {
+                            var waitTime = (int)Math.Pow(2, uploadRetries) * 1000; // Exponential backoff: 2s, 4s, 8s
+                            Console.WriteLine($"⚠️ [UPLOAD] File locked (attempt {uploadRetries}/{maxUploadRetries}). Waiting {waitTime/1000}s before retry...");
+                            await Task.Delay(waitTime);
+                        }
+                    }
+                }
+                
+                if (uploaded == null)
+                {
+                    throw new InvalidOperationException("Failed to upload enriched document after retries");
+                }
 
                 // 7. Create embeddings and store
                 Console.WriteLine($"🔍 [ENRICHMENT] Creating embeddings for {docModel.Sections.Count} sections...");
@@ -516,7 +630,7 @@ namespace SMEPilot.FunctionApp.Functions
                             Embedding = emb,
                             CreatedAt = DateTime.UtcNow
                         };
-                        await _cosmos.UpsertEmbeddingAsync(embDoc);
+                        await _embeddingStore.UpsertEmbeddingAsync(embDoc);
                         Console.WriteLine($"   ✅ Embedding created and stored for section: {s.Heading}");
                     }
                     catch (Exception ex)
@@ -537,15 +651,71 @@ namespace SMEPilot.FunctionApp.Functions
                     {"SMEPilot_EnrichedJobId", fileId},
                     {"SMEPilot_Confidence", 0.0}
                 };
-                await _graph.UpdateListItemFieldsAsync(driveId, itemId, metadata);
-                Console.WriteLine($"✅ [METADATA] Successfully marked file as processed (SMEPilot_Enriched=true)");
+                
+                // Add classification if in hybrid mode
+                if (_cfg.UseHybridMode && _hybridEnricher != null)
+                {
+                    var classification = _hybridEnricher.ClassifyDocument(docModel.Title, text);
+                    metadata["SMEPilot_Classification"] = classification;
+                    Console.WriteLine($"📂 [METADATA] Document classified as: {classification}");
+                }
+                
+                // Update metadata with retry for locked files
+                int metadataRetries = 0;
+                const int maxMetadataRetries = 3;
+                while (metadataRetries < maxMetadataRetries)
+                {
+                    try
+                    {
+                        await _graph.UpdateListItemFieldsAsync(driveId, itemId, metadata);
+                        Console.WriteLine($"✅ [METADATA] Successfully marked file as processed (SMEPilot_Enriched=true)");
+                        break; // Success!
+                    }
+                    catch (ODataError ex) when (ex.Error?.Code == "notAllowed" && ex.Error?.Message?.Contains("locked") == true)
+                    {
+                        metadataRetries++;
+                        if (metadataRetries >= maxMetadataRetries)
+                        {
+                            Console.WriteLine($"❌ [METADATA] File still locked after {maxMetadataRetries} retries. Document was enriched but metadata update failed.");
+                            Console.WriteLine($"   Enriched document URL: {uploaded.WebUrl}");
+                            // Don't throw - document was successfully enriched, just metadata update failed
+                            break;
+                        }
+                        else
+                        {
+                            var waitTime = (int)Math.Pow(2, metadataRetries) * 1000; // Exponential backoff: 2s, 4s, 8s
+                            Console.WriteLine($"⚠️ [METADATA] File locked (attempt {metadataRetries}/{maxMetadataRetries}). Waiting {waitTime/1000}s before retry...");
+                            await Task.Delay(waitTime);
+                        }
+                    }
+                }
 
                 Console.WriteLine($"Successfully processed {fileName}, enriched document: {uploaded.WebUrl}");
                 return (true, uploaded.WebUrl, null);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error processing file {fileName}: {ex.Message}");
+                // Enhanced error logging for Graph API errors
+                if (ex is ODataError odataError)
+                {
+                    Console.WriteLine($"❌ [GRAPH ERROR] ODataError processing file {fileName}:");
+                    Console.WriteLine($"   Error Code: {odataError.Error?.Code ?? "Unknown"}");
+                    Console.WriteLine($"   Error Message: {odataError.Error?.Message ?? ex.Message}");
+                    if (odataError.Error?.AdditionalData != null)
+                    {
+                        Console.WriteLine($"   Additional Data:");
+                        foreach (var kvp in odataError.Error.AdditionalData)
+                        {
+                            Console.WriteLine($"     {kvp.Key}: {kvp.Value}");
+                        }
+                    }
+                    return (false, null, $"Graph API Error: {odataError.Error?.Code ?? "Unknown"} - {odataError.Error?.Message ?? ex.Message}");
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Error processing file {fileName}: {ex.GetType().Name}: {ex.Message}");
+                    Console.WriteLine($"   Stack Trace: {ex.StackTrace}");
+                }
                 return (false, null, ex.Message);
             }
         }

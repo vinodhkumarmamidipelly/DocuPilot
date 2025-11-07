@@ -2,7 +2,8 @@
   "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/spfx-serve.schema.json",
   "port": 4321,
   "https": true,
-  "initialPage": "https://localhost:4321/workbench"
+  "hostname": "localhost",
+  "initialPage": "https://onblick.sharepoint.com/sites/DocEnricher-PoC/_layouts/15/workbench.aspx?noredir=true&debugManifestsFile=https://localhost:4321/temp/build/manifests.js"
 }
 
 

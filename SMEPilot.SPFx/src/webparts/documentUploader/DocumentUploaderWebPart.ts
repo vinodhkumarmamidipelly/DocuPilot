@@ -16,29 +16,45 @@ export interface IDocumentUploaderWebPartProps {
   functionAppUrl: string;
 }
 
-export default class DocumentUploaderWebPart extends BaseClientSideWebPart<IDocumentUploaderWebPartProps> {
+class DocumentUploaderWebPart extends BaseClientSideWebPart<IDocumentUploaderWebPartProps> {
   private _functionAppUrl: string = '';
+
 
   protected onInit(): Promise<void> {
     return super.onInit().then(_ => {
-      // Default to ngrok URL for local testing, or use configured value
+      // Use configured value, or default to ngrok URL for local testing
+      // For production, configure Azure Function App URL via web part properties
       this._functionAppUrl = this.properties.functionAppUrl || 
-        'https://562fbad9f946.ngrok-free.app'; // Update this with your ngrok URL for local testing
+        'https://a5fb7edc07fe.ngrok-free.app'; // Ngrok URL for local Function App testing
     });
   }
 
   public render(): void {
-    const element: React.ReactElement<IDocumentUploaderProps> = React.createElement(
-      DocumentUploader,
-      {
-        context: this.context,
-        libraryName: this.properties.scratchDocsLibrary || 'ScratchDocs',
-        functionAppUrl: this._functionAppUrl,
-        httpClient: this.context.spHttpClient
-      }
-    );
+    try {
+      const element: React.ReactElement<IDocumentUploaderProps> = React.createElement(
+        DocumentUploader,
+        {
+          context: this.context,
+          libraryName: this.properties.scratchDocsLibrary || 'ScratchDocs',
+          functionAppUrl: this._functionAppUrl,
+          httpClient: this.context.spHttpClient
+        }
+      );
 
-    ReactDom.render(element, this.domElement);
+      // Use React 17 render
+      ReactDom.render(element, this.domElement);
+    } catch (error: any) {
+      console.error('Error rendering DocumentUploader:', error);
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+      const errorStack = error?.stack || '';
+      this.domElement.innerHTML = `
+        <div style="padding: 20px; border: 2px solid red; background: #fff5f5;">
+          <h3 style="color: red; margin-top: 0;">Error loading web part</h3>
+          <p><strong>Error:</strong> ${errorMessage}</p>
+          ${errorStack ? `<pre style="font-size: 11px; overflow: auto;">${errorStack}</pre>` : ''}
+        </div>
+      `;
+    }
   }
 
   protected onDispose(): void {
@@ -66,7 +82,8 @@ export default class DocumentUploaderWebPart extends BaseClientSideWebPart<IDocu
                 }),
                 PropertyPaneTextField('functionAppUrl', {
                   label: 'Function App URL',
-                  value: ''
+                  description: 'Enter your Azure Function App URL (e.g., https://your-app.azurewebsites.net) or ngrok URL for local testing',
+                  value: this.properties.functionAppUrl || ''
                 })
               ]
             }
@@ -76,4 +93,6 @@ export default class DocumentUploaderWebPart extends BaseClientSideWebPart<IDocu
     };
   }
 }
+
+export default DocumentUploaderWebPart;
 

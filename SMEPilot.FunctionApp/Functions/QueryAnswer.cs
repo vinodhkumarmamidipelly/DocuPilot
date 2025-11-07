@@ -16,12 +16,12 @@ namespace SMEPilot.FunctionApp.Functions
     public class QueryAnswer
     {
         private readonly OpenAiHelper _openai;
-        private readonly CosmosHelper _cosmos;
+        private readonly IEmbeddingStore _embeddingStore;
 
-        public QueryAnswer(OpenAiHelper openai, CosmosHelper cosmos)
+        public QueryAnswer(OpenAiHelper openai, IEmbeddingStore embeddingStore)
         {
             _openai = openai;
-            _cosmos = cosmos;
+            _embeddingStore = embeddingStore;
         }
 
         [Function("QueryAnswer")]
@@ -62,7 +62,7 @@ namespace SMEPilot.FunctionApp.Functions
                 var qEmb = await _openai.GetEmbeddingAsync(question);
 
                 // 2. Fetch candidate docs for tenant (auto-detected from user context)
-                var candidates = await _cosmos.GetEmbeddingsForTenantAsync(tenantId);
+                var candidates = await _embeddingStore.GetEmbeddingsForTenantAsync(tenantId);
 
                 // 3. Compute cosine similarity
                 var ranked = candidates.Select(c => new

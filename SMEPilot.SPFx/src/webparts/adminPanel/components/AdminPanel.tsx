@@ -43,11 +43,27 @@ export default class AdminPanel extends React.Component<IAdminPanelProps, IAdmin
       // For now, check ProcessedDocs library
       const url = `${this.props.context.pageContext.web.absoluteUrl}/_api/web/lists/getbytitle('ProcessedDocs')/items?$select=Id,Title,SMEPilot_Status,SMEPilot_EnrichedFileUrl,Modified&$orderby=Modified desc&$top=50`;
       const response = await this.props.httpClient.get(url, SPHttpClient.configurations.v1);
+      
+      if (!response.ok) {
+        // If list doesn't exist (404), that's OK - no logs yet
+        if (response.status === 404) {
+          console.log('ProcessedDocs library not found - no enrichment logs yet');
+          this.setState({
+            enrichmentLogs: [],
+            isLoading: false,
+            error: null
+          });
+          return;
+        }
+        throw new Error(`Failed to load enrichment logs: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       this.setState({
         enrichmentLogs: data.value || [],
-        isLoading: false
+        isLoading: false,
+        error: null
       });
     } catch (error: any) {
       this.setState({

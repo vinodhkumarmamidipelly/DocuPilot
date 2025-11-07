@@ -60,25 +60,48 @@ var FunctionAppService = /** @class */ (function () {
      */
     FunctionAppService.prototype.processSharePointFile = function (request) {
         return __awaiter(this, void 0, void 0, function () {
-            var response, errorText;
+            var response, contentType, text, errorText, error_1;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, fetch("".concat(this.functionAppUrl, "/api/ProcessSharePointFile"), {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(request)
-                        })];
+                    case 0:
+                        _a.trys.push([0, 7, , 8]);
+                        return [4 /*yield*/, fetch("".concat(this.functionAppUrl, "/api/ProcessSharePointFile"), {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify(request),
+                                // Add mode and credentials for CORS
+                                mode: 'cors',
+                                credentials: 'omit'
+                            })];
                     case 1:
                         response = _a.sent();
-                        if (!!response.ok) return [3 /*break*/, 3];
+                        contentType = response.headers.get('content-type');
+                        if (!(contentType && contentType.includes('text/html'))) return [3 /*break*/, 3];
                         return [4 /*yield*/, response.text()];
                     case 2:
+                        text = _a.sent();
+                        if (text.includes('ngrok') || text.includes('browser warning')) {
+                            throw new Error('Ngrok browser warning page detected. Please visit the ngrok URL in a new tab and click "Visit Site" to bypass the warning, then try again.');
+                        }
+                        _a.label = 3;
+                    case 3:
+                        if (!!response.ok) return [3 /*break*/, 5];
+                        return [4 /*yield*/, response.text()];
+                    case 4:
                         errorText = _a.sent();
-                        throw new Error("Enrichment failed: ".concat(errorText));
-                    case 3: return [4 /*yield*/, response.json()];
-                    case 4: return [2 /*return*/, _a.sent()];
+                        throw new Error("Enrichment failed (".concat(response.status, "): ").concat(errorText));
+                    case 5: return [4 /*yield*/, response.json()];
+                    case 6: return [2 /*return*/, _a.sent()];
+                    case 7:
+                        error_1 = _a.sent();
+                        // Enhanced error handling for CORS issues
+                        if (error_1.message.includes('Failed to fetch') || error_1.message.includes('CORS')) {
+                            throw new Error("CORS error: Cannot connect to Function App. Please ensure:\n1. Function App is running locally\n2. Ngrok tunnel is active (if using ngrok)\n3. Visit ".concat(this.functionAppUrl, " in a new tab and bypass ngrok warning (if shown)\n4. CORS headers are configured in Function App"));
+                        }
+                        throw error_1;
+                    case 8: return [2 /*return*/];
                 }
             });
         });
@@ -119,6 +142,129 @@ var FunctionAppService = /** @class */ (function () {
     return FunctionAppService;
 }());
 
+
+
+/***/ }),
+
+/***/ 2351:
+/*!******************************************************************!*\
+  !*** ./lib/webparts/documentUploader/DocumentUploaderWebPart.js ***!
+  \******************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ 5959);
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var react_dom__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react-dom */ 8398);
+/* harmony import */ var react_dom__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react_dom__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @microsoft/sp-core-library */ 9676);
+/* harmony import */ var _microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(_microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var _microsoft_sp_property_pane__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @microsoft/sp-property-pane */ 9877);
+/* harmony import */ var _microsoft_sp_property_pane__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(_microsoft_sp_property_pane__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var _microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @microsoft/sp-webpart-base */ 6642);
+/* harmony import */ var _microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(_microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_4__);
+/* harmony import */ var DocumentUploaderWebPartStrings__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! DocumentUploaderWebPartStrings */ 3444);
+/* harmony import */ var DocumentUploaderWebPartStrings__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(DocumentUploaderWebPartStrings__WEBPACK_IMPORTED_MODULE_5__);
+/* harmony import */ var _components_DocumentUploader__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./components/DocumentUploader */ 3711);
+var __extends = (undefined && undefined.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        if (typeof b !== "function" && b !== null)
+            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+
+
+
+
+
+
+
+var DocumentUploaderWebPart = /** @class */ (function (_super) {
+    __extends(DocumentUploaderWebPart, _super);
+    function DocumentUploaderWebPart() {
+        var _this = _super !== null && _super.apply(this, arguments) || this;
+        _this._functionAppUrl = '';
+        return _this;
+    }
+    DocumentUploaderWebPart.prototype.onInit = function () {
+        var _this = this;
+        return _super.prototype.onInit.call(this).then(function (_) {
+            // Use configured value, or default to ngrok URL for local testing
+            // For production, configure Azure Function App URL via web part properties
+            _this._functionAppUrl = _this.properties.functionAppUrl ||
+                'https://a5fb7edc07fe.ngrok-free.app'; // Ngrok URL for local Function App testing
+        });
+    };
+    DocumentUploaderWebPart.prototype.render = function () {
+        try {
+            var element = react__WEBPACK_IMPORTED_MODULE_0__.createElement(_components_DocumentUploader__WEBPACK_IMPORTED_MODULE_6__["default"], {
+                context: this.context,
+                libraryName: this.properties.scratchDocsLibrary || 'ScratchDocs',
+                functionAppUrl: this._functionAppUrl,
+                httpClient: this.context.spHttpClient
+            });
+            // Use React 17 render
+            react_dom__WEBPACK_IMPORTED_MODULE_1__.render(element, this.domElement);
+        }
+        catch (error) {
+            console.error('Error rendering DocumentUploader:', error);
+            var errorMessage = (error === null || error === void 0 ? void 0 : error.message) || (error === null || error === void 0 ? void 0 : error.toString()) || 'Unknown error';
+            var errorStack = (error === null || error === void 0 ? void 0 : error.stack) || '';
+            this.domElement.innerHTML = "\n        <div style=\"padding: 20px; border: 2px solid red; background: #fff5f5;\">\n          <h3 style=\"color: red; margin-top: 0;\">Error loading web part</h3>\n          <p><strong>Error:</strong> ".concat(errorMessage, "</p>\n          ").concat(errorStack ? "<pre style=\"font-size: 11px; overflow: auto;\">".concat(errorStack, "</pre>") : '', "\n        </div>\n      ");
+        }
+    };
+    DocumentUploaderWebPart.prototype.onDispose = function () {
+        react_dom__WEBPACK_IMPORTED_MODULE_1__.unmountComponentAtNode(this.domElement);
+    };
+    Object.defineProperty(DocumentUploaderWebPart.prototype, "dataVersion", {
+        get: function () {
+            return _microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2__.Version.parse('1.0');
+        },
+        enumerable: false,
+        configurable: true
+    });
+    DocumentUploaderWebPart.prototype.getPropertyPaneConfiguration = function () {
+        return {
+            pages: [
+                {
+                    header: {
+                        description: DocumentUploaderWebPartStrings__WEBPACK_IMPORTED_MODULE_5__.PropertyPaneDescription
+                    },
+                    groups: [
+                        {
+                            groupName: DocumentUploaderWebPartStrings__WEBPACK_IMPORTED_MODULE_5__.BasicGroupName,
+                            groupFields: [
+                                (0,_microsoft_sp_property_pane__WEBPACK_IMPORTED_MODULE_3__.PropertyPaneTextField)('scratchDocsLibrary', {
+                                    label: 'ScratchDocs Library Name',
+                                    value: 'ScratchDocs'
+                                }),
+                                (0,_microsoft_sp_property_pane__WEBPACK_IMPORTED_MODULE_3__.PropertyPaneTextField)('functionAppUrl', {
+                                    label: 'Function App URL',
+                                    description: 'Enter your Azure Function App URL (e.g., https://your-app.azurewebsites.net) or ngrok URL for local testing',
+                                    value: this.properties.functionAppUrl || ''
+                                })
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+    };
+    return DocumentUploaderWebPart;
+}(_microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_4__.BaseClientSideWebPart));
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (DocumentUploaderWebPart);
 
 
 /***/ }),
@@ -205,6 +351,7 @@ var DocumentUploader = /** @class */ (function (_super) {
     __extends(DocumentUploader, _super);
     function DocumentUploader(props) {
         var _this = _super.call(this, props) || this;
+        _this._fileInput = null;
         _this.state = {
             uploadStatus: 'idle',
             message: '',
@@ -213,28 +360,187 @@ var DocumentUploader = /** @class */ (function (_super) {
         _this.functionAppService = new _services_FunctionAppService__WEBPACK_IMPORTED_MODULE_2__.FunctionAppService(props.functionAppUrl);
         return _this;
     }
+    DocumentUploader.prototype.ensureLibraryExists = function (libraryName) {
+        var _a;
+        return __awaiter(this, void 0, void 0, function () {
+            var webUrl, checkUrl, checkResponse, error_1, createUrl, createBody, digest, headers, createResponse, errorText, errorMessage, errorJson, responseData, error_2, errorMsg;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        webUrl = this.props.context.pageContext.web.absoluteUrl;
+                        checkUrl = "".concat(webUrl, "/_api/web/lists/getbytitle('").concat(encodeURIComponent(libraryName), "')");
+                        _b.label = 1;
+                    case 1:
+                        _b.trys.push([1, 3, , 4]);
+                        return [4 /*yield*/, this.props.httpClient.get(checkUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_1__.SPHttpClient.configurations.v1)];
+                    case 2:
+                        checkResponse = _b.sent();
+                        if (checkResponse.ok) {
+                            console.log("\u2705 Library '".concat(libraryName, "' already exists"));
+                            return [2 /*return*/];
+                        }
+                        return [3 /*break*/, 4];
+                    case 3:
+                        error_1 = _b.sent();
+                        // Library doesn't exist (404 or other error), will create it
+                        console.log("\u26A0\uFE0F Library '".concat(libraryName, "' not found. Attempting to create document library..."));
+                        console.log("   Note: If you created a FOLDER with this name, please create a DOCUMENT LIBRARY instead.");
+                        return [3 /*break*/, 4];
+                    case 4:
+                        createUrl = "".concat(webUrl, "/_api/web/lists");
+                        createBody = JSON.stringify({
+                            '__metadata': { 'type': 'SP.List' },
+                            'BaseTemplate': 101,
+                            'Title': libraryName,
+                            'Description': 'SMEPilot document library for uploaded files'
+                        });
+                        _b.label = 5;
+                    case 5:
+                        _b.trys.push([5, 12, , 13]);
+                        return [4 /*yield*/, this.getRequestDigest()];
+                    case 6:
+                        digest = _b.sent();
+                        if (!digest) {
+                            throw new Error('Could not obtain request digest. Please refresh the page and try again.');
+                        }
+                        headers = {
+                            'Accept': 'application/json;odata=verbose',
+                            'Content-Type': 'application/json;odata=verbose',
+                            'X-RequestDigest': digest
+                        };
+                        console.log('Creating library:', libraryName);
+                        return [4 /*yield*/, this.props.httpClient.post(createUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_1__.SPHttpClient.configurations.v1, {
+                                body: createBody,
+                                headers: headers
+                            })];
+                    case 7:
+                        createResponse = _b.sent();
+                        if (!!createResponse.ok) return [3 /*break*/, 9];
+                        return [4 /*yield*/, createResponse.text().catch(function () { return 'Unknown error'; })];
+                    case 8:
+                        errorText = _b.sent();
+                        console.error('Failed to create library:', createResponse.status, errorText);
+                        errorMessage = "Failed to create library (".concat(createResponse.status, ")");
+                        try {
+                            errorJson = JSON.parse(errorText);
+                            if ((_a = errorJson.error) === null || _a === void 0 ? void 0 : _a.message) {
+                                errorMessage = errorJson.error.message;
+                            }
+                        }
+                        catch (e) {
+                            // Not JSON, use text as-is
+                        }
+                        throw new Error(errorMessage);
+                    case 9: return [4 /*yield*/, createResponse.json().catch(function () { return ({}); })];
+                    case 10:
+                        responseData = _b.sent();
+                        console.log("Library '".concat(libraryName, "' created successfully"), responseData);
+                        // Wait a moment for SharePoint to process the creation
+                        return [4 /*yield*/, new Promise(function (resolve) { return setTimeout(resolve, 1500); })];
+                    case 11:
+                        // Wait a moment for SharePoint to process the creation
+                        _b.sent();
+                        return [3 /*break*/, 13];
+                    case 12:
+                        error_2 = _b.sent();
+                        console.error('Error creating library:', error_2);
+                        errorMsg = (error_2 === null || error_2 === void 0 ? void 0 : error_2.message) || String(error_2);
+                        // If it's a permissions error, provide helpful message
+                        if (errorMsg.includes('403') || errorMsg.includes('Unauthorized') || errorMsg.includes('permission')) {
+                            throw new Error("Cannot create library '".concat(libraryName, "'. You need \"Manage Lists\" permission. Please create the library manually or contact your SharePoint admin."));
+                        }
+                        // Otherwise, throw the original error
+                        throw new Error("Cannot create library '".concat(libraryName, "'. Error: ").concat(errorMsg));
+                    case 13: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    DocumentUploader.prototype.getRequestDigest = function () {
+        var _a, _b;
+        return __awaiter(this, void 0, void 0, function () {
+            var webUrl, digestUrl, response, data, digest, error_3;
+            return __generator(this, function (_c) {
+                switch (_c.label) {
+                    case 0:
+                        _c.trys.push([0, 3, , 4]);
+                        webUrl = this.props.context.pageContext.web.absoluteUrl;
+                        digestUrl = "".concat(webUrl, "/_api/contextinfo");
+                        return [4 /*yield*/, this.props.httpClient.post(digestUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_1__.SPHttpClient.configurations.v1, {
+                                body: ''
+                            })];
+                    case 1:
+                        response = _c.sent();
+                        if (!response.ok) {
+                            console.warn('Failed to get request digest:', response.status);
+                            return [2 /*return*/, ''];
+                        }
+                        return [4 /*yield*/, response.json()];
+                    case 2:
+                        data = _c.sent();
+                        digest = ((_b = (_a = data.d) === null || _a === void 0 ? void 0 : _a.GetContextWebInformation) === null || _b === void 0 ? void 0 : _b.FormDigestValue) ||
+                            data.FormDigestValue ||
+                            '';
+                        if (digest) {
+                            console.log('Request digest obtained');
+                        }
+                        else {
+                            console.warn('Request digest is empty');
+                        }
+                        return [2 /*return*/, digest];
+                    case 3:
+                        error_3 = _c.sent();
+                        console.warn('Could not get request digest:', error_3);
+                        return [2 /*return*/, ''];
+                    case 4: return [2 /*return*/];
+                }
+            });
+        });
+    };
     DocumentUploader.prototype.uploadFile = function (file) {
         var _a, _b;
         return __awaiter(this, void 0, void 0, function () {
-            var libraryUrl, fileBuffer, uploadUrl, tenantId, request, response, error_1;
+            var libraryUrl, fileBuffer, digest, uploadUrl, uploadResponse, errorText, tenantId, request, response, error_4;
             var _this = this;
             return __generator(this, function (_c) {
                 switch (_c.label) {
                     case 0:
-                        this.setState({ uploadStatus: 'uploading', message: 'Uploading document to SharePoint...' });
+                        this.setState({ uploadStatus: 'uploading', message: 'Preparing upload...' });
                         _c.label = 1;
                     case 1:
-                        _c.trys.push([1, 5, , 6]);
+                        _c.trys.push([1, 9, , 10]);
+                        // 0. Ensure library exists
+                        return [4 /*yield*/, this.ensureLibraryExists(this.props.libraryName)];
+                    case 2:
+                        // 0. Ensure library exists
+                        _c.sent();
+                        this.setState({ message: 'Uploading document to SharePoint...' });
                         libraryUrl = "".concat(this.props.context.pageContext.web.absoluteUrl, "/_api/web/lists/getbytitle('").concat(this.props.libraryName, "')/RootFolder");
                         return [4 /*yield*/, file.arrayBuffer()];
-                    case 2:
+                    case 3:
                         fileBuffer = _c.sent();
+                        return [4 /*yield*/, this.getRequestDigest()];
+                    case 4:
+                        digest = _c.sent();
+                        if (!digest) {
+                            throw new Error('Could not obtain request digest for file upload');
+                        }
                         uploadUrl = "".concat(libraryUrl, "/Files/Add(url='").concat(encodeURIComponent(file.name), "', overwrite=true)");
                         return [4 /*yield*/, this.props.httpClient.post(uploadUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_1__.SPHttpClient.configurations.v1, {
-                                body: fileBuffer
+                                body: fileBuffer,
+                                headers: {
+                                    'X-RequestDigest': digest
+                                    // Let SPHttpClient handle Accept and Content-Type headers automatically
+                                }
                             })];
-                    case 3:
-                        _c.sent();
+                    case 5:
+                        uploadResponse = _c.sent();
+                        if (!!uploadResponse.ok) return [3 /*break*/, 7];
+                        return [4 /*yield*/, uploadResponse.text().catch(function () { return 'Unknown error'; })];
+                    case 6:
+                        errorText = _c.sent();
+                        throw new Error("File upload failed (".concat(uploadResponse.status, "): ").concat(errorText));
+                    case 7:
                         this.setState({ message: 'File uploaded. Triggering enrichment...' });
                         tenantId = ((_b = (_a = this.props.context.pageContext.aadInfo) === null || _a === void 0 ? void 0 : _a.tenantId) === null || _b === void 0 ? void 0 : _b.toString()) || 'default';
                         request = {
@@ -246,7 +552,7 @@ var DocumentUploader = /** @class */ (function (_super) {
                             tenantId: tenantId
                         };
                         return [4 /*yield*/, this.functionAppService.processSharePointFile(request)];
-                    case 4:
+                    case 8:
                         response = _c.sent();
                         this.setState({
                             uploadStatus: 'success',
@@ -254,49 +560,79 @@ var DocumentUploader = /** @class */ (function (_super) {
                         });
                         // Refresh enriched documents list
                         setTimeout(function () { return _this.loadEnrichedDocuments(); }, 2000);
-                        return [3 /*break*/, 6];
-                    case 5:
-                        error_1 = _c.sent();
+                        return [3 /*break*/, 10];
+                    case 9:
+                        error_4 = _c.sent();
                         this.setState({
                             uploadStatus: 'error',
-                            message: "Upload failed: ".concat(error_1.message)
+                            message: "Upload failed: ".concat(error_4.message)
                         });
+                        return [3 /*break*/, 10];
+                    case 10: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    DocumentUploader.prototype.loadEnrichedDocuments = function () {
+        var _a, _b, _c, _d;
+        return __awaiter(this, void 0, void 0, function () {
+            var webUrl, library, processedDocsUrl, response, text, data, err_1;
+            return __generator(this, function (_e) {
+                switch (_e.label) {
+                    case 0:
+                        _e.trys.push([0, 5, , 6]);
+                        webUrl = (_d = (_c = (_b = (_a = this.props) === null || _a === void 0 ? void 0 : _a.context) === null || _b === void 0 ? void 0 : _b.pageContext) === null || _c === void 0 ? void 0 : _c.web) === null || _d === void 0 ? void 0 : _d.absoluteUrl;
+                        if (!webUrl) {
+                            console.warn('Missing webUrl in props.context.pageContext.web.absoluteUrl');
+                            this.setState({ enrichedDocuments: [], uploadStatus: 'idle' });
+                            return [2 /*return*/];
+                        }
+                        library = encodeURIComponent(this.props.libraryName || 'SMEPilot-Enriched');
+                        processedDocsUrl = "".concat(webUrl, "/_api/web/lists/getbytitle('").concat(library, "')/items?$select=Id,Title,FileRef,Created&$top=10&$orderby=Created desc");
+                        console.log('Fetching enriched docs from', processedDocsUrl);
+                        return [4 /*yield*/, this.props.httpClient.get(processedDocsUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_1__.SPHttpClient.configurations.v1)];
+                    case 1:
+                        response = _e.sent();
+                        if (!!response.ok) return [3 /*break*/, 3];
+                        // If list doesn't exist (404), that's OK - it will be created on first upload
+                        if (response.status === 404) {
+                            console.log('Library not found - will be created on first upload');
+                            this.setState({ enrichedDocuments: [], uploadStatus: 'idle', message: '' });
+                            return [2 /*return*/];
+                        }
+                        return [4 /*yield*/, response.text().catch(function () { return '<no body>'; })];
+                    case 2:
+                        text = _e.sent();
+                        console.error('Failed to fetch enriched docs', response.status, text);
+                        this.setState({ enrichedDocuments: [], uploadStatus: 'idle', message: 'Unable to load enriched docs' });
+                        return [2 /*return*/];
+                    case 3: return [4 /*yield*/, response.json()];
+                    case 4:
+                        data = _e.sent();
+                        this.setState({ enrichedDocuments: data.value || [], uploadStatus: 'idle', message: '' });
+                        return [3 /*break*/, 6];
+                    case 5:
+                        err_1 = _e.sent();
+                        console.error('Error loading enriched documents', err_1);
+                        this.setState({ enrichedDocuments: [], uploadStatus: 'error', message: String(err_1) });
                         return [3 /*break*/, 6];
                     case 6: return [2 /*return*/];
                 }
             });
         });
     };
-    DocumentUploader.prototype.loadEnrichedDocuments = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            var processedDocsUrl, response, data, error_2;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        _a.trys.push([0, 3, , 4]);
-                        processedDocsUrl = "".concat(this.props.context.pageContext.web.absoluteUrl, "/_api/web/lists/getbytitle('ProcessedDocs')/items?$select=Id,Title,FileRef&$top=10&$orderby=Created desc");
-                        return [4 /*yield*/, this.props.httpClient.get(processedDocsUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_1__.SPHttpClient.configurations.v1)];
-                    case 1:
-                        response = _a.sent();
-                        return [4 /*yield*/, response.json()];
-                    case 2:
-                        data = _a.sent();
-                        this.setState({
-                            enrichedDocuments: data.value || []
-                        });
-                        return [3 /*break*/, 4];
-                    case 3:
-                        error_2 = _a.sent();
-                        // Silently fail - library might not exist yet
-                        console.log('Could not load enriched documents:', error_2);
-                        return [3 /*break*/, 4];
-                    case 4: return [2 /*return*/];
-                }
+    DocumentUploader.prototype.componentDidMount = function () {
+        var _this = this;
+        console.log('DocumentUploader mounted', { props: this.props });
+        // defensive load
+        this.loadEnrichedDocuments().catch(function (err) {
+            console.error('loadEnrichedDocuments failed', err);
+            _this.setState({
+                enrichedDocuments: [],
+                uploadStatus: 'error',
+                message: 'Failed to load enriched documents: ' + ((err === null || err === void 0 ? void 0 : err.message) || err)
             });
         });
-    };
-    DocumentUploader.prototype.componentDidMount = function () {
-        this.loadEnrichedDocuments();
     };
     DocumentUploader.prototype.render = function () {
         var _this = this;
@@ -311,11 +647,16 @@ var DocumentUploader = /** @class */ (function (_super) {
                         var _a;
                         var file = (_a = e.target.files) === null || _a === void 0 ? void 0 : _a[0];
                         if (file) {
+                            console.log('File selected:', file.name);
                             _this.uploadFile(file);
                         }
-                    }, style: { display: 'none' }, id: "file-upload-input" }),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("label", { htmlFor: "file-upload-input" },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_8__.PrimaryButton, { text: "Upload Document (.docx)" }))),
+                    }, style: { display: 'none' }, id: "file-upload-input", ref: function (input) { _this._fileInput = input; } }),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_8__.PrimaryButton, { text: "Upload Document (.docx)", onClick: function () {
+                        console.log('Upload button clicked');
+                        if (_this._fileInput) {
+                            _this._fileInput.click();
+                        }
+                    } })),
             this.state.enrichedDocuments.length > 0 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 10 } },
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Text, { variant: "mediumPlus" }, "Recently Enriched Documents"),
                 this.state.enrichedDocuments.map(function (doc) { return (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.DocumentCard, { key: doc.Id },
@@ -22817,111 +23158,20 @@ function __rewriteRelativeImportExtension(path, preserveJsx) {
 var __webpack_exports__ = {};
 // This entry need to be wrapped in an IIFE because it need to be isolated against other modules in the chunk.
 (() => {
-/*!******************************************************************!*\
-  !*** ./lib/webparts/documentUploader/DocumentUploaderWebPart.js ***!
-  \******************************************************************/
+/*!************************************************!*\
+  !*** ./lib/webparts/documentUploader/index.js ***!
+  \************************************************/
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
-/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ 5959);
-/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var react_dom__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react-dom */ 8398);
-/* harmony import */ var react_dom__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react_dom__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var _microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @microsoft/sp-core-library */ 9676);
-/* harmony import */ var _microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(_microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var _microsoft_sp_property_pane__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @microsoft/sp-property-pane */ 9877);
-/* harmony import */ var _microsoft_sp_property_pane__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(_microsoft_sp_property_pane__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var _microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @microsoft/sp-webpart-base */ 6642);
-/* harmony import */ var _microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(_microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_4__);
-/* harmony import */ var DocumentUploaderWebPartStrings__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! DocumentUploaderWebPartStrings */ 3444);
-/* harmony import */ var DocumentUploaderWebPartStrings__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(DocumentUploaderWebPartStrings__WEBPACK_IMPORTED_MODULE_5__);
-/* harmony import */ var _components_DocumentUploader__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./components/DocumentUploader */ 3711);
-var __extends = (undefined && undefined.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    };
-    return function (d, b) {
-        if (typeof b !== "function" && b !== null)
-            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
+/* harmony import */ var _DocumentUploaderWebPart__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./DocumentUploaderWebPart */ 2351);
+// A file is required to be in the root of the ./src directory named index.ts
+// SPFx loads this module and expects the web part class as the default export
 
 
-
-
-
-
-
-var DocumentUploaderWebPart = /** @class */ (function (_super) {
-    __extends(DocumentUploaderWebPart, _super);
-    function DocumentUploaderWebPart() {
-        var _this = _super !== null && _super.apply(this, arguments) || this;
-        _this._functionAppUrl = '';
-        return _this;
-    }
-    DocumentUploaderWebPart.prototype.onInit = function () {
-        var _this = this;
-        return _super.prototype.onInit.call(this).then(function (_) {
-            // Default to ngrok URL for local testing, or use configured value
-            _this._functionAppUrl = _this.properties.functionAppUrl ||
-                'https://562fbad9f946.ngrok-free.app'; // Update this with your ngrok URL for local testing
-        });
-    };
-    DocumentUploaderWebPart.prototype.render = function () {
-        var element = react__WEBPACK_IMPORTED_MODULE_0__.createElement(_components_DocumentUploader__WEBPACK_IMPORTED_MODULE_6__["default"], {
-            context: this.context,
-            libraryName: this.properties.scratchDocsLibrary || 'ScratchDocs',
-            functionAppUrl: this._functionAppUrl,
-            httpClient: this.context.spHttpClient
-        });
-        react_dom__WEBPACK_IMPORTED_MODULE_1__.render(element, this.domElement);
-    };
-    DocumentUploaderWebPart.prototype.onDispose = function () {
-        react_dom__WEBPACK_IMPORTED_MODULE_1__.unmountComponentAtNode(this.domElement);
-    };
-    Object.defineProperty(DocumentUploaderWebPart.prototype, "dataVersion", {
-        get: function () {
-            return _microsoft_sp_core_library__WEBPACK_IMPORTED_MODULE_2__.Version.parse('1.0');
-        },
-        enumerable: false,
-        configurable: true
-    });
-    DocumentUploaderWebPart.prototype.getPropertyPaneConfiguration = function () {
-        return {
-            pages: [
-                {
-                    header: {
-                        description: DocumentUploaderWebPartStrings__WEBPACK_IMPORTED_MODULE_5__.PropertyPaneDescription
-                    },
-                    groups: [
-                        {
-                            groupName: DocumentUploaderWebPartStrings__WEBPACK_IMPORTED_MODULE_5__.BasicGroupName,
-                            groupFields: [
-                                (0,_microsoft_sp_property_pane__WEBPACK_IMPORTED_MODULE_3__.PropertyPaneTextField)('scratchDocsLibrary', {
-                                    label: 'ScratchDocs Library Name',
-                                    value: 'ScratchDocs'
-                                }),
-                                (0,_microsoft_sp_property_pane__WEBPACK_IMPORTED_MODULE_3__.PropertyPaneTextField)('functionAppUrl', {
-                                    label: 'Function App URL',
-                                    value: ''
-                                })
-                            ]
-                        }
-                    ]
-                }
-            ]
-        };
-    };
-    return DocumentUploaderWebPart;
-}(_microsoft_sp_webpart_base__WEBPACK_IMPORTED_MODULE_4__.BaseClientSideWebPart));
-/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (DocumentUploaderWebPart);
+// Ensure the default export is the web part class
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (_DocumentUploaderWebPart__WEBPACK_IMPORTED_MODULE_0__["default"]);
 
 })();
 

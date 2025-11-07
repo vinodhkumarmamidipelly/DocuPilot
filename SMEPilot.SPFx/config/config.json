@@ -5,7 +5,7 @@
     "document-uploader-web-part": {
       "components": [
         {
-          "entrypoint": "./lib/webparts/documentUploader/DocumentUploaderWebPart.js",
+          "entrypoint": "./lib/webparts/documentUploader/index.js",
           "manifest": "./src/webparts/documentUploader/DocumentUploaderWebPart.manifest.json"
         }
       ]
@@ -13,7 +13,7 @@
     "admin-panel-web-part": {
       "components": [
         {
-          "entrypoint": "./lib/webparts/adminPanel/AdminPanelWebPart.js",
+          "entrypoint": "./lib/webparts/adminPanel/index.js",
           "manifest": "./src/webparts/adminPanel/AdminPanelWebPart.manifest.json"
         }
       ]
