@@ -191,7 +191,7 @@ var AdminPanel = /** @class */ (function (_super) {
                         if (!response.ok) {
                             // If list doesn't exist (404), that's OK - no logs yet
                             if (response.status === 404) {
-                                console.log('ProcessedDocs library not found - no enrichment logs yet');
+                                console.log('ProcessedDocs library not found - no formatting logs yet');
                                 this.setState({
                                     enrichmentLogs: [],
                                     isLoading: false,
@@ -199,7 +199,7 @@ var AdminPanel = /** @class */ (function (_super) {
                                 });
                                 return [2 /*return*/];
                             }
-                            throw new Error("Failed to load enrichment logs: ".concat(response.status));
+                            throw new Error("Failed to load formatting logs: ".concat(response.status));
                         }
                         return [4 /*yield*/, response.json()];
                     case 2:
@@ -232,7 +232,7 @@ var AdminPanel = /** @class */ (function (_super) {
             react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Text, { variant: "xLarge" }, "SMEPilot Admin Panel"),
             this.state.error && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.MessageBar, { messageBarType: _fluentui_react__WEBPACK_IMPORTED_MODULE_5__.MessageBarType.error }, this.state.error)),
             react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_2__.Stack, { tokens: { childrenGap: 10 } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Text, { variant: "mediumPlus" }, "Enrichment History"),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Text, { variant: "mediumPlus" }, "Formatting History"),
                 this.state.isLoading ? (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Text, null, "Loading...")) : (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.DetailsList, { items: this.state.enrichmentLogs, columns: columns, selectionMode: _fluentui_react__WEBPACK_IMPORTED_MODULE_7__.SelectionMode.none })))));
     };
     return AdminPanel;

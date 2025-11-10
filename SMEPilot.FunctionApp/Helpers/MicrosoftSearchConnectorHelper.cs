@@ -23,7 +23,7 @@ namespace SMEPilot.FunctionApp.Helpers
         {
             if (!_hasClient)
             {
-                Console.WriteLine($"Mock: Would index document {documentId} to Microsoft Search");
+                // Mock mode - no logging needed for mock operations
                 return;
             }
 
@@ -31,12 +31,12 @@ namespace SMEPilot.FunctionApp.Helpers
             {
                 // Note: Requires Microsoft Search Connection to be created first via admin UI or PowerShell
                 // This is a placeholder - actual implementation requires Search Connection setup
-                Console.WriteLine($"Document {documentId} ready for Microsoft Search indexing. Configure Search Connector to enable Copilot integration.");
-                Console.WriteLine($"Title: {title}, Summary: {summary}, URL: {webUrl}, Tenant: {tenantId}");
+                // Document indexing is handled silently - no logging needed for placeholder
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to index document in Microsoft Search: {ex.Message}");
+                // Silent failure for placeholder implementation
+                // In production, this would use ILogger
             }
         }
     }

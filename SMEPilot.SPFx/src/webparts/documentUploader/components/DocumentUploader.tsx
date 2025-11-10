@@ -195,9 +195,9 @@ export default class DocumentUploader extends React.Component<IDocumentUploaderP
         throw new Error(`File upload failed (${uploadResponse.status}): ${errorText}`);
       }
 
-      this.setState({ message: 'File uploaded. Triggering enrichment...' });
+      this.setState({ message: 'File uploaded. Triggering template formatting...' });
 
-      // 2. Trigger enrichment via Function App
+      // 2. Trigger template formatting via Function App
       const tenantId = this.props.context.pageContext.aadInfo?.tenantId?.toString() || 'default';
       
       const request: ProcessSharePointFileRequest = {
@@ -213,10 +213,10 @@ export default class DocumentUploader extends React.Component<IDocumentUploaderP
 
       this.setState({ 
         uploadStatus: 'success', 
-        message: `Document "${file.name}" uploaded and enrichment started! Enriched document: ${response.enrichedUrl}` 
+        message: `Document "${file.name}" uploaded and template formatting started! Formatted document: ${response.enrichedUrl}` 
       });
 
-      // Refresh enriched documents list
+      // Refresh formatted documents list
       setTimeout(() => this.loadEnrichedDocuments(), 2000);
     } catch (error: any) {
       this.setState({ 
@@ -279,7 +279,7 @@ export default class DocumentUploader extends React.Component<IDocumentUploaderP
   public render(): React.ReactElement<IDocumentUploaderProps> {
     return (
       <Stack tokens={{ childrenGap: 15 }} style={{ padding: '20px' }}>
-        <Text variant="xLarge">SMEPilot - Document Enrichment</Text>
+        <Text variant="xLarge">SMEPilot - Document Template Formatting</Text>
         
         {this.state.message && (
           <MessageBar messageBarType={
@@ -292,7 +292,7 @@ export default class DocumentUploader extends React.Component<IDocumentUploaderP
         )}
         
         {this.state.uploadStatus === 'uploading' && (
-          <ProgressIndicator label="Uploading and enriching document..." />
+          <ProgressIndicator label="Uploading and formatting document..." />
         )}
 
         <Stack horizontal tokens={{ childrenGap: 10 }}>
@@ -323,7 +323,7 @@ export default class DocumentUploader extends React.Component<IDocumentUploaderP
 
         {this.state.enrichedDocuments.length > 0 && (
           <Stack tokens={{ childrenGap: 10 }}>
-            <Text variant="mediumPlus">Recently Enriched Documents</Text>
+            <Text variant="mediumPlus">Recently Formatted Documents</Text>
             {this.state.enrichedDocuments.map((doc: any) => (
               <DocumentCard key={doc.Id}>
                 <DocumentCardTitle title={doc.Title || doc.FileRef} />

@@ -6,6 +6,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using SMEPilot.FunctionApp.Helpers;
 using Newtonsoft.Json;
+using Microsoft.Extensions.Logging;
 
 namespace SMEPilot.FunctionApp.Functions
 {
@@ -13,11 +14,13 @@ namespace SMEPilot.FunctionApp.Functions
     {
         private readonly GraphHelper _graph;
         private readonly Config _cfg;
+        private readonly ILogger<SetupSubscription> _logger;
 
-        public SetupSubscription(GraphHelper graph, Config cfg)
+        public SetupSubscription(GraphHelper graph, Config cfg, ILogger<SetupSubscription> logger)
         {
             _graph = graph;
             _cfg = cfg;
+            _logger = logger;
         }
 
         [Function("SetupSubscription")]
@@ -79,19 +82,18 @@ namespace SMEPilot.FunctionApp.Functions
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"ERROR in SetupSubscription: {ex}");
-                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
-                Console.WriteLine($"Inner Exception: {ex.InnerException?.Message ?? "None"}");
+                _logger.LogError(ex, "ERROR in SetupSubscription: {Error}", ex.Message);
                 
                 // Check if credentials are configured
                 var hasCredentials = !string.IsNullOrWhiteSpace(_cfg.GraphTenantId) 
                     && !string.IsNullOrWhiteSpace(_cfg.GraphClientId) 
                     && !string.IsNullOrWhiteSpace(_cfg.GraphClientSecret);
                 
-                Console.WriteLine($"Credentials configured: {hasCredentials}");
-                Console.WriteLine($"Tenant ID present: {!string.IsNullOrWhiteSpace(_cfg.GraphTenantId)}");
-                Console.WriteLine($"Client ID present: {!string.IsNullOrWhiteSpace(_cfg.GraphClientId)}");
-                Console.WriteLine($"Client Secret present: {!string.IsNullOrWhiteSpace(_cfg.GraphClientSecret)}");
+                _logger.LogDebug("Credentials configured: {HasCredentials}, Tenant ID: {HasTenantId}, Client ID: {HasClientId}, Client Secret: {HasClientSecret}",
+                    hasCredentials,
+                    !string.IsNullOrWhiteSpace(_cfg.GraphTenantId),
+                    !string.IsNullOrWhiteSpace(_cfg.GraphClientId),
+                    !string.IsNullOrWhiteSpace(_cfg.GraphClientSecret));
                 
                 var err = req.CreateResponse(HttpStatusCode.InternalServerError);
                 await err.WriteStringAsync(JsonConvert.SerializeObject(new
@@ -101,7 +103,7 @@ namespace SMEPilot.FunctionApp.Functions
                     innerException = ex.InnerException?.Message,
                     stackTrace = ex.StackTrace,
                     credentialsConfigured = hasCredentials,
-                    message = "Check Visual Studio Output window for full details"
+                    message = "Check log files for full details"
                 }, Formatting.Indented));
                 return err;
             }

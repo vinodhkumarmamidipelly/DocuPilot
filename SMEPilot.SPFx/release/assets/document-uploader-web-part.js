@@ -56,7 +56,7 @@ var FunctionAppService = /** @class */ (function () {
         this.functionAppUrl = functionAppUrl;
     }
     /**
-     * Trigger document enrichment via Function App
+     * Trigger document template formatting via Function App
      */
     FunctionAppService.prototype.processSharePointFile = function (request) {
         return __awaiter(this, void 0, void 0, function () {
@@ -91,7 +91,7 @@ var FunctionAppService = /** @class */ (function () {
                         return [4 /*yield*/, response.text()];
                     case 4:
                         errorText = _a.sent();
-                        throw new Error("Enrichment failed (".concat(response.status, "): ").concat(errorText));
+                        throw new Error("Template formatting failed (".concat(response.status, "): ").concat(errorText));
                     case 5: return [4 /*yield*/, response.json()];
                     case 6: return [2 /*return*/, _a.sent()];
                     case 7:
@@ -102,39 +102,6 @@ var FunctionAppService = /** @class */ (function () {
                         }
                         throw error_1;
                     case 8: return [2 /*return*/];
-                }
-            });
-        });
-    };
-    /**
-     * Query enriched documents
-     */
-    FunctionAppService.prototype.queryAnswer = function (request, accessToken) {
-        return __awaiter(this, void 0, void 0, function () {
-            var headers, response, errorText;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        headers = {
-                            'Content-Type': 'application/json'
-                        };
-                        if (accessToken) {
-                            headers['Authorization'] = "Bearer ".concat(accessToken);
-                        }
-                        return [4 /*yield*/, fetch("".concat(this.functionAppUrl, "/api/QueryAnswer"), {
-                                method: 'POST',
-                                headers: headers,
-                                body: JSON.stringify(request)
-                            })];
-                    case 1:
-                        response = _a.sent();
-                        if (!!response.ok) return [3 /*break*/, 3];
-                        return [4 /*yield*/, response.text()];
-                    case 2:
-                        errorText = _a.sent();
-                        throw new Error("Query failed: ".concat(errorText));
-                    case 3: return [4 /*yield*/, response.json()];
-                    case 4: return [2 /*return*/, _a.sent()];
                 }
             });
         });
@@ -541,7 +508,7 @@ var DocumentUploader = /** @class */ (function (_super) {
                         errorText = _c.sent();
                         throw new Error("File upload failed (".concat(uploadResponse.status, "): ").concat(errorText));
                     case 7:
-                        this.setState({ message: 'File uploaded. Triggering enrichment...' });
+                        this.setState({ message: 'File uploaded. Triggering template formatting...' });
                         tenantId = ((_b = (_a = this.props.context.pageContext.aadInfo) === null || _a === void 0 ? void 0 : _a.tenantId) === null || _b === void 0 ? void 0 : _b.toString()) || 'default';
                         request = {
                             siteId: this.props.context.pageContext.site.id.toString(),
@@ -556,9 +523,9 @@ var DocumentUploader = /** @class */ (function (_super) {
                         response = _c.sent();
                         this.setState({
                             uploadStatus: 'success',
-                            message: "Document \"".concat(file.name, "\" uploaded and enrichment started! Enriched document: ").concat(response.enrichedUrl)
+                            message: "Document \"".concat(file.name, "\" uploaded and template formatting started! Formatted document: ").concat(response.enrichedUrl)
                         });
-                        // Refresh enriched documents list
+                        // Refresh formatted documents list
                         setTimeout(function () { return _this.loadEnrichedDocuments(); }, 2000);
                         return [3 /*break*/, 10];
                     case 9:
@@ -637,11 +604,11 @@ var DocumentUploader = /** @class */ (function (_super) {
     DocumentUploader.prototype.render = function () {
         var _this = this;
         return (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 15 }, style: { padding: '20px' } },
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Text, { variant: "xLarge" }, "SMEPilot - Document Enrichment"),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Text, { variant: "xLarge" }, "SMEPilot - Document Template Formatting"),
             this.state.message && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_5__.MessageBar, { messageBarType: this.state.uploadStatus === 'error' ? _fluentui_react__WEBPACK_IMPORTED_MODULE_6__.MessageBarType.error :
                     this.state.uploadStatus === 'success' ? _fluentui_react__WEBPACK_IMPORTED_MODULE_6__.MessageBarType.success :
                         _fluentui_react__WEBPACK_IMPORTED_MODULE_6__.MessageBarType.info }, this.state.message)),
-            this.state.uploadStatus === 'uploading' && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_7__.ProgressIndicator, { label: "Uploading and enriching document..." })),
+            this.state.uploadStatus === 'uploading' && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_7__.ProgressIndicator, { label: "Uploading and formatting document..." })),
             react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { horizontal: true, tokens: { childrenGap: 10 } },
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { type: "file", accept: ".docx", onChange: function (e) {
                         var _a;
@@ -658,7 +625,7 @@ var DocumentUploader = /** @class */ (function (_super) {
                         }
                     } })),
             this.state.enrichedDocuments.length > 0 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 10 } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Text, { variant: "mediumPlus" }, "Recently Enriched Documents"),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Text, { variant: "mediumPlus" }, "Recently Formatted Documents"),
                 this.state.enrichedDocuments.map(function (doc) { return (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.DocumentCard, { key: doc.Id },
                     react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.DocumentCardTitle, { title: doc.Title || doc.FileRef }))); })))));
     };

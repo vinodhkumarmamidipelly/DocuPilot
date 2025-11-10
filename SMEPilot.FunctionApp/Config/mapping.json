@@ -1,0 +1,14 @@
+{
+  "Sections": [
+    { "Name": "1. Overview", "Keywords": ["overview","summary","purpose","introduction"], "Mandatory": true },
+    { "Name": "2. Functional Details", "Keywords": ["functional","behaviour","use case","workflow","feature","module"], "Mandatory": false },
+    { "Name": "3. Technical Details", "Keywords": ["technical","implementation","api","endpoint","install","deploy","config","configuration","cron","webhook"], "Mandatory": false },
+    { "Name": "4. Screenshots", "Keywords": ["screenshot","figure","image","diagram","dashboard"], "Mandatory": false },
+    { "Name": "5. Troubleshooting & FAQ", "Keywords": ["troubleshoot","issue","error","faq","resolution","fix"], "Mandatory": false },
+    { "Name": "6. References", "Keywords": ["references","links","docs","documentation","guide"], "Mandatory": false },
+    { "Name": "7. Revision History", "Keywords": [], "Mandatory": true }
+  ],
+  "FunctionalKeywords": ["user","flow","feature","use case","functional","module"],
+  "TechnicalKeywords": ["api","endpoint","db","database","schema","install","deploy","config","configuration","cron","webhook"],
+  "SupportKeywords": ["support","runbook","troubleshoot","issue","error","escalation"]
+}

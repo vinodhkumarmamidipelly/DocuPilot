@@ -39,15 +39,15 @@ export default class AdminPanel extends React.Component<IAdminPanelProps, IAdmin
 
   private async loadEnrichmentLogs(): Promise<void> {
     try {
-      // Load enrichment history from SharePoint metadata or Cosmos DB
-      // For now, check ProcessedDocs library
+      // Load formatting history from SharePoint metadata
+      // Check ProcessedDocs library
       const url = `${this.props.context.pageContext.web.absoluteUrl}/_api/web/lists/getbytitle('ProcessedDocs')/items?$select=Id,Title,SMEPilot_Status,SMEPilot_EnrichedFileUrl,Modified&$orderby=Modified desc&$top=50`;
       const response = await this.props.httpClient.get(url, SPHttpClient.configurations.v1);
       
       if (!response.ok) {
         // If list doesn't exist (404), that's OK - no logs yet
         if (response.status === 404) {
-          console.log('ProcessedDocs library not found - no enrichment logs yet');
+          console.log('ProcessedDocs library not found - no formatting logs yet');
           this.setState({
             enrichmentLogs: [],
             isLoading: false,
@@ -55,7 +55,7 @@ export default class AdminPanel extends React.Component<IAdminPanelProps, IAdmin
           });
           return;
         }
-        throw new Error(`Failed to load enrichment logs: ${response.status}`);
+        throw new Error(`Failed to load formatting logs: ${response.status}`);
       }
       
       const data = await response.json();
@@ -91,7 +91,7 @@ export default class AdminPanel extends React.Component<IAdminPanelProps, IAdmin
         )}
 
         <Stack tokens={{ childrenGap: 10 }}>
-          <Text variant="mediumPlus">Enrichment History</Text>
+          <Text variant="mediumPlus">Formatting History</Text>
           {this.state.isLoading ? (
             <Text>Loading...</Text>
           ) : (

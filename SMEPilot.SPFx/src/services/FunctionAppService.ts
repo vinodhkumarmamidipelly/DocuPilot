@@ -15,20 +15,6 @@ export interface ProcessSharePointFileResponse {
   enrichedUrl: string;
 }
 
-export interface QueryAnswerRequest {
-  question: string;
-  tenantId?: string;
-}
-
-export interface QueryAnswerResponse {
-  answer: string;
-  sources: Array<{
-    FileUrl: string;
-    Heading: string;
-    score: number;
-  }>;
-}
-
 export class FunctionAppService {
   private functionAppUrl: string;
 
@@ -37,7 +23,7 @@ export class FunctionAppService {
   }
 
   /**
-   * Trigger document enrichment via Function App
+   * Trigger document template formatting via Function App
    */
   async processSharePointFile(request: ProcessSharePointFileRequest): Promise<ProcessSharePointFileResponse> {
     try {
@@ -63,7 +49,7 @@ export class FunctionAppService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Enrichment failed (${response.status}): ${errorText}`);
+        throw new Error(`Template formatting failed (${response.status}): ${errorText}`);
       }
 
       return await response.json();
@@ -80,31 +66,6 @@ export class FunctionAppService {
     }
   }
 
-  /**
-   * Query enriched documents
-   */
-  async queryAnswer(request: QueryAnswerRequest, accessToken?: string): Promise<QueryAnswerResponse> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-
-    if (accessToken) {
-      headers['Authorization'] = `Bearer ${accessToken}`;
-    }
-
-    const response = await fetch(`${this.functionAppUrl}/api/QueryAnswer`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(request)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Query failed: ${errorText}`);
-    }
-
-    return await response.json();
-  }
 }
 
 

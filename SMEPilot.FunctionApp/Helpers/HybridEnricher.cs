@@ -4,22 +4,19 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Azure.AI.OpenAI;
 using SMEPilot.FunctionApp.Models;
 
 namespace SMEPilot.FunctionApp.Helpers
 {
     /// <summary>
-    /// Hybrid enricher: Rule-based sectioning + AI content enrichment
-    /// Cost-saving approach: Uses AI only for enriching content, not for sectioning
+    /// Template formatter: Rule-based sectioning and template application
+    /// NO AI - Just template formatting and styling
     /// </summary>
     public class HybridEnricher
     {
-        private readonly OpenAiHelper _openai;
-
-        public HybridEnricher(OpenAiHelper openai)
+        public HybridEnricher()
         {
-            _openai = openai;
+            // No dependencies - rule-based only
         }
 
         /// <summary>
@@ -52,108 +49,7 @@ namespace SMEPilot.FunctionApp.Helpers
             };
         }
 
-        /// <summary>
-        /// Step 2: AI enrichment of section content only (minimal AI usage)
-        /// Only enriches the body text, not sectioning
-        /// </summary>
-        public async Task<DocumentModel> EnrichSectionsAsync(DocumentModel docModel, List<string> imageOcrs)
-        {
-            if (docModel.Sections == null || docModel.Sections.Count == 0)
-            {
-                return docModel;
-            }
-
-            Console.WriteLine($"🔧 [HYBRID] Enriching {docModel.Sections.Count} sections with AI (content only)...");
-
-            // Enrich each section's body text using AI
-            foreach (var section in docModel.Sections)
-            {
-                if (string.IsNullOrWhiteSpace(section.Body))
-                {
-                    // Generate simple summary if body is empty
-                    section.Summary = "Content section";
-                    continue;
-                }
-
-                try
-                {
-                    // Use AI ONLY to enrich/expand the body text
-                    var enrichedBody = await EnrichSectionContentAsync(section.Body);
-                    
-                    // Update body with enriched content
-                    section.Body = enrichedBody;
-                    
-                    // Generate summary from enriched content (first sentence)
-                    section.Summary = GenerateSummary(enrichedBody);
-                    
-                    Console.WriteLine($"✅ [HYBRID] Enriched section: {section.Heading}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"⚠️ [HYBRID] Failed to enrich section '{section.Heading}': {ex.Message}");
-                    // Keep original content if enrichment fails
-                    section.Summary = GenerateSummary(section.Body);
-                }
-            }
-
-            return docModel;
-        }
-
-        /// <summary>
-        /// Use AI to enrich/expand section content only
-        /// This is the ONLY AI call per section (minimal cost)
-        /// </summary>
-        private async Task<string> EnrichSectionContentAsync(string originalText)
-        {
-            if (_openai == null)
-            {
-                // Mock mode - return original
-                return originalText;
-            }
-
-            try
-            {
-                var client = _openai.GetClient();
-                var deployment = _openai.GetDeployment();
-                
-                if (client == null || string.IsNullOrWhiteSpace(deployment))
-                {
-                    return originalText; // Fallback to original
-                }
-
-                // Minimal AI prompt - only enrich content, don't restructure
-                string systemPrompt = @"You are a content enricher. Your job is to EXPAND and ENRICH the given text.
-PRESERVE all original information.
-ADD detail, explanations, and context.
-Make the text MORE comprehensive and detailed.
-Do NOT change the structure or remove any information.
-Return ONLY the enriched text, no JSON, no formatting.";
-
-                string userPrompt = $"Enrich and expand this content while preserving all information:\n\n{originalText}";
-
-                var options = new ChatCompletionsOptions(
-                    deploymentName: deployment,
-                    messages: new ChatRequestMessage[]
-                    {
-                        new ChatRequestSystemMessage(systemPrompt),
-                        new ChatRequestUserMessage(userPrompt)
-                    })
-                {
-                    Temperature = 0.3f,
-                    MaxTokens = Math.Min(2000, (originalText.Length / 4) * 2) // Dynamic based on input
-                };
-
-                var response = await client.GetChatCompletionsAsync(options);
-                var enrichedText = response.Value.Choices[0].Message.Content;
-
-                return enrichedText ?? originalText;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"⚠️ [HYBRID] AI enrichment failed: {ex.Message}");
-                return originalText; // Fallback to original
-            }
-        }
+        // AI enrichment methods removed - template formatting only (no AI required)
 
         /// <summary>
         /// Classify document (Functional/Support/Technical) using keyword-based approach
@@ -250,14 +146,54 @@ Return ONLY the enriched text, no JSON, no formatting.";
 
         private bool IsLikelyHeading(string line, bool isFirstLine)
         {
-            if (isFirstLine && line.Length < 100) return true;
-            if (line.Length > 80) return false;
-            if (line.EndsWith(".") || line.EndsWith(",")) return false;
+            var trimmed = line.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed)) return false;
 
-            if (Regex.IsMatch(line, @"^\d+[\.\)]\s+[A-Z]")) return true;
+            // First line rule
+            if (isFirstLine && trimmed.Length < 100 && !trimmed.Contains('.')) return true;
+            
+            // Too long to be a heading
+            if (trimmed.Length > 120) return false;
+            
+            // Ends with punctuation - likely not a heading
+            if (trimmed.EndsWith(".") || trimmed.EndsWith(",") || trimmed.EndsWith(":")) 
+            {
+                // Exception: if it's very short and ends with colon, might be a heading
+                if (trimmed.Length < 50 && trimmed.EndsWith(":")) return true;
+                return false;
+            }
 
-            var upperCount = line.Count(c => char.IsUpper(c));
-            if (upperCount > line.Length * 0.5 && line.Length > 5) return true;
+            // Numbered headings: "1. ", "1) ", "1.1 ", etc.
+            if (Regex.IsMatch(trimmed, @"^\d+([\.\)]\s+|\.[\d\.]+\s+)[A-Z]")) return true;
+
+            // All caps or mostly caps (likely heading)
+            var upperCount = trimmed.Count(c => char.IsUpper(c));
+            if (upperCount > trimmed.Length * 0.5 && trimmed.Length > 5 && trimmed.Length < 80) return true;
+
+            // Short lines that start with capital and don't contain sentence-ending punctuation
+            if (trimmed.Length < 60 && 
+                char.IsUpper(trimmed[0]) && 
+                !trimmed.Contains('.') && 
+                !trimmed.Contains('!') && 
+                !trimmed.Contains('?'))
+            {
+                // Check if it looks like a title/heading (not a sentence)
+                var wordCount = trimmed.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+                if (wordCount <= 8) return true; // Short phrases are likely headings
+            }
+
+            // Module/document type patterns (e.g., "Personnel File", "Form I-983", "H-1B")
+            if (Regex.IsMatch(trimmed, @"^(Form\s+[A-Z0-9-]+|([A-Z]-?\d+|[A-Z]{2,4})\s+(Visa|File|Documents?))", RegexOptions.IgnoreCase)) return true;
+
+            // Lines that are all on one line and short, starting with capital
+            if (trimmed.Length < 50 && 
+                char.IsUpper(trimmed[0]) && 
+                !trimmed.Contains(" and ") && 
+                !trimmed.Contains(" or ") &&
+                trimmed.Split(' ').Length <= 6)
+            {
+                return true;
+            }
 
             return false;
         }

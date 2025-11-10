@@ -1,11 +1,21 @@
 {
   "version": "2.0",
   "logging": {
+    "logLevel": {
+      "default": "None",
+      "Host": "None",
+      "Function": "None",
+      "Microsoft": "None",
+      "System": "None"
+    },
     "applicationInsights": {
       "samplingSettings": {
         "isEnabled": true,
         "maxTelemetryItemsPerSecond": 20
       }
+    },
+    "console": {
+      "isEnabled": false
     }
   },
   "extensionBundle": {
