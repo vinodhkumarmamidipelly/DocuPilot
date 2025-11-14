@@ -106,6 +106,114 @@ var FunctionAppService = /** @class */ (function () {
             });
         });
     };
+    /**
+     * Create webhook subscription for monitoring source folder
+     */
+    FunctionAppService.prototype.createWebhookSubscription = function (request) {
+        return __awaiter(this, void 0, void 0, function () {
+            var requestBody, response, errorText, result, error_2;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        _a.trys.push([0, 5, , 6]);
+                        requestBody = {};
+                        if (request.driveId && request.driveId !== 'null' && request.driveId !== 'undefined') {
+                            requestBody.driveId = request.driveId;
+                        }
+                        if (request.siteId && request.siteId !== 'null' && request.siteId !== 'undefined') {
+                            requestBody.siteId = request.siteId;
+                        }
+                        if (request.sourceFolderPath) {
+                            requestBody.sourceFolderPath = request.sourceFolderPath;
+                        }
+                        if (request.notificationUrl) {
+                            requestBody.notificationUrl = request.notificationUrl;
+                        }
+                        else {
+                            requestBody.notificationUrl = "".concat(this.functionAppUrl, "/api/ProcessSharePointFile");
+                        }
+                        if (request.functionAppUrl) {
+                            requestBody.functionAppUrl = request.functionAppUrl;
+                        }
+                        if (request.tenantId) {
+                            requestBody.tenantId = request.tenantId;
+                        }
+                        console.log('[FunctionAppService] Creating webhook subscription with body:', JSON.stringify(requestBody, null, 2));
+                        return [4 /*yield*/, fetch("".concat(this.functionAppUrl, "/api/SetupSubscription"), {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify(requestBody),
+                                mode: 'cors',
+                                credentials: 'omit'
+                            })];
+                    case 1:
+                        response = _a.sent();
+                        if (!!response.ok) return [3 /*break*/, 3];
+                        return [4 /*yield*/, response.text()];
+                    case 2:
+                        errorText = _a.sent();
+                        throw new Error("Failed to create webhook subscription (".concat(response.status, "): ").concat(errorText));
+                    case 3: return [4 /*yield*/, response.json()];
+                    case 4:
+                        result = _a.sent();
+                        return [2 /*return*/, {
+                                subscriptionId: result.subscriptionId || '',
+                                expirationDateTime: result.expirationDateTime || '',
+                                success: true,
+                                message: result.message
+                            }];
+                    case 5:
+                        error_2 = _a.sent();
+                        console.error('Error creating webhook subscription:', error_2);
+                        return [2 /*return*/, {
+                                subscriptionId: '',
+                                expirationDateTime: '',
+                                success: false,
+                                message: error_2.message
+                            }];
+                    case 6: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
+     * Validate webhook subscription
+     */
+    FunctionAppService.prototype.validateWebhookSubscription = function (subscriptionId) {
+        return __awaiter(this, void 0, void 0, function () {
+            var response, result, error_3;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        _a.trys.push([0, 3, , 4]);
+                        return [4 /*yield*/, fetch("".concat(this.functionAppUrl, "/api/ValidateSubscription?subscriptionId=").concat(subscriptionId), {
+                                method: 'GET',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                mode: 'cors',
+                                credentials: 'omit'
+                            })];
+                    case 1:
+                        response = _a.sent();
+                        if (!response.ok) {
+                            return [2 /*return*/, false];
+                        }
+                        return [4 /*yield*/, response.json()];
+                    case 2:
+                        result = _a.sent();
+                        return [2 /*return*/, result.isValid === true];
+                    case 3:
+                        error_3 = _a.sent();
+                        console.error('Error validating webhook subscription:', error_3);
+                        return [2 /*return*/, false];
+                    case 4: return [2 /*return*/];
+                }
+            });
+        });
+    };
     return FunctionAppService;
 }());
 
@@ -171,7 +279,7 @@ var DocumentUploaderWebPart = /** @class */ (function (_super) {
             // Use configured value, or default to ngrok URL for local testing
             // For production, configure Azure Function App URL via web part properties
             _this._functionAppUrl = _this.properties.functionAppUrl ||
-                'https://a5fb7edc07fe.ngrok-free.app'; // Ngrok URL for local Function App testing
+                'https://078dcba0929b.ngrok-free.app'; // Ngrok URL for local Function App testing
         });
     };
     DocumentUploaderWebPart.prototype.render = function () {

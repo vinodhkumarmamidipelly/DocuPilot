@@ -2,11 +2,16 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SMEPilot.FunctionApp.Helpers;
+using SMEPilot.FunctionApp.Services;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
 using System.IO;
 using Spire.Pdf;
+using Microsoft.ApplicationInsights;
+using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.ApplicationInsights.WorkerService;
+using Microsoft.Azure.Functions.Worker.ApplicationInsights;
 
 // Configure Serilog for file logging
 // Use app folder for better tracking (instead of temp directory)
@@ -46,15 +51,60 @@ try
     
     var host = new HostBuilder()
         .ConfigureFunctionsWorkerDefaults()
-               .ConfigureServices(services =>
-               {
-                   services.AddSingleton<Config>();
-                   services.AddSingleton<GraphHelper>(sp => 
-                   {
-                       var cfg = sp.GetRequiredService<Config>();
-                       var logger = sp.GetService<ILogger<GraphHelper>>();
-                       return new GraphHelper(cfg, logger);
-                   });
+        .ConfigureServices(services =>
+        {
+            // Add Application Insights
+            // Note: AddApplicationInsightsTelemetryWorkerService automatically registers TelemetryConfiguration
+            services.AddApplicationInsightsTelemetryWorkerService(options =>
+            {
+                options.ConnectionString = Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
+                options.EnableAdaptiveSampling = true;
+                options.EnableDependencyTrackingTelemetryModule = true;
+                options.EnablePerformanceCounterCollectionModule = true;
+            });
+            
+            // Add TelemetryClient
+            // TelemetryConfiguration is automatically registered by AddApplicationInsightsTelemetryWorkerService
+            services.AddSingleton<TelemetryClient>(sp =>
+            {
+                var telemetryConfig = sp.GetRequiredService<TelemetryConfiguration>();
+                return new TelemetryClient(telemetryConfig);
+            });
+            
+            // Add TelemetryService
+            services.AddSingleton<TelemetryService>(sp =>
+            {
+                var telemetryClient = sp.GetRequiredService<TelemetryClient>();
+                var logger = sp.GetService<ILogger<TelemetryService>>();
+                return new TelemetryService(telemetryClient, logger);
+            });
+            
+            // Add NotificationService
+            services.AddSingleton<NotificationService>(sp =>
+            {
+                var connectionString = Environment.GetEnvironmentVariable("AzureCommunicationServices_ConnectionString");
+                var adminEmail = Environment.GetEnvironmentVariable("AdminEmail") 
+                    ?? Environment.GetEnvironmentVariable("NotificationEmail");
+                var logger = sp.GetService<ILogger<NotificationService>>();
+                return new NotificationService(connectionString, adminEmail, logger);
+            });
+            
+            // Add RateLimitingService
+            services.AddSingleton<RateLimitingService>(sp =>
+            {
+                var maxPerMinute = int.TryParse(Environment.GetEnvironmentVariable("RateLimit_MaxPerMinute"), out var perMin) ? perMin : 60;
+                var maxPerHour = int.TryParse(Environment.GetEnvironmentVariable("RateLimit_MaxPerHour"), out var perHour) ? perHour : 1000;
+                var logger = sp.GetService<ILogger<RateLimitingService>>();
+                return new RateLimitingService(maxPerMinute, maxPerHour, logger);
+            });
+            
+            services.AddSingleton<Config>();
+            services.AddSingleton<GraphHelper>(sp => 
+            {
+                var cfg = sp.GetRequiredService<Config>();
+                var logger = sp.GetService<ILogger<GraphHelper>>();
+                return new GraphHelper(cfg, logger);
+            });
                    services.AddSingleton<SimpleExtractor>(sp => 
                    {
                        var logger = sp.GetService<ILogger<SimpleExtractor>>();
@@ -72,6 +122,9 @@ try
                    var cfg = new Config();
                    services.AddSingleton<HybridEnricher>();
                    
+                   // Add RuleBasedFormatter for rule-based document enrichment (NO AI, NO DB)
+                   services.AddSingleton<RuleBasedFormatter>();
+                   
                    // SetupSubscription requires ILogger
                    services.AddSingleton<SMEPilot.FunctionApp.Functions.SetupSubscription>(sp =>
                    {
@@ -79,6 +132,26 @@ try
                        var config = sp.GetRequiredService<Config>();
                        var logger = sp.GetService<ILogger<SMEPilot.FunctionApp.Functions.SetupSubscription>>();
                        return new SMEPilot.FunctionApp.Functions.SetupSubscription(graph, config, logger);
+                   });
+                   
+                   // ProcessSharePointFile - Explicit registration (preventive, even though Worker should auto-instantiate)
+                   // This ensures all dependencies are properly injected if auto-instantiation fails
+                   services.AddScoped<SMEPilot.FunctionApp.Functions.ProcessSharePointFile>(sp =>
+                   {
+                       var graph = sp.GetRequiredService<GraphHelper>();
+                       var extractor = sp.GetRequiredService<SimpleExtractor>();
+                       var cfg = sp.GetRequiredService<Config>();
+                       var logger = sp.GetService<ILogger<SMEPilot.FunctionApp.Functions.ProcessSharePointFile>>();
+                       var hybridEnricher = sp.GetService<HybridEnricher>();
+                       var ocrHelper = sp.GetService<OcrHelper>();
+                       var ruleBasedFormatter = sp.GetService<RuleBasedFormatter>();
+                       var telemetry = sp.GetService<TelemetryService>();
+                       var notifications = sp.GetService<NotificationService>();
+                       var rateLimiter = sp.GetService<RateLimitingService>();
+                       return new SMEPilot.FunctionApp.Functions.ProcessSharePointFile(
+                           graph, extractor, cfg, logger,
+                           hybridEnricher, ocrHelper, ruleBasedFormatter,
+                           telemetry, notifications, rateLimiter);
                    });
                    
                    // Add Serilog logging - CLEAR all default providers first to prevent console output

@@ -1,0 +1,150 @@
+<mxfile host="app.diagrams.net" modified="2024-01-01T00:00:00.000Z" agent="5.0" version="21.0.0" etag="config-diagram-v2" type="device">
+  <diagram name="SMEPilot Configuration" id="config-diagram-v2">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Title -->
+        <mxCell id="title" value="SMEPilot Configuration Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=28;fontStyle=1;fontColor=#1a1a1a" vertex="1" parent="1">
+          <mxGeometry x="500" y="20" width="600" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Configuration Storage -->
+        <mxCell id="config-storage" value="SMEPilotConfig List&#xa;(SharePoint List)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5ff;strokeColor=#01579b;strokeWidth=3;fontSize=16;fontStyle=1;align=center;verticalAlign=top;spacingTop=15" vertex="1" parent="1">
+          <mxGeometry x="600" y="100" width="400" height="80" as="geometry" />
+        </mxCell>
+        
+        <!-- Configuration Columns -->
+        <mxCell id="config-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="200" y="220" width="1200" height="700" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="config-title" value="Configuration Parameters (6 Items)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontColor=#1a1a1a" vertex="1" parent="1">
+          <mxGeometry x="230" y="240" width="400" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- Source Configuration -->
+        <mxCell id="source-config" value="Source Folder Configuration" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=14;fontStyle=1;align=center;verticalAlign=top;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="240" y="300" width="350" height="150" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="source1" value="Column: SourceLibraryUrl&#xa;Type: Text&#xa;Required: Yes&#xa;Example: /Shared Documents/RawDocs&#xa;Purpose: Where users upload documents&#xa;Note: User-selected during installation" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#2e7d32" vertex="1" parent="1">
+          <mxGeometry x="260" y="340" width="310" height="90" as="geometry" />
+        </mxCell>
+        
+        <!-- Destination Configuration -->
+        <mxCell id="dest-config" value="Destination Folder Configuration" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5ff;strokeColor=#01579b;strokeWidth=2;fontSize=14;fontStyle=1;align=center;verticalAlign=top;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="620" y="300" width="350" height="150" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="dest1" value="Column: TargetLibraryUrl&#xa;Type: Text&#xa;Required: Yes&#xa;Example: /Shared Documents/EnrichedDocs&#xa;Purpose: Where enriched docs are stored&#xa;Note: User-selected during installation" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#01579b" vertex="1" parent="1">
+          <mxGeometry x="640" y="340" width="310" height="90" as="geometry" />
+        </mxCell>
+        
+        <!-- Template Configuration -->
+        <mxCell id="template-config" value="Template Configuration" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f57f17;strokeWidth=2;fontSize=14;fontStyle=1;align=center;verticalAlign=top;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="1000" y="300" width="350" height="150" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="template1" value="Column: TemplateFileUrl&#xa;Type: Text&#xa;Required: Yes&#xa;Default: UniversalOrgTemplate.dotx&#xa;Example: /Templates/UniversalOrgTemplate.dotx&#xa;Purpose: Template file for formatting" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#e65100" vertex="1" parent="1">
+          <mxGeometry x="1020" y="340" width="310" height="90" as="geometry" />
+        </mxCell>
+        
+        <!-- Processing Configuration -->
+        <mxCell id="process-config" value="Processing Configuration" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;fontSize=14;fontStyle=1;align=center;verticalAlign=top;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="240" y="480" width="350" height="180" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="process1" value="Column: MaxFileSizeMB&#xa;Type: Number&#xa;Default: 50&#xa;Purpose: Maximum file size for processing" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#1565c0" vertex="1" parent="1">
+          <mxGeometry x="260" y="520" width="310" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="process2" value="Column: ProcessingTimeoutSeconds&#xa;Type: Number&#xa;Default: 60&#xa;Purpose: Processing timeout in seconds" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#1565c0" vertex="1" parent="1">
+          <mxGeometry x="260" y="580" width="310" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="process3" value="Column: MaxRetries&#xa;Type: Number&#xa;Default: 3&#xa;Purpose: Number of retry attempts" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#1565c0" vertex="1" parent="1">
+          <mxGeometry x="260" y="640" width="310" height="20" as="geometry" />
+        </mxCell>
+        
+        <!-- Copilot Configuration -->
+        <mxCell id="copilot-config" value="Copilot Agent Configuration" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;strokeWidth=2;fontSize=14;fontStyle=1;align=center;verticalAlign=top;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="620" y="480" width="350" height="180" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot1" value="Column: CopilotPrompt&#xa;Type: Text (Long Text)&#xa;Required: Yes&#xa;Purpose: Custom prompt/instructions for Copilot Agent&#xa;Note: Copilot Agent is ALWAYS ENABLED" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#880e4f;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="640" y="520" width="310" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot2" value="Column: AccessTeams&#xa;Type: Boolean&#xa;Default: true&#xa;Purpose: Enable Teams access" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#880e4f" vertex="1" parent="1">
+          <mxGeometry x="640" y="600" width="310" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot3" value="Column: AccessWeb&#xa;Type: Boolean&#xa;Default: true&#xa;Purpose: Enable Web access" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#880e4f" vertex="1" parent="1">
+          <mxGeometry x="640" y="620" width="310" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot4" value="Column: AccessO365&#xa;Type: Boolean&#xa;Default: true&#xa;Purpose: Enable O365 apps access" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#880e4f" vertex="1" parent="1">
+          <mxGeometry x="640" y="640" width="310" height="20" as="geometry" />
+        </mxCell>
+        
+        <!-- Azure Function App Settings -->
+        <mxCell id="azure-config-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;strokeWidth=2;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="1000" y="480" width="350" height="180" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="azure-title" value="Azure Function App Environment Variables" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#7b1fa2" vertex="1" parent="1">
+          <mxGeometry x="1020" y="500" width="310" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="azure1" value="Graph_TenantId&#xa;Graph_ClientId&#xa;Graph_ClientSecret" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#7b1fa2;strokeWidth=2;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="1020" y="540" width="310" height="100" as="geometry" />
+        </mxCell>
+        
+        <!-- Arrows -->
+        <mxCell id="arrow1" value="Reads Configuration" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#01579b;fontSize=12;fontColor=#01579b" edge="1" parent="1" source="config-storage" target="config-box">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="800" y="300" as="sourcePoint" />
+            <mxPoint x="850" y="250" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Notes -->
+        <mxCell id="note-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#e65100;strokeWidth=2;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="240" y="700" width="1110" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="note-title" value="Important Notes" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#e65100" vertex="1" parent="1">
+          <mxGeometry x="270" y="720" width="150" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="note1" value="• Source and Destination folders are user-selected during installation (not static)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#5d4037;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="280" y="750" width="500" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="note2" value="• Copilot Agent is always enabled for everyone - no enable/disable option" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#5d4037;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="800" y="750" width="530" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="note3" value="• Configuration is stored in SharePoint List (SMEPilotConfig) - no code changes needed to update" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#5d4037" vertex="1" parent="1">
+          <mxGeometry x="280" y="770" width="1050" height="20" as="geometry" />
+        </mxCell>
+        
+        <!-- Summary Box -->
+        <mxCell id="summary-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#2e7d32;strokeWidth=2;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="240" y="810" width="1110" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="summary-title" value="Configuration Summary" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontStyle=1;fontColor=#2e7d32" vertex="1" parent="1">
+          <mxGeometry x="270" y="830" width="200" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="summary-text" value="Total: 6 Configuration Items | All provided during installation via SPFx Admin Panel | Source &amp; Destination folders: User-selected | Copilot Agent: Always enabled | DocumentEnricherService: Can use third-party libraries" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#1b5e20" vertex="1" parent="1">
+          <mxGeometry x="280" y="860" width="1050" height="20" as="geometry" />
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

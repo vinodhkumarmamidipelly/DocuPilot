@@ -15,6 +15,22 @@ export interface ProcessSharePointFileResponse {
   enrichedUrl: string;
 }
 
+export interface WebhookSubscriptionRequest {
+  sourceFolderPath?: string;
+  driveId?: string;
+  siteId?: string;
+  tenantId?: string;
+  functionAppUrl?: string;
+  notificationUrl?: string;
+}
+
+export interface WebhookSubscriptionResponse {
+  subscriptionId: string;
+  expirationDateTime: string;
+  success: boolean;
+  message?: string;
+}
+
 export class FunctionAppService {
   private functionAppUrl: string;
 
@@ -63,6 +79,97 @@ export class FunctionAppService {
 4. CORS headers are configured in Function App`);
       }
       throw error;
+    }
+  }
+
+  /**
+   * Create webhook subscription for monitoring source folder
+   */
+  async createWebhookSubscription(request: WebhookSubscriptionRequest): Promise<WebhookSubscriptionResponse> {
+    try {
+      // Build request body - only include non-null/non-undefined values
+      // This prevents sending "null" as a string
+      const requestBody: any = {};
+      
+      if (request.driveId && request.driveId !== 'null' && request.driveId !== 'undefined') {
+        requestBody.driveId = request.driveId;
+      }
+      if (request.siteId && request.siteId !== 'null' && request.siteId !== 'undefined') {
+        requestBody.siteId = request.siteId;
+      }
+      if (request.sourceFolderPath) {
+        requestBody.sourceFolderPath = request.sourceFolderPath;
+      }
+      if (request.notificationUrl) {
+        requestBody.notificationUrl = request.notificationUrl;
+      } else {
+        requestBody.notificationUrl = `${this.functionAppUrl}/api/ProcessSharePointFile`;
+      }
+      if (request.functionAppUrl) {
+        requestBody.functionAppUrl = request.functionAppUrl;
+      }
+      if (request.tenantId) {
+        requestBody.tenantId = request.tenantId;
+      }
+      
+      console.log('[FunctionAppService] Creating webhook subscription with body:', JSON.stringify(requestBody, null, 2));
+
+      const response = await fetch(`${this.functionAppUrl}/api/SetupSubscription`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody),
+        mode: 'cors',
+        credentials: 'omit'
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to create webhook subscription (${response.status}): ${errorText}`);
+      }
+
+      const result = await response.json();
+      return {
+        subscriptionId: result.subscriptionId || '',
+        expirationDateTime: result.expirationDateTime || '',
+        success: true,
+        message: result.message
+      };
+    } catch (error: any) {
+      console.error('Error creating webhook subscription:', error);
+      return {
+        subscriptionId: '',
+        expirationDateTime: '',
+        success: false,
+        message: error.message
+      };
+    }
+  }
+
+  /**
+   * Validate webhook subscription
+   */
+  async validateWebhookSubscription(subscriptionId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.functionAppUrl}/api/ValidateSubscription?subscriptionId=${subscriptionId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        mode: 'cors',
+        credentials: 'omit'
+      });
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const result = await response.json();
+      return result.isValid === true;
+    } catch (error: any) {
+      console.error('Error validating webhook subscription:', error);
+      return false;
     }
   }
 

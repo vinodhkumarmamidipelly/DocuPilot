@@ -95,6 +95,205 @@ namespace SMEPilot.FunctionApp.Helpers
             return ms;
         }
 
+        /// <summary>
+        /// Downloads a template file from SharePoint using the configured template path or file URL
+        /// </summary>
+        public async Task<string?> DownloadTemplateFileAsync(string siteId, string templateLibraryPath, string templateFileName, string? templateFileUrl = null)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogWarning("⚠️ [DownloadTemplateFileAsync] No credentials available, cannot download from SharePoint");
+                return null;
+            }
+
+            try
+            {
+                string? templateFilePath = null;
+                string? targetDriveId = null;
+                string? targetItemId = null;
+
+                // Option 1: If TemplateFileUrl is provided, parse and use it
+                if (!string.IsNullOrWhiteSpace(templateFileUrl))
+                {
+                    _logger?.LogInformation("📥 [TEMPLATE] Attempting to download template from URL: {Url}", templateFileUrl);
+                    
+                    // Parse the URL format: /sites/SiteName/LibraryName/FileName or /LibraryName/FileName
+                    var normalizedUrl = templateFileUrl.TrimStart('/').TrimEnd('/');
+                    var urlParts = normalizedUrl.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                    
+                    string? parsedLibraryName = null;
+                    string? parsedFileName = null;
+                    
+                    if (urlParts.Length >= 3 && urlParts[0].Equals("sites", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Format: /sites/SiteName/LibraryName/FileName
+                        // Skip "sites" and site name, library is at index 2, file is last
+                        if (urlParts.Length >= 4)
+                        {
+                            parsedLibraryName = urlParts[2];
+                            parsedFileName = urlParts[urlParts.Length - 1];
+                            _logger?.LogInformation("📥 [TEMPLATE] Parsed URL - Library: '{Library}', File: '{File}'", parsedLibraryName, parsedFileName);
+                        }
+                        else if (urlParts.Length == 3)
+                        {
+                            // Format: /sites/SiteName/LibraryName (no file name, invalid)
+                            _logger?.LogWarning("⚠️ [TEMPLATE] URL format invalid - missing file name: {Url}", templateFileUrl);
+                        }
+                    }
+                    else if (urlParts.Length >= 2)
+                    {
+                        // Format: /LibraryName/FileName (relative path)
+                        parsedLibraryName = urlParts[0];
+                        parsedFileName = urlParts[urlParts.Length - 1];
+                        _logger?.LogInformation("📥 [TEMPLATE] Parsed URL - Library: '{Library}', File: '{File}'", parsedLibraryName, parsedFileName);
+                    }
+                    else if (urlParts.Length == 1)
+                    {
+                        // Format: /FileName (just file name, no library - invalid)
+                        _logger?.LogWarning("⚠️ [TEMPLATE] URL format invalid - missing library name: {Url}", templateFileUrl);
+                    }
+                    
+                    // If we successfully parsed the URL, try to resolve and download
+                    if (!string.IsNullOrWhiteSpace(parsedLibraryName) && !string.IsNullOrWhiteSpace(parsedFileName))
+                    {
+                        // Resolve the library to get drive ID
+                        var (driveId, folderItemId) = await ResolveFolderPathAsync(siteId, parsedLibraryName);
+                        if (!string.IsNullOrWhiteSpace(driveId))
+                        {
+                            targetDriveId = driveId;
+                            
+                            // File is in library root (no subfolder)
+                            string filePath = parsedFileName;
+                            
+                            try
+                            {
+                                // Try to get the file using ItemWithPath
+                                var fileItem = await _client!.Drives[targetDriveId].Root.ItemWithPath(filePath).GetAsync();
+                                targetItemId = fileItem.Id;
+                                _logger?.LogInformation("✅ [TEMPLATE] Found template file in SharePoint from URL: {Library}/{File} (ItemId: {ItemId})", 
+                                    parsedLibraryName, parsedFileName, targetItemId);
+                                
+                                // Update templateFileName for download path
+                                templateFileName = parsedFileName;
+                            }
+                            catch (ODataError odataError) when (odataError.Error?.Code == "itemNotFound" || odataError.Error?.Code == "NotFound")
+                            {
+                                _logger?.LogWarning("⚠️ [TEMPLATE] Template file not found at parsed URL path: {Library}/{File}", 
+                                    parsedLibraryName, parsedFileName);
+                                // Continue to fallback option 2
+                            }
+                        }
+                        else
+                        {
+                            _logger?.LogWarning("⚠️ [TEMPLATE] Could not resolve library '{Library}' from URL, falling back to TemplateLibraryPath", 
+                                parsedLibraryName);
+                            // Continue to fallback option 2
+                        }
+                    }
+                    else
+                    {
+                        _logger?.LogWarning("⚠️ [TEMPLATE] Could not parse TemplateFileUrl, falling back to TemplateLibraryPath + TemplateFileName");
+                        // Continue to fallback option 2
+                    }
+                }
+
+                // Option 2: Resolve template path using TemplateLibraryPath and TemplateFileName (fallback if Option 1 didn't work)
+                if (string.IsNullOrWhiteSpace(targetDriveId) || string.IsNullOrWhiteSpace(targetItemId))
+                {
+                    if (!string.IsNullOrWhiteSpace(templateLibraryPath) && !string.IsNullOrWhiteSpace(templateFileName))
+                    {
+                        _logger?.LogInformation("📥 [TEMPLATE] Resolving template path: {LibraryPath}/{FileName}", templateLibraryPath, templateFileName);
+                    
+                        // Resolve the library path to get drive ID
+                        var (driveId, folderItemId) = await ResolveFolderPathAsync(siteId, templateLibraryPath);
+                        if (string.IsNullOrWhiteSpace(driveId))
+                        {
+                            _logger?.LogWarning("⚠️ [TEMPLATE] Could not resolve template library path: {Path}", templateLibraryPath);
+                            return null;
+                        }
+
+                        targetDriveId = driveId;
+                        
+                        // Normalize the library path (remove /sites/SiteName/ prefix if present)
+                        var normalizedLibPath = templateLibraryPath.TrimStart('/').TrimEnd('/');
+                        if (normalizedLibPath.StartsWith("sites/", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var parts = normalizedLibPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Length >= 3)
+                            {
+                                normalizedLibPath = string.Join("/", parts.Skip(2));
+                            }
+                        }
+                        
+                        // Construct the full path to the template file
+                        // If folderItemId is null, template is in library root, otherwise it's in a subfolder
+                        string normalizedPath;
+                        if (string.IsNullOrWhiteSpace(folderItemId))
+                        {
+                            // Template is in library root
+                            normalizedPath = templateFileName;
+                        }
+                        else
+                        {
+                            // Template is in a subfolder - need to extract subfolder path from templateLibraryPath
+                            var pathParts = normalizedLibPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (pathParts.Length > 1)
+                            {
+                                // Library name is first part, rest is subfolder path
+                                var subfolderPath = string.Join("/", pathParts.Skip(1));
+                                normalizedPath = $"{subfolderPath}/{templateFileName}";
+                            }
+                            else
+                            {
+                                // Just library name, template should be in root
+                                normalizedPath = templateFileName;
+                            }
+                        }
+
+                        try
+                        {
+                            // Try to get the file using ItemWithPath
+                            var fileItem = await _client!.Drives[targetDriveId].Root.ItemWithPath(normalizedPath).GetAsync();
+                            targetItemId = fileItem.Id;
+                            _logger?.LogInformation("✅ [TEMPLATE] Found template file in SharePoint: {Path} (ItemId: {ItemId})", normalizedPath, targetItemId);
+                        }
+                        catch (ODataError odataError) when (odataError.Error?.Code == "itemNotFound" || odataError.Error?.Code == "NotFound")
+                        {
+                            _logger?.LogWarning("⚠️ [TEMPLATE] Template file not found at path: {Path}", normalizedPath);
+                            return null;
+                        }
+                    }
+                } // End of Option 2 (fallback)
+
+                if (string.IsNullOrWhiteSpace(targetDriveId) || string.IsNullOrWhiteSpace(targetItemId))
+                {
+                    _logger?.LogWarning("⚠️ [TEMPLATE] Could not determine drive/item IDs for template download");
+                    return null;
+                }
+
+                // Download the template file to a temp location
+                var tempDir = Path.Combine(Path.GetTempPath(), "SMEPilot_Templates");
+                Directory.CreateDirectory(tempDir);
+                templateFilePath = Path.Combine(tempDir, templateFileName);
+
+                _logger?.LogInformation("📥 [TEMPLATE] Downloading template file to: {TempPath}", templateFilePath);
+                
+                using (var templateStream = await DownloadFileStreamAsync(targetDriveId, targetItemId))
+                using (var fileStream = File.Create(templateFilePath))
+                {
+                    await templateStream.CopyToAsync(fileStream);
+                }
+
+                _logger?.LogInformation("✅ [TEMPLATE] Template file downloaded successfully: {Path}", templateFilePath);
+                return templateFilePath;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "❌ [TEMPLATE] Failed to download template from SharePoint: {Error}", ex.Message);
+                return null;
+            }
+        }
+
         public async Task<DriveItem> UploadFileBytesAsync(string driveId, string folderPath, string fileName, byte[] bytes)
         {
             if (!_hasCredentials)
@@ -117,9 +316,29 @@ namespace SMEPilot.FunctionApp.Helpers
                 return new DriveItem { Id = Guid.NewGuid().ToString(), WebUrl = outPath };
             }
 
-            var path = folderPath.TrimEnd('/') + "/" + fileName;
+            // Normalize the path - remove leading slash if present (Graph API expects relative path)
+            var normalizedPath = folderPath.TrimStart('/').TrimEnd('/');
+            
+            // If the path contains "Shared Documents" or a library name, we need to handle it correctly
+            // Graph API paths are relative to the drive root
+            // If folderPath is like "/Shared Documents/ProcessedDocs", normalize to "Shared Documents/ProcessedDocs"
+            // If folderPath is like "ProcessedDocs" and we're in "Shared Documents" drive, use "ProcessedDocs"
+            
+            var fullPath = normalizedPath;
+            if (!string.IsNullOrEmpty(fileName))
+            {
+                fullPath = normalizedPath + "/" + fileName;
+            }
+            
+            _logger?.LogInformation("📤 [UploadFileBytesAsync] Uploading to path: '{FullPath}' in drive {DriveId} (normalized from: '{OriginalPath}')", 
+                fullPath, driveId, folderPath);
+            
             using var ms = new MemoryStream(bytes);
-            var item = await _client!.Drives[driveId].Root.ItemWithPath(path).Content.PutAsync(ms);
+            var item = await _client!.Drives[driveId].Root.ItemWithPath(fullPath).Content.PutAsync(ms);
+            
+            _logger?.LogInformation("✅ [UploadFileBytesAsync] File uploaded successfully. WebUrl: {WebUrl}, Id: {ItemId}, Name: {Name}", 
+                item.WebUrl, item.Id, item.Name);
+            
             return item;
         }
 
@@ -604,6 +823,68 @@ namespace SMEPilot.FunctionApp.Helpers
             }
         }
 
+        /// <summary>
+        /// Get all active subscriptions
+        /// </summary>
+        /// <returns>List of active subscriptions</returns>
+        public async Task<IEnumerable<Subscription>> GetSubscriptionsAsync()
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogDebug("Mock: Would get all subscriptions");
+                return new List<Subscription>();
+            }
+
+            try
+            {
+                _logger?.LogInformation("📋 [GetSubscriptionsAsync] Getting all active subscriptions");
+
+                var subscriptions = await _retryPolicy.ExecuteAsync(async () =>
+                {
+                    return await _client!.Subscriptions.GetAsync();
+                });
+
+                var subscriptionList = subscriptions?.Value?.ToList() ?? new List<Subscription>();
+                _logger?.LogInformation("✅ [GetSubscriptionsAsync] Found {Count} active subscriptions", subscriptionList.Count);
+                return subscriptionList;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "❌ [GetSubscriptionsAsync] Error getting subscriptions: {Error}", ex.Message);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Delete a subscription by ID
+        /// </summary>
+        /// <param name="subscriptionId">Subscription ID</param>
+        public async Task DeleteSubscriptionAsync(string subscriptionId)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogDebug("Mock: Would delete subscription {SubscriptionId}", subscriptionId);
+                return;
+            }
+
+            try
+            {
+                _logger?.LogInformation("🗑️ [DeleteSubscriptionAsync] Deleting subscription {SubscriptionId}", subscriptionId);
+
+                await _retryPolicy.ExecuteAsync(async () =>
+                {
+                    await _client!.Subscriptions[subscriptionId].DeleteAsync();
+                });
+
+                _logger?.LogInformation("✅ [DeleteSubscriptionAsync] Successfully deleted subscription {SubscriptionId}", subscriptionId);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "❌ [DeleteSubscriptionAsync] Error deleting subscription {SubscriptionId}: {Error}", subscriptionId, ex.Message);
+                throw;
+            }
+        }
+
         public async Task<Subscription> CreateSubscriptionAsync(string resource, string notificationUrl, DateTimeOffset expiration)
         {
             if (!_hasCredentials) throw new InvalidOperationException("Graph credentials are not configured.");
@@ -679,6 +960,854 @@ namespace SMEPilot.FunctionApp.Helpers
                 _logger?.LogError("=== END ERROR ===");
                 throw new InvalidOperationException(errorDetails, odataError);
             }
+        }
+
+        /// <summary>
+        /// Get site ID from drive ID
+        /// </summary>
+        /// <param name="driveId">Drive ID</param>
+        /// <returns>Site ID or null if not found</returns>
+        public async Task<string?> GetSiteIdFromDriveAsync(string driveId)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogDebug("Mock: Would get site ID from drive {DriveId}", driveId);
+                return null;
+            }
+
+            try
+            {
+                _logger?.LogDebug("🔍 [GetSiteIdFromDriveAsync] Getting site ID for drive {DriveId}", driveId);
+
+                // Get drive root item to extract siteId from ParentReference
+                var rootItem = await _client!.Drives[driveId].Root.GetAsync();
+                if (rootItem?.ParentReference?.SiteId != null)
+                {
+                    var siteId = rootItem.ParentReference.SiteId;
+                    _logger?.LogDebug("✅ [GetSiteIdFromDriveAsync] Found site ID: {SiteId}", siteId);
+                    return siteId;
+                }
+
+                _logger?.LogWarning("⚠️ [GetSiteIdFromDriveAsync] SiteId not found in drive root for drive {DriveId}", driveId);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "❌ [GetSiteIdFromDriveAsync] Error getting site ID from drive {DriveId}: {Error}", driveId, ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Normalize site ID for Graph API - Graph API requires specific formats
+        /// Options:
+        /// 1. Use full siteId as-is: sites/{hostname},{tenantId},{siteId}
+        /// 2. Use hostname and path: sites/{hostname}:/sites/{sitePath}
+        /// 3. Use just the site ID part: sites/{siteId}
+        /// </summary>
+        private string NormalizeSiteIdForGraph(string siteId, string? sourceFolderPath = null)
+        {
+            // If siteId is in SharePoint REST chunk format (hostname,tenantId,siteId)
+            if (!string.IsNullOrWhiteSpace(siteId) && siteId.Contains(','))
+            {
+                var parts = siteId.Split(',');
+                if (parts.Length >= 3)
+                {
+                    var hostname = parts[0];
+
+                    // If a usable sourceFolderPath is available and includes '/sites/<sitePath>',
+                    // prefer the hostname:/sites/<sitePath> format which is accepted by Graph.
+                    if (!string.IsNullOrWhiteSpace(sourceFolderPath))
+                    {
+                        var pathParts = sourceFolderPath.TrimStart('/').Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                        if (pathParts.Length >= 2 && pathParts[0].Equals("sites", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var sitePath = pathParts[1]; // e.g. "DocEnricher-PoC"
+                            var hostnamePathFormat = $"{hostname}:/sites/{sitePath}";
+                            _logger?.LogDebug("🔍 [NormalizeSiteIdForGraph] Using hostname:path format: {HostnamePathFormat}", hostnamePathFormat);
+                            return hostnamePathFormat; // Graph likes this format
+                        }
+                    }
+
+                    // fallback: use just the siteId guid portion as sites/<siteGuid>
+                    var siteGuid = parts[2];
+                    var guidFormat = siteGuid;
+                    _logger?.LogDebug("🔍 [NormalizeSiteIdForGraph] Using site GUID format: {SiteGuid}", guidFormat);
+                    return guidFormat;
+                }
+            }
+
+            // If already in a friendly format, return as-is
+            return siteId;
+        }
+
+        public async Task<(string? driveId, string? itemId)> ResolveFolderPathAsync(string siteId, string folderPath)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogDebug("Mock: Would resolve folder path for site {SiteId}, path {FolderPath}", siteId, folderPath);
+                return (null, null);
+            }
+
+            try
+            {
+                _logger?.LogDebug("🔍 [ResolveFolderPathAsync] Resolving folder path for site {SiteId}, path {FolderPath}", siteId, folderPath);
+                
+                // Try multiple siteId formats
+                var siteIdFormats = new List<string>();
+                
+                // Format 1: Use normalized format (hostname:/sites/sitePath if available)
+                var initialNormalizedSiteId = NormalizeSiteIdForGraph(siteId, folderPath);
+                siteIdFormats.Add(initialNormalizedSiteId);
+                
+                // Format 2: If siteId contains commas, try extracting just the site ID part
+                if (siteId.Contains(','))
+                {
+                    var parts = siteId.Split(',');
+                    if (parts.Length >= 3)
+                    {
+                        // Try just the site ID (GUID)
+                        siteIdFormats.Add(parts[2]);
+                        // Try hostname:/sites/siteId format
+                        siteIdFormats.Add($"{parts[0]}:/sites/{parts[2]}");
+                    }
+                }
+                
+                // Format 3: Original siteId as-is
+                if (!siteIdFormats.Contains(siteId))
+                {
+                    siteIdFormats.Add(siteId);
+                }
+                
+                _logger?.LogDebug("🔍 [ResolveFolderPathAsync] Will try {Count} site ID formats", siteIdFormats.Count);
+
+                // Normalize the path - remove leading/trailing slashes and handle URL encoding
+                var normalizedPath = folderPath.TrimStart('/').TrimEnd('/');
+                _logger?.LogInformation("🔍 [ResolveFolderPathAsync] Input path: '{InputPath}' -> After trim: '{TrimmedPath}'", folderPath, normalizedPath);
+                
+                // If path starts with "sites/", remove it (Graph API expects path relative to site root)
+                if (normalizedPath.StartsWith("sites/", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Extract path after site name (e.g., "sites/SiteName/Library/Folder" -> "Library/Folder")
+                    var parts = normalizedPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                    _logger?.LogInformation("🔍 [ResolveFolderPathAsync] Path starts with 'sites/', parts: [{Parts}]", string.Join(", ", parts));
+                    if (parts.Length >= 3)
+                    {
+                        // Skip "sites" and site name, take the rest
+                        var beforeNormalize = normalizedPath;
+                        normalizedPath = string.Join("/", parts.Skip(2));
+                        _logger?.LogInformation("🔍 [ResolveFolderPathAsync] Removed site prefix: '{Before}' -> '{After}'", beforeNormalize, normalizedPath);
+                    }
+                    else if (parts.Length == 2)
+                    {
+                        // Just "sites/SiteName" - no library specified, this is invalid
+                        _logger?.LogWarning("⚠️ [ResolveFolderPathAsync] Path 'sites/SiteName' format but no library name found");
+                    }
+                }
+
+                _logger?.LogInformation("🔍 [ResolveFolderPathAsync] Final normalized path: '{NormalizedPath}'", normalizedPath);
+
+                // PERMANENT FIX: Parse the path to extract library name and subfolder path
+                // Path format: "LibraryName" or "LibraryName/Subfolder" or "LibraryName/Subfolder/Subfolder2"
+                var pathParts = normalizedPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                string? libraryName = null;
+                string? subfolderPath = null;
+                
+                if (pathParts.Length == 0)
+                {
+                    _logger?.LogWarning("⚠️ [ResolveFolderPathAsync] Empty path after normalization");
+                    return (null, null);
+                }
+                else if (pathParts.Length == 1)
+                {
+                    // Just a library name (e.g., "Shared Documents")
+                    libraryName = pathParts[0];
+                    subfolderPath = null;
+                    _logger?.LogDebug("🔍 [ResolveFolderPathAsync] Path is just a library name: '{LibraryName}'", libraryName);
+                }
+                else
+                {
+                    // Library name + subfolder path (e.g., "Shared Documents/ProcessedDocs")
+                    libraryName = pathParts[0];
+                    subfolderPath = string.Join("/", pathParts.Skip(1));
+                    _logger?.LogDebug("🔍 [ResolveFolderPathAsync] Parsed path - Library: '{LibraryName}', Subfolder: '{SubfolderPath}'", libraryName, subfolderPath);
+                }
+                
+                // Get all drives for the site and find the matching library
+                string? targetDriveId = null;
+                string? normalizedSiteId = null;
+                
+                // Try each siteId format until one works
+                foreach (var siteIdFormat in siteIdFormats.Distinct())
+                {
+                    try
+                    {
+                        _logger?.LogDebug("🔍 [ResolveFolderPathAsync] Trying site ID format: {SiteIdFormat}", siteIdFormat);
+                        var allDrives = await _client!.Sites[siteIdFormat].Drives.GetAsync();
+                        if (allDrives?.Value != null)
+                        {
+                            _logger?.LogInformation("🔍 [ResolveFolderPathAsync] Found {Count} drives in site {SiteIdFormat}", allDrives.Value.Count(), siteIdFormat);
+                            
+                            // Log all drive names for debugging
+                            var driveNames = string.Join(", ", allDrives.Value.Select(d => $"'{d.Name}'"));
+                            _logger?.LogInformation("📋 [ResolveFolderPathAsync] Available drives: {DriveNames}", driveNames);
+                            
+                            // PERMANENT FIX: Handle common library name variations
+                            // SharePoint often uses different names in Graph API vs user-facing names
+                            var libraryNameVariations = new List<string> { libraryName };
+                            
+                            // Add common variations for standard libraries
+                            if (libraryName.Equals("Shared Documents", StringComparison.OrdinalIgnoreCase))
+                            {
+                                libraryNameVariations.Add("Documents");
+                                libraryNameVariations.Add("Document Library");
+                            }
+                            else if (libraryName.Equals("Documents", StringComparison.OrdinalIgnoreCase))
+                            {
+                                libraryNameVariations.Add("Shared Documents");
+                                libraryNameVariations.Add("Document Library");
+                            }
+                            // Handle "Enriched documents" variations (common naming patterns)
+                            else if (libraryName.IndexOf("Enriched", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                // Try variations: "Enriched documents", "Enriched Documents", "EnrichedDocs", etc.
+                                libraryNameVariations.Add(libraryName.Replace(" ", "")); // "Enricheddocuments"
+                                // Capitalize "Documents" if present (case-insensitive replace)
+                                var lowerLibraryName = libraryName.ToLowerInvariant();
+                                if (lowerLibraryName.Contains(" documents"))
+                                {
+                                    var idx = lowerLibraryName.IndexOf(" documents");
+                                    libraryNameVariations.Add(libraryName.Substring(0, idx) + " Documents" + libraryName.Substring(idx + " documents".Length));
+                                }
+                                libraryNameVariations.Add("EnrichedDocs");
+                                libraryNameVariations.Add("Enriched Documents");
+                                // Also try with different casing
+                                libraryNameVariations.Add("enriched documents");
+                            }
+                            
+                            Drive? matchingDrive = null;
+                            
+                            // Try each variation
+                            foreach (var variation in libraryNameVariations)
+                            {
+                                // Try exact match first
+                                matchingDrive = allDrives.Value.FirstOrDefault(d => 
+                                    string.Equals(d.Name, variation, StringComparison.OrdinalIgnoreCase));
+                                
+                                if (matchingDrive != null)
+                                {
+                                    _logger?.LogInformation("✅ [ResolveFolderPathAsync] Found exact match: '{Variation}' -> Drive '{DriveName}' (ID: {DriveId})", 
+                                        variation, matchingDrive.Name, matchingDrive.Id);
+                                    break;
+                                }
+                                
+                                // Try normalized comparison (remove spaces, case-insensitive)
+                                var normalizedVariation = variation.Replace(" ", "").ToLowerInvariant();
+                                matchingDrive = allDrives.Value.FirstOrDefault(d =>
+                                {
+                                    var driveName = d.Name?.Replace(" ", "").ToLowerInvariant() ?? "";
+                                    return driveName == normalizedVariation;
+                                });
+                                
+                                if (matchingDrive != null)
+                                {
+                                    _logger?.LogInformation("✅ [ResolveFolderPathAsync] Found normalized match: '{Variation}' -> Drive '{DriveName}' (ID: {DriveId})", 
+                                        variation, matchingDrive.Name, matchingDrive.Id);
+                                    break;
+                                }
+                            }
+                            
+                            if (matchingDrive != null && !string.IsNullOrWhiteSpace(matchingDrive.Id))
+                            {
+                                targetDriveId = matchingDrive.Id;
+                                normalizedSiteId = siteIdFormat;
+                                _logger?.LogInformation("✅ [ResolveFolderPathAsync] Successfully matched library '{LibraryName}' to drive '{DriveName}' (ID: {DriveId})", 
+                                    libraryName, matchingDrive.Name, targetDriveId);
+                                break; // Found the drive, exit the siteId format loop
+                            }
+                            
+                            _logger?.LogWarning("⚠️ [ResolveFolderPathAsync] No matching drive found for library '{LibraryName}' (tried variations: {Variations}) among {Count} drives: {DriveNames}", 
+                                libraryName, string.Join(", ", libraryNameVariations), allDrives.Value.Count(), driveNames);
+                        }
+                        else
+                        {
+                            _logger?.LogWarning("⚠️ [ResolveFolderPathAsync] No drives found for site {SiteIdFormat}", siteIdFormat);
+                        }
+                        
+                        // If we got here, we successfully accessed the site, so break and use this format
+                        normalizedSiteId = siteIdFormat;
+                        break;
+                }
+                catch (ODataError odataError)
+                {
+                    _logger?.LogWarning(odataError, "⚠️ [ResolveFolderPathAsync] ODataError getting drives for site {SiteIdFormat}: {Code} - {Message}. Trying next format...", 
+                        siteIdFormat, odataError.Error?.Code, odataError.Error?.Message);
+                    // Try next format
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "⚠️ [ResolveFolderPathAsync] Error getting drives for site {SiteIdFormat}: {Error}. Trying next format...", 
+                        siteIdFormat, ex.Message);
+                    // Try next format
+                    continue;
+                }
+                }
+
+                // If we couldn't find the library drive, return null
+                if (string.IsNullOrWhiteSpace(targetDriveId))
+                {
+                    _logger?.LogError("❌ [ResolveFolderPathAsync] Could not find drive for library '{LibraryName}' in site", libraryName);
+                    return (null, null);
+                }
+
+                // If there's no subfolder path, return the library root
+                if (string.IsNullOrWhiteSpace(subfolderPath))
+                {
+                    _logger?.LogInformation("✅ [ResolveFolderPathAsync] Resolved to library root. DriveId: {DriveId}", targetDriveId);
+                    return (targetDriveId, null);
+                }
+
+                // Resolve the subfolder path within the found drive
+                _logger?.LogInformation("🔍 [ResolveFolderPathAsync] Resolving subfolder path '{SubfolderPath}' within drive {DriveId}...", subfolderPath, targetDriveId);
+                DriveItem? folderItem = null;
+                try
+                {
+                    // Use the drive ID to access root and resolve the subfolder path
+                    folderItem = await _client!.Drives[targetDriveId].Root.ItemWithPath(subfolderPath).GetAsync();
+                    _logger?.LogInformation("✅ [ResolveFolderPathAsync] Successfully resolved subfolder '{SubfolderPath}' in drive {DriveId}", subfolderPath, targetDriveId);
+                }
+                catch (ODataError odataError) when (odataError.Error?.Code == "itemNotFound" || odataError.Error?.Code == "NotFound")
+                {
+                    // PERMANENT FIX: If folder doesn't exist, create it
+                    _logger?.LogWarning("⚠️ [ResolveFolderPathAsync] Subfolder '{SubfolderPath}' not found in drive {DriveId}. Attempting to create it...", subfolderPath, targetDriveId);
+                    
+                    try
+                    {
+                        // Split the path into parts to create nested folders if needed
+                        var folderParts = subfolderPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                        DriveItem? currentFolder = null;
+                        string currentPath = "";
+                        
+                        foreach (var folderPart in folderParts)
+                        {
+                            currentPath = string.IsNullOrEmpty(currentPath) ? folderPart : $"{currentPath}/{folderPart}";
+                            
+                            try
+                            {
+                                // Try to get the folder
+                                if (currentFolder == null)
+                                {
+                                    currentFolder = await _client!.Drives[targetDriveId].Root.ItemWithPath(currentPath).GetAsync();
+                                }
+                                else
+                                {
+                                    currentFolder = await _client!.Drives[targetDriveId].Items[currentFolder.Id].ItemWithPath(folderPart).GetAsync();
+                                }
+                                _logger?.LogDebug("✅ [ResolveFolderPathAsync] Folder '{FolderPart}' already exists at path '{CurrentPath}'", folderPart, currentPath);
+                            }
+                            catch (ODataError ex) when (ex.Error?.Code == "itemNotFound" || ex.Error?.Code == "NotFound")
+                            {
+                                // Folder doesn't exist, create it
+                                _logger?.LogInformation("📁 [ResolveFolderPathAsync] Creating folder '{FolderPart}' at path '{CurrentPath}'...", folderPart, currentPath);
+                                
+                                var newFolder = new DriveItem
+                                {
+                                    Name = folderPart,
+                                    Folder = new Folder()
+                                };
+                                
+                                if (currentFolder == null)
+                                {
+                                    // Create in drive root - need to get root item first
+                                    var rootItem = await _client!.Drives[targetDriveId].Root.GetAsync();
+                                    if (rootItem?.Id != null)
+                                    {
+                                        currentFolder = await _client!.Drives[targetDriveId].Items[rootItem.Id].Children.PostAsync(newFolder);
+                                    }
+                                    else
+                                    {
+                                        throw new InvalidOperationException($"Could not get root item for drive {targetDriveId}");
+                                    }
+                                }
+                                else
+                                {
+                                    // Create in current folder
+                                    currentFolder = await _client!.Drives[targetDriveId].Items[currentFolder.Id].Children.PostAsync(newFolder);
+                                }
+                                
+                                _logger?.LogInformation("✅ [ResolveFolderPathAsync] Successfully created folder '{FolderPart}' (ID: {ItemId})", folderPart, currentFolder.Id);
+                            }
+                        }
+                        
+                        folderItem = currentFolder;
+                        _logger?.LogInformation("✅ [ResolveFolderPathAsync] Successfully created/verified subfolder path '{SubfolderPath}' in drive {DriveId}", subfolderPath, targetDriveId);
+                    }
+                    catch (Exception createEx)
+                    {
+                        _logger?.LogError(createEx, "❌ [ResolveFolderPathAsync] Failed to create subfolder '{SubfolderPath}' in drive {DriveId}. Error: {Error}", 
+                            subfolderPath, targetDriveId, createEx.Message);
+                        return (null, null);
+                    }
+                }
+                catch (ODataError odataError)
+                {
+                    _logger?.LogError(odataError, "❌ [ResolveFolderPathAsync] ODataError resolving subfolder path '{SubfolderPath}' in drive {DriveId}. Error Code: {Code}, Message: {Message}", 
+                        subfolderPath, targetDriveId, odataError.Error?.Code, odataError.Error?.Message);
+                    if (odataError.Error?.InnerError != null)
+                    {
+                        _logger?.LogError("Inner Error: {InnerError}", odataError.Error.InnerError);
+                    }
+                    return (null, null);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "⚠️ [ResolveFolderPathAsync] Error resolving subfolder path '{SubfolderPath}' in drive {DriveId}. Error: {Error}", subfolderPath, targetDriveId, ex.Message);
+                    return (null, null);
+                }
+                
+                if (folderItem == null)
+                {
+                    _logger?.LogWarning("⚠️ [ResolveFolderPathAsync] Subfolder not found at path: {SubfolderPath} in drive {DriveId}", subfolderPath, targetDriveId);
+                    return (null, null);
+                }
+
+                var resolvedDriveId = folderItem.ParentReference?.DriveId;
+                var itemId = folderItem.Id;
+
+                if (string.IsNullOrWhiteSpace(resolvedDriveId) || string.IsNullOrWhiteSpace(itemId))
+                {
+                    _logger?.LogWarning("⚠️ [ResolveFolderPathAsync] Subfolder found but missing driveId or itemId. DriveId: {DriveId}, ItemId: {ItemId}", resolvedDriveId, itemId);
+                    return (null, null);
+                }
+
+                _logger?.LogInformation("✅ [ResolveFolderPathAsync] Successfully resolved folder. DriveId: {DriveId}, ItemId: {ItemId}, Path: {Path}", resolvedDriveId, itemId, normalizedPath);
+                return (resolvedDriveId, itemId);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "❌ [ResolveFolderPathAsync] Error resolving folder path for site {SiteId}, path {FolderPath}: {Error}", siteId, folderPath, ex.Message);
+                return (null, null);
+            }
+        }
+
+        /// <summary>
+        /// Get drive ID from site ID and library name (or folder path)
+        /// </summary>
+        /// <param name="siteId">Site ID</param>
+        /// <param name="libraryName">Library name (e.g., "Shared Documents", "Documents")</param>
+        /// <param name="sourceFolderPath">Optional source folder path to help normalize siteId</param>
+        /// <returns>Drive ID or null if not found</returns>
+        public async Task<string?> GetDriveIdFromSiteAndLibraryAsync(string siteId, string libraryName, string? sourceFolderPath = null)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogDebug("Mock: Would get drive ID for site {SiteId}, library {LibraryName}", siteId, libraryName);
+                return null;
+            }
+
+            // Try multiple siteId formats if the first one fails
+            var siteIdFormats = new List<string>();
+            
+            // Format 1: Use normalized format (hostname:/sites/sitePath if available)
+            var normalizedSiteId = NormalizeSiteIdForGraph(siteId, sourceFolderPath);
+            siteIdFormats.Add(normalizedSiteId);
+            
+            // Format 2: If siteId contains commas, try extracting just the site ID part
+            if (siteId.Contains(','))
+            {
+                var parts = siteId.Split(',');
+                if (parts.Length >= 3)
+                {
+                    // Try just the site ID (GUID)
+                    siteIdFormats.Add(parts[2]);
+                    // Try hostname:/sites/siteId format
+                    siteIdFormats.Add($"{parts[0]}:/sites/{parts[2]}");
+                }
+            }
+            
+            // Format 3: Original siteId as-is
+            if (!siteIdFormats.Contains(siteId))
+            {
+                siteIdFormats.Add(siteId);
+            }
+
+            foreach (var siteIdFormat in siteIdFormats.Distinct())
+            {
+                try
+                {
+                    _logger?.LogDebug("🔍 [GetDriveIdFromSiteAndLibraryAsync] Trying site ID format: {SiteIdFormat} for library {LibraryName}", siteIdFormat, libraryName);
+
+                    // Get all drives for the site
+                    var drives = await _client!.Sites[siteIdFormat].Drives.GetAsync();
+                    if (drives?.Value == null || !drives.Value.Any())
+                    {
+                        _logger?.LogWarning("⚠️ [GetDriveIdFromSiteAndLibraryAsync] No drives found for site {SiteIdFormat}", siteIdFormat);
+                        continue; // Try next format
+                    }
+
+                    _logger?.LogDebug("🔍 [GetDriveIdFromSiteAndLibraryAsync] Found {Count} drives. Drive names: {DriveNames}", 
+                        drives.Value.Count(), string.Join(", ", drives.Value.Select(d => d.Name ?? "Unknown")));
+
+                    // Find drive by name (case-insensitive, exact match)
+                    var matchingDrive = drives.Value.FirstOrDefault(d => 
+                        string.Equals(d.Name, libraryName, StringComparison.OrdinalIgnoreCase));
+
+                    if (matchingDrive != null && !string.IsNullOrWhiteSpace(matchingDrive.Id))
+                    {
+                        _logger?.LogInformation("✅ [GetDriveIdFromSiteAndLibraryAsync] Found drive ID: {DriveId} for library '{LibraryName}' (exact match)", matchingDrive.Id, libraryName);
+                        return matchingDrive.Id;
+                    }
+
+                    // If exact match not found, try normalized comparison (remove spaces, case-insensitive)
+                    var normalizedLibraryName = libraryName.Replace(" ", "").ToLowerInvariant();
+                    matchingDrive = drives.Value.FirstOrDefault(d =>
+                    {
+                        var normalizedDriveName = d.Name?.Replace(" ", "").ToLowerInvariant() ?? "";
+                        return normalizedDriveName == normalizedLibraryName;
+                    });
+
+                    if (matchingDrive != null && !string.IsNullOrWhiteSpace(matchingDrive.Id))
+                    {
+                        _logger?.LogInformation("✅ [GetDriveIdFromSiteAndLibraryAsync] Found drive ID: {DriveId} for library '{LibraryName}' (normalized match, actual name: '{ActualName}')", 
+                            matchingDrive.Id, libraryName, matchingDrive.Name);
+                        return matchingDrive.Id;
+                    }
+
+                    // Try partial match (contains)
+                    matchingDrive = drives.Value.FirstOrDefault(d =>
+                        d.Name?.Contains(libraryName, StringComparison.OrdinalIgnoreCase) == true ||
+                        libraryName.Contains(d.Name ?? "", StringComparison.OrdinalIgnoreCase));
+
+                    if (matchingDrive != null && !string.IsNullOrWhiteSpace(matchingDrive.Id))
+                    {
+                        _logger?.LogInformation("✅ [GetDriveIdFromSiteAndLibraryAsync] Found drive ID: {DriveId} for library '{LibraryName}' (partial match, actual name: '{ActualName}')", 
+                            matchingDrive.Id, libraryName, matchingDrive.Name);
+                        return matchingDrive.Id;
+                    }
+
+                    _logger?.LogWarning("⚠️ [GetDriveIdFromSiteAndLibraryAsync] Drive not found for library '{LibraryName}' in site {SiteIdFormat}. Available drives: {Drives}", 
+                        libraryName, siteIdFormat, string.Join(", ", drives.Value.Select(d => $"'{d.Name}'")));
+                }
+                catch (ODataError odataError)
+                {
+                    _logger?.LogWarning(odataError, "⚠️ [GetDriveIdFromSiteAndLibraryAsync] ODataError with site ID format '{SiteIdFormat}': {Code} - {Message}. Trying next format...", 
+                        siteIdFormat, odataError.Error?.Code, odataError.Error?.Message);
+                    continue; // Try next format
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "⚠️ [GetDriveIdFromSiteAndLibraryAsync] Error with site ID format '{SiteIdFormat}': {Error}. Trying next format...", 
+                        siteIdFormat, ex.Message);
+                    continue; // Try next format
+                }
+            }
+
+            _logger?.LogError("❌ [GetDriveIdFromSiteAndLibraryAsync] Failed to get drive ID for library '{LibraryName}' in site {SiteId} after trying {Count} formats", 
+                libraryName, siteId, siteIdFormats.Count);
+            return null;
+        }
+
+        /// <summary>
+        /// Update list item fields by site ID, list ID, and list item ID
+        /// </summary>
+        /// <param name="siteId">Site ID</param>
+        /// <param name="listId">List ID</param>
+        /// <param name="listItemId">List item ID</param>
+        /// <param name="fields">Fields to update</param>
+        public async Task UpdateListItemFieldsByListIdAsync(string siteId, string listId, string listItemId, Dictionary<string, object> fields, string? sourceFolderPath = null)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogDebug("Mock: Would update list item fields for site {SiteId}, list {ListId}, item {ListItemId}", siteId, listId, listItemId);
+                return;
+            }
+
+            // Try multiple siteId formats if the first one fails
+            var siteIdFormats = new List<string>();
+            
+            // Format 1: Use normalized format (hostname:/sites/sitePath if available)
+            var normalizedSiteId = NormalizeSiteIdForGraph(siteId, sourceFolderPath);
+            siteIdFormats.Add(normalizedSiteId);
+            
+            // Format 2: If siteId contains commas, try extracting just the site ID part
+            if (siteId.Contains(','))
+            {
+                var parts = siteId.Split(',');
+                if (parts.Length >= 3)
+                {
+                    // Try just the site ID (GUID)
+                    siteIdFormats.Add(parts[2]);
+                    // Try hostname:/sites/siteId format
+                    siteIdFormats.Add($"{parts[0]}:/sites/{parts[2]}");
+                }
+            }
+            
+            // Format 3: Original siteId as-is
+            if (!siteIdFormats.Contains(siteId))
+            {
+                siteIdFormats.Add(siteId);
+            }
+
+            Exception? lastException = null;
+
+            // Try each siteId format until one works
+            foreach (var siteIdFormat in siteIdFormats.Distinct())
+            {
+                try
+                {
+                    _logger?.LogInformation("🔄 [UpdateListItemFieldsByListIdAsync] Updating fields for site {SiteId}, list {ListId}, item {ListItemId} (trying format: {Format})", 
+                        siteId, listId, listItemId, siteIdFormat);
+
+                    var fieldValues = new Microsoft.Graph.Models.FieldValueSet();
+                    if (fieldValues.AdditionalData == null)
+                    {
+                        fieldValues.AdditionalData = new Dictionary<string, object>();
+                    }
+
+                    foreach (var field in fields)
+                    {
+                        fieldValues.AdditionalData[field.Key] = field.Value;
+                    }
+
+                    await _retryPolicy.ExecuteAsync(async () =>
+                    {
+                        await _client!.Sites[siteIdFormat].Lists[listId].Items[listItemId].Fields.PatchAsync(fieldValues);
+                    });
+
+                    _logger?.LogInformation("✅ [UpdateListItemFieldsByListIdAsync] Successfully updated fields for list item {ListItemId} using site ID format: {SiteIdFormat}", 
+                        listItemId, siteIdFormat);
+                    return; // Success, exit
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                    _logger?.LogWarning("⚠️ [UpdateListItemFieldsByListIdAsync] Failed with site ID format {SiteIdFormat}: {Error}", 
+                        siteIdFormat, ex.Message);
+                    if (ex is ODataError odataError)
+                    {
+                        _logger?.LogWarning("   OData Error Code: {Code}, Message: {Message}", odataError.Error?.Code, odataError.Error?.Message);
+                        // If it's itemNotFound, try next format
+                        if (odataError.Error?.Code == "itemNotFound" || odataError.Error?.Code == "NotFound")
+                        {
+                            continue; // Try next format
+                        }
+                    }
+                    // For other errors, continue trying other formats
+                }
+            }
+
+            // If we get here, all formats failed
+            _logger?.LogError(lastException, "❌ [UpdateListItemFieldsByListIdAsync] Error updating fields for site {SiteId}, list {ListId}, item {ListItemId} after trying all formats: {Error}", 
+                siteId, listId, listItemId, lastException?.Message ?? "Unknown error");
+            throw lastException ?? new InvalidOperationException($"Could not update list item fields in site {siteId} using any site ID format");
+        }
+
+        /// <summary>
+        /// Get list ID by list name
+        /// </summary>
+        /// <param name="siteId">Site ID</param>
+        /// <param name="listName">List name (e.g., "SMEPilotConfig")</param>
+        /// <returns>List ID or null if not found</returns>
+        public async Task<string?> GetListIdByNameAsync(string siteId, string listName, string? sourceFolderPath = null)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogDebug("Mock: Would get list ID for list {ListName} in site {SiteId}", listName, siteId);
+                return null;
+            }
+
+            // Try multiple siteId formats if the first one fails
+            var siteIdFormats = new List<string>();
+            
+            // Format 1: Use normalized format (hostname:/sites/sitePath if available)
+            var normalizedSiteId = NormalizeSiteIdForGraph(siteId, sourceFolderPath);
+            siteIdFormats.Add(normalizedSiteId);
+            
+            // Format 2: If siteId contains commas, try extracting just the site ID part
+            if (siteId.Contains(','))
+            {
+                var parts = siteId.Split(',');
+                if (parts.Length >= 3)
+                {
+                    // Try just the site ID (GUID)
+                    siteIdFormats.Add(parts[2]);
+                    // Try hostname:/sites/siteId format
+                    siteIdFormats.Add($"{parts[0]}:/sites/{parts[2]}");
+                }
+            }
+            
+            // Format 3: Original siteId as-is
+            if (!siteIdFormats.Contains(siteId))
+            {
+                siteIdFormats.Add(siteId);
+            }
+
+            // Try each siteId format until one works
+            foreach (var siteIdFormat in siteIdFormats.Distinct())
+            {
+                try
+                {
+                    _logger?.LogInformation("🔍 [GetListIdByNameAsync] Getting list ID for list '{ListName}' in site {SiteId} (trying format: {Format})", 
+                        listName, siteId, siteIdFormat);
+
+                    var lists = await _retryPolicy.ExecuteAsync(async () =>
+                    {
+                        return await _client!.Sites[siteIdFormat].Lists.GetAsync(config =>
+                        {
+                            config.QueryParameters.Filter = $"displayName eq '{listName}'";
+                            config.QueryParameters.Top = 1;
+                        });
+                    });
+
+                    if (lists?.Value == null || !lists.Value.Any())
+                    {
+                        _logger?.LogWarning("⚠️ [GetListIdByNameAsync] List '{ListName}' not found in site {SiteIdFormat}", listName, siteIdFormat);
+                        continue; // Try next format
+                    }
+
+                    var list = lists.Value.First();
+                    var listId = list.Id;
+                    _logger?.LogInformation("✅ [GetListIdByNameAsync] Found list '{ListName}' with ID {ListId} using site ID format: {SiteIdFormat}", 
+                        listName, listId, siteIdFormat);
+                    return listId;
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning("⚠️ [GetListIdByNameAsync] Failed with site ID format {SiteIdFormat}: {Error}", 
+                        siteIdFormat, ex.Message);
+                    if (ex is ODataError odataError)
+                    {
+                        _logger?.LogWarning("   OData Error Code: {Code}, Message: {Message}", odataError.Error?.Code, odataError.Error?.Message);
+                        // If it's itemNotFound, try next format
+                        if (odataError.Error?.Code == "itemNotFound" || odataError.Error?.Code == "NotFound")
+                        {
+                            continue; // Try next format
+                        }
+                    }
+                    // For other errors, continue trying other formats
+                }
+            }
+
+            // If we get here, all formats failed
+            _logger?.LogError("❌ [GetListIdByNameAsync] Error getting list ID for list '{ListName}' in site {SiteId} after trying all formats", listName, siteId);
+            return null;
+        }
+
+        /// <summary>
+        /// Get list items from a SharePoint list by list name
+        /// </summary>
+        /// <param name="siteId">Site ID</param>
+        /// <param name="listName">List name (e.g., "SMEPilotConfig")</param>
+        /// <param name="top">Maximum number of items to return (default: 100)</param>
+        /// <returns>List of list items with their fields</returns>
+        public async Task<List<Microsoft.Graph.Models.ListItem>> GetListItemsByNameAsync(string siteId, string listName, int top = 100, string? sourceFolderPath = null)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogDebug("Mock: Would query list items from list {ListName} in site {SiteId}", listName, siteId);
+                return new List<Microsoft.Graph.Models.ListItem>();
+            }
+
+            // Try multiple siteId formats if the first one fails
+            var siteIdFormats = new List<string>();
+            
+            // Format 1: Use normalized format (hostname:/sites/sitePath if available)
+            var normalizedSiteId = NormalizeSiteIdForGraph(siteId, sourceFolderPath);
+            siteIdFormats.Add(normalizedSiteId);
+            
+            // Format 2: If siteId contains commas, try extracting just the site ID part
+            if (siteId.Contains(','))
+            {
+                var parts = siteId.Split(',');
+                if (parts.Length >= 3)
+                {
+                    // Try just the site ID (GUID)
+                    siteIdFormats.Add(parts[2]);
+                    // Try hostname:/sites/siteId format
+                    siteIdFormats.Add($"{parts[0]}:/sites/{parts[2]}");
+                }
+            }
+            
+            // Format 3: Original siteId as-is
+            if (!siteIdFormats.Contains(siteId))
+            {
+                siteIdFormats.Add(siteId);
+            }
+
+            Exception? lastException = null;
+            
+            // Try each siteId format until one works
+            foreach (var siteIdFormat in siteIdFormats.Distinct())
+            {
+                try
+                {
+                    _logger?.LogInformation("📋 [GetListItemsByNameAsync] Querying list items from list '{ListName}' in site {SiteId} (trying format: {Format})", 
+                        listName, siteId, siteIdFormat);
+
+                    // First, get the list by name
+                    var lists = await _retryPolicy.ExecuteAsync(async () =>
+                    {
+                        return await _client!.Sites[siteIdFormat].Lists.GetAsync(config =>
+                        {
+                            config.QueryParameters.Filter = $"displayName eq '{listName}'";
+                            config.QueryParameters.Top = 1;
+                        });
+                    });
+
+                    if (lists?.Value == null || !lists.Value.Any())
+                    {
+                        _logger?.LogWarning("⚠️ [GetListItemsByNameAsync] List '{ListName}' not found in site {SiteIdFormat}", listName, siteIdFormat);
+                        continue; // Try next format
+                    }
+
+                    var list = lists.Value.First();
+                    var listId = list.Id;
+
+                    _logger?.LogInformation("✅ [GetListItemsByNameAsync] Found list '{ListName}' with ID {ListId} using site ID format: {SiteIdFormat}", 
+                        listName, listId, siteIdFormat);
+
+                    // Get list items
+                    var items = await _retryPolicy.ExecuteAsync(async () =>
+                    {
+                        return await _client!.Sites[siteIdFormat].Lists[listId].Items.GetAsync(config =>
+                        {
+                            config.QueryParameters.Top = top;
+                            config.QueryParameters.Expand = new[] { "fields" };
+                        });
+                    });
+
+                    var itemList = items?.Value?.ToList() ?? new List<Microsoft.Graph.Models.ListItem>();
+                    _logger?.LogInformation("✅ [GetListItemsByNameAsync] Retrieved {Count} items from list '{ListName}'", itemList.Count, listName);
+
+                    return itemList;
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                    _logger?.LogWarning("⚠️ [GetListItemsByNameAsync] Failed with site ID format {SiteIdFormat}: {Error}", 
+                        siteIdFormat, ex.Message);
+                    if (ex is ODataError odataError)
+                    {
+                        _logger?.LogWarning("   OData Error Code: {Code}, Message: {Message}", odataError.Error?.Code, odataError.Error?.Message);
+                        // If it's itemNotFound, try next format
+                        if (odataError.Error?.Code == "itemNotFound" || odataError.Error?.Code == "NotFound")
+                        {
+                            continue; // Try next format
+                        }
+                    }
+                    // For other errors, continue trying other formats
+                }
+            }
+
+            // If we get here, all formats failed
+            _logger?.LogError(lastException, "❌ [GetListItemsByNameAsync] Error retrieving list items from list '{ListName}' in site {SiteId} after trying all formats: {Error}", 
+                listName, siteId, lastException?.Message ?? "Unknown error");
+            if (lastException is ODataError odataError2)
+            {
+                _logger?.LogError("   OData Error Code: {Code}, Message: {Message}", odataError2.Error?.Code, odataError2.Error?.Message);
+            }
+            throw lastException ?? new InvalidOperationException($"Could not retrieve list items from '{listName}' in site {siteId} using any site ID format");
         }
     }
 }

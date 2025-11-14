@@ -1,0 +1,127 @@
+I'm using SPFx 1.21.1 with SPHttpClient to create a SharePoint list, but I'm getting errors.
+
+SPFx Version: 1.21.1
+Node Version: >=22.0.0
+React Version: 17.0.1
+Using: SPHttpClient from @microsoft/sp-http
+Environment: Local workbench (localhost:4321) → SharePoint Online
+
+MY CODE:
+
+```typescript
+public async createSMEPilotConfigList(): Promise<boolean> {
+  try {
+    // Check if list already exists
+    const listExists = await this.listExists();
+    if (listExists) {
+      return true;
+    }
+
+    // Get request digest
+    const digestUrl = `${this.webUrl}/_api/contextinfo`;
+    const digestResponse = await this.httpClient.post(
+      digestUrl,
+      SPHttpClient.configurations.v1,
+      {
+        body: '' // Empty body for contextinfo
+      }
+    );
+
+    if (!digestResponse.ok) {
+      const errorText = await digestResponse.text();
+      throw new Error(`Failed to get request digest (${digestResponse.status}): ${errorText}`);
+    }
+
+    const digestData = await digestResponse.json();
+    const digest = digestData.d?.GetContextWebInformation?.FormDigestValue || 
+                   digestData.FormDigestValue || 
+                   '';
+
+    if (!digest) {
+      throw new Error('Request digest not found in response');
+    }
+
+    // Create the list
+    const createListUrl = `${this.webUrl}/_api/web/lists`;
+    const listBody = {
+      __metadata: { type: 'SP.List' },
+      Title: this.listName,
+      Description: 'SMEPilot Configuration List - Stores all installation-time settings',
+      BaseTemplate: 100, // Custom List
+      ContentTypesEnabled: false,
+      Hidden: false
+    };
+
+    const createResponse = await this.httpClient.post(
+      createListUrl,
+      SPHttpClient.configurations.v1,
+      {
+        headers: {
+          'X-RequestDigest': digest
+        },
+        body: JSON.stringify(listBody)
+      }
+    );
+
+    if (!createResponse.ok) {
+      const errorText = await createResponse.text();
+      throw new Error(`Failed to create list (${createResponse.status}): ${errorText}`);
+    }
+
+    const listData = await createResponse.json();
+    const listId = listData.d?.Id || listData.Id;
+    
+    await this.addListColumns(listId);
+    return true;
+  } catch (error: any) {
+    console.error('Error creating SMEPilotConfig list:', error);
+    throw error;
+  }
+}
+```
+
+ERRORS I'VE ENCOUNTERED:
+
+1. First Error (when using /_api/web/lists/Add with manual headers):
+```
+Failed to create list: {"odata.error":{"code":"-1, Microsoft.SharePoint.Client.InvalidClientQueryException","message":{"lang":"en-US","value":"The property '__metadata' does not exist on type 'SP.List'. Make sure to only use property names that are defined by the type."}}}
+Status: 400 Bad Request
+```
+
+2. Second Error (when getting request digest with manual Accept header):
+```
+Failed to get request digest: {"error":{"code":"-1, Microsoft.SharePoint.Client.ClientServiceException","message":"The HTTP header ACCEPT is missing or its value is invalid."}}
+Status: 406 Not Acceptable
+```
+
+3. Network Errors:
+- GET https://onblick.sharepoint.com/sites/DocEnricher-PoC/_api/web/lists/getbytitle('SMEPilotConfig') 404 (Not Found) - This is expected, list doesn't exist yet
+- POST https://onblick.sharepoint.com/sites/DocEnricher-PoC/_api/contextinfo 406 (Not Acceptable) - When I manually set Accept header
+
+WHAT I'VE TRIED:
+
+1. ✅ Using SPHttpClient (not plain fetch)
+2. ✅ Getting request digest from /_api/contextinfo
+3. ✅ Including X-RequestDigest header
+4. ✅ Using SPHttpClient.configurations.v1 (should handle headers automatically)
+5. ✅ Including __metadata in request body
+6. ❌ Tried without __metadata - got same error
+7. ❌ Tried /_api/web/lists/Add endpoint - got same error
+8. ❌ Tried manual Accept/Content-Type headers - got 406 error
+9. ✅ Using empty body for contextinfo request
+10. ✅ Letting SPHttpClient handle Accept/Content-Type automatically
+
+CURRENT ISSUE:
+
+When I click "Save Configuration", the code tries to create a SharePoint list. The request fails with an error about __metadata not existing on type SP.List, even though I'm using SPHttpClient which should handle this correctly.
+
+QUESTION:
+
+What's the correct way to create a SharePoint list using SPHttpClient in SPFx 1.21.1? Should I:
+- Include __metadata or not?
+- Use /_api/web/lists or /_api/web/lists/Add?
+- Set headers manually or let SPHttpClient handle them?
+- Use a different approach entirely (like PnPjs)?
+
+Please provide working code that definitely works with SPFx 1.21.1 and SPHttpClient.
+

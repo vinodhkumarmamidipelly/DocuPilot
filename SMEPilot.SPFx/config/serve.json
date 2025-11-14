@@ -3,7 +3,7 @@
   "port": 4321,
   "https": true,
   "hostname": "localhost",
-  "initialPage": "https://onblick.sharepoint.com/sites/DocEnricher-PoC/_layouts/15/workbench.aspx?noredir=true&debugManifestsFile=https://localhost:4321/temp/build/manifests.js"
+  "initialPage": "https://onblick.sharepoint.com/sites/DocEnricher-PoC/_layouts/15/workbench.aspx"
 }
 
 

@@ -1,0 +1,299 @@
+<mxfile host="app.diagrams.net" modified="2024-01-01T00:00:00.000Z" agent="5.0" version="21.0.0" etag="arch-enhanced-fixed" type="device">
+  <diagram name="SMEPilot System Architecture" id="architecture-enhanced-fixed">
+    <mxGraphModel dx="2000" dy="1600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Title -->
+        <mxCell id="title" value="SMEPilot System Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=28;fontStyle=1;fontColor=#1a1a1a" vertex="1" parent="1">
+          <mxGeometry x="600" y="20" width="600" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- USER -->
+        <mxCell id="user" value="👤 USER" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=3;fontSize=20;fontStyle=1;fontColor=#1b5e20" vertex="1" parent="1">
+          <mxGeometry x="700" y="80" width="200" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- SHAREPOINT SOURCE -->
+        <mxCell id="sp-source-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5ff;strokeColor=#01579b;strokeWidth=3;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="600" y="200" width="400" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="sp-source" value="📁 SHAREPOINT ONLINE" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;fontColor=#01579b" vertex="1" parent="1">
+          <mxGeometry x="600" y="210" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="sp-source-detail" value="Source Folder (Configurable)&#xa;• Raw Documents (.docx)&#xa;• Webhook Subscription Active" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#01579b" vertex="1" parent="1">
+          <mxGeometry x="600" y="250" width="400" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- ARROW 1: User to SharePoint -->
+        <mxCell id="arrow1" value="1. Uploads Document (.docx)" style="endArrow=classic;html=1;rounded=0;strokeWidth=4;strokeColor=#1976d2;fontSize=16;fontColor=#0d47a1;fontStyle=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="user" target="sp-source-box">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="800" y="150" as="sourcePoint" />
+            <mxPoint x="800" y="200" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- AZURE FUNCTION APP -->
+        <mxCell id="func-app-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1565c0;strokeWidth=3;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="600" y="380" width="400" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="func-app" value="⚙️ AZURE FUNCTION APP" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;fontColor=#1565c0" vertex="1" parent="1">
+          <mxGeometry x="600" y="390" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="func-app-detail" value="ProcessSharePointFile.cs&#xa;• Downloads file via Graph API&#xa;• Reads template from Templates Library&#xa;• TemplateFiller.cs - OpenXML processing&#xa;• SimplifiedContentMapper.cs - Rule-based mapping&#xa;• Uploads enriched document&#xa;• Updates metadata (SMEPilot_Enriched, Status)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#1565c0;spacingLeft=20" vertex="1" parent="1">
+          <mxGeometry x="620" y="430" width="360" height="120" as="geometry" />
+        </mxCell>
+        
+        <!-- ARROW 2: SharePoint to Function App -->
+        <mxCell id="arrow2" value="2. Webhook Notification&#xa;(Microsoft Graph)" style="endArrow=classic;html=1;rounded=0;strokeWidth=4;strokeColor=#1976d2;fontSize=16;fontColor=#0d47a1;fontStyle=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="sp-source-box" target="func-app-box">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="800" y="330" as="sourcePoint" />
+            <mxPoint x="800" y="380" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- SHAREPOINT ENRICHED -->
+        <mxCell id="sp-enriched-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffebee;strokeColor=#c62828;strokeWidth=4;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="600" y="620" width="400" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="sp-enriched" value="🔍 SMEPILOT ENRICHED DOCS" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;fontColor=#c62828" vertex="1" parent="1">
+          <mxGeometry x="600" y="630" width="400" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="sp-enriched-detail" value="(Required Library Name)&#xa;• Enriched Documents (.docx)&#xa;• Indexed by Microsoft Search&#xa;• Metadata: SMEPilot_Enriched=Yes" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#c62828" vertex="1" parent="1">
+          <mxGeometry x="600" y="670" width="400" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- ARROW 3: Function App to Enriched -->
+        <mxCell id="arrow3" value="3. Uploads Enriched Document" style="endArrow=classic;html=1;rounded=0;strokeWidth=4;strokeColor=#c62828;fontSize=16;fontColor=#b71c1c;fontStyle=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="func-app-box" target="sp-enriched-box">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="800" y="570" as="sourcePoint" />
+            <mxPoint x="800" y="620" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- COPILOT -->
+        <mxCell id="copilot-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;strokeWidth=3;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="1100" y="620" width="350" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="copilot" value="🤖 O365 COPILOT" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;fontColor=#c2185b" vertex="1" parent="1">
+          <mxGeometry x="1100" y="630" width="350" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="copilot-detail" value="• Configured via Copilot Studio&#xa;• Custom Instructions Active&#xa;• Queries SharePoint DIRECTLY" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#c2185b;spacingLeft=20" vertex="1" parent="1">
+          <mxGeometry x="1120" y="670" width="310" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- ARROW 4: Enriched to Copilot (User Query) -->
+        <mxCell id="arrow4" value="4. User Asks Question" style="endArrow=classic;html=1;rounded=0;strokeWidth=4;strokeColor=#c2185b;fontSize=16;fontColor=#880e4f;fontStyle=1;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="sp-enriched-box" target="copilot-box">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1000" y="680" as="sourcePoint" />
+            <mxPoint x="1100" y="680" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- ARROW 5: Copilot to SharePoint (Query) -->
+        <mxCell id="arrow5" value="5. Queries Search Index" style="endArrow=classic;html=1;rounded=0;strokeWidth=3;strokeColor=#c2185b;fontSize=14;fontColor=#880e4f;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="copilot-box" target="sp-enriched-box">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1100" y="680" as="sourcePoint" />
+            <mxPoint x="1000" y="680" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- USER ANSWER -->
+        <mxCell id="user-answer" value="👤 USER&#xa;Receives Formatted Answer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=3;fontSize=18;fontStyle=1;fontColor=#1b5e20" vertex="1" parent="1">
+          <mxGeometry x="600" y="780" width="400" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- ARROW 6: Copilot to User (Answer) -->
+        <mxCell id="arrow6" value="6. Returns Answer with Citations" style="endArrow=classic;html=1;rounded=0;strokeWidth=4;strokeColor=#c2185b;fontSize=16;fontColor=#880e4f;fontStyle=1;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="copilot-box" target="user-answer">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1275" y="800" as="sourcePoint" />
+            <mxPoint x="800" y="800" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1275" y="800" />
+              <mxPoint x="800" y="800" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- LEFT SIDE: Components -->
+        <mxCell id="components-title" value="SYSTEM COMPONENTS" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="100" y="200" width="250" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="comp-sp-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5ff;strokeColor=#01579b;strokeWidth=2;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="100" y="250" width="250" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="comp1" value="SharePoint Online" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#01579b" vertex="1" parent="1">
+          <mxGeometry x="120" y="260" width="210" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="comp-sp-list" value="• Source Folder (configurable)&#xa;• Templates Library&#xa;• SMEPilot Enriched Docs&#xa;• SMEPilotConfig List&#xa;• Document Metadata&#xa;• Error Folders (RejectedDocs, FailedDocs)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#01579b;spacingLeft=10" vertex="1" parent="1">
+          <mxGeometry x="120" y="300" width="210" height="120" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="comp-az-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1565c0;strokeWidth=2;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="100" y="450" width="250" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="comp2" value="Azure Function App" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#1565c0" vertex="1" parent="1">
+          <mxGeometry x="120" y="460" width="210" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="comp-az-list" value="• ProcessSharePointFile.cs&#xa;• TemplateFiller.cs&#xa;• SimplifiedContentMapper.cs&#xa;• GraphHelper.cs&#xa;• ConfigService.cs&#xa;• Error Handler" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#1565c0;spacingLeft=10" vertex="1" parent="1">
+          <mxGeometry x="120" y="500" width="210" height="120" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="comp-platform-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;strokeWidth=2;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="100" y="650" width="250" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="comp3" value="Azure Platform Services" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#7b1fa2" vertex="1" parent="1">
+          <mxGeometry x="120" y="660" width="210" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="comp-platform-list" value="• Azure AD App Registration&#xa;• Microsoft Graph API&#xa;• Application Insights&#xa;• Webhook Subscriptions" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#7b1fa2;spacingLeft=10" vertex="1" parent="1">
+          <mxGeometry x="120" y="700" width="210" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="comp-search-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8eaf6;strokeColor=#3f51b5;strokeWidth=2;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="100" y="790" width="250" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="comp5" value="Microsoft Search" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#3f51b5" vertex="1" parent="1">
+          <mxGeometry x="120" y="800" width="210" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="comp-search-list" value="• Enterprise Search Service&#xa;• Indexes 'SMEPilot Enriched Docs'" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#3f51b5;spacingLeft=10" vertex="1" parent="1">
+          <mxGeometry x="120" y="840" width="210" height="20" as="geometry" />
+        </mxCell>
+        
+        <!-- RIGHT SIDE: Key Points & Configuration -->
+        <mxCell id="key-title" value="KEY PRINCIPLES" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="1500" y="200" width="250" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="key-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#e65100;strokeWidth=2;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="1500" y="250" width="250" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="key1" value="✓ Rule-Based Processing" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontColor=#5d4037" vertex="1" parent="1">
+          <mxGeometry x="1520" y="270" width="210" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="key1-detail" value="(No AI in enrichment)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#757575;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="1520" y="300" width="210" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="key2" value="✓ No Database" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontColor=#5d4037" vertex="1" parent="1">
+          <mxGeometry x="1520" y="330" width="210" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="key2-detail" value="(SharePoint Only)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#757575;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="1520" y="360" width="210" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="key3" value="✓ Copilot Queries Directly" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=14;fontColor=#5d4037;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1520" y="390" width="210" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="key3-detail" value="(NO Function App in queries)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#757575;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="1520" y="420" width="210" height="20" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="config-title" value="CONFIGURATION" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="1500" y="470" width="250" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="config-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#2e7d32;strokeWidth=2;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="1500" y="520" width="250" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="config-list" value="• Source Folder (configurable)&#xa;• Destination: 'SMEPilot Enriched Docs'&#xa;• Template: UniversalOrgTemplate.dotx&#xa;• Notification Email&#xa;• Max File Size&#xa;• Retry Attempts" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#2e7d32;spacingLeft=10" vertex="1" parent="1">
+          <mxGeometry x="1520" y="540" width="210" height="150" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="auth-title" value="AUTHENTICATION" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=20;fontStyle=1;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="1500" y="720" width="250" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="auth-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;strokeWidth=2;dashed=0" vertex="1" parent="1">
+          <mxGeometry x="1500" y="770" width="250" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="auth-list" value="• Azure AD App Registration&#xa;• App-Only Authentication&#xa;• Sites.ReadWrite.All permission&#xa;• Webhooks.ReadWrite.All" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#7b1fa2;spacingLeft=10" vertex="1" parent="1">
+          <mxGeometry x="1520" y="790" width="210" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- FLOW LABELS -->
+        <mxCell id="flow1-label" value="ENRICHMENT FLOW" style="text;html=1;strokeColor=#1976d2;fillColor=#e3f2fd;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#0d47a1" vertex="1" parent="1">
+          <mxGeometry x="100" y="80" width="200" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="flow2-label" value="COPILOT QUERY FLOW" style="text;html=1;strokeColor=#c2185b;fillColor=#fce4ec;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=16;fontStyle=1;fontColor=#880e4f" vertex="1" parent="1">
+          <mxGeometry x="1500" y="80" width="200" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- DETAILED FLOW BOX (Bottom) -->
+        <mxCell id="detail-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#757575;strokeWidth=2;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="100" y="900" width="1600" height="400" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="detail-title" value="DETAILED PROCESS FLOW" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=22;fontStyle=1;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="130" y="920" width="400" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- Enrichment Steps -->
+        <mxCell id="detail-e-title" value="ENRICHMENT PROCESS:" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#1565c0" vertex="1" parent="1">
+          <mxGeometry x="150" y="980" width="300" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="detail-e1" value="1. User uploads .docx to Source Folder (configured during installation)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="170" y="1020" width="500" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="detail-e2" value="2. SharePoint webhook (Microsoft Graph) triggers Azure Function App endpoint: /api/ProcessSharePointFile" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="170" y="1055" width="600" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="detail-e3" value="3. Function App: Downloads file via Graph API, reads configuration from SMEPilotConfig list, retrieves template from Templates Library" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="170" y="1090" width="700" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="detail-e4" value="4. TemplateFiller.cs processes document: Rule-based content mapping, inserts content into template sections, handles images, expands revision history" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="170" y="1125" width="700" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="detail-e5" value="5. Enriched document uploaded to 'SMEPilot Enriched Docs' library (required name for Copilot integration), metadata updated" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="170" y="1160" width="700" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="detail-e6" value="6. Microsoft Search automatically indexes the document (no manual action required)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="170" y="1195" width="500" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- Copilot Steps -->
+        <mxCell id="detail-c-title" value="COPILOT QUERY PROCESS:" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;fontStyle=1;fontColor=#c2185b" vertex="1" parent="1">
+          <mxGeometry x="950" y="980" width="300" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="detail-c1" value="7. User asks question via O365 Copilot (Teams or Web interface)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="970" y="1020" width="500" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="detail-c2" value="8. O365 Copilot queries SharePoint Search Index DIRECTLY (NO Function App involvement)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#424242;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="970" y="1055" width="600" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="detail-c3" value="9. Microsoft Search returns relevant documents from 'SMEPilot Enriched Docs' library based on query" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="970" y="1090" width="600" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="detail-c4" value="10. Copilot formats answer per custom instructions: Short summary (2-3 lines), numbered steps, citations (document title &amp; link)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="970" y="1125" width="700" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="detail-c5" value="11. Answer returned to user via Teams/Web interface" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=13;fontColor=#424242" vertex="1" parent="1">
+          <mxGeometry x="970" y="1160" width="500" height="25" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="detail-note" value="⚠️ CRITICAL: Copilot queries SharePoint Search Index directly. Azure Function App is NOT involved in query processing." style="text;html=1;strokeColor=#e65100;fillColor=#fff3e0;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=14;fontStyle=1;fontColor=#e65100" vertex="1" parent="1">
+          <mxGeometry x="970" y="1200" width="700" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Error Handling Note -->
+        <mxCell id="error-note" value="Error Handling: Invalid files → RejectedDocs folder | Processing failures → FailedDocs folder | Retry logic with configurable attempts" style="text;html=1;strokeColor=#c62828;fillColor=#ffebee;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=12;fontColor=#c62828" vertex="1" parent="1">
+          <mxGeometry x="150" y="1230" width="800" height="40" as="geometry" />
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

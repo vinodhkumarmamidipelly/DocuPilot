@@ -1,102 +1,81 @@
-# DocuPilot - Document Template Formatting for SharePoint
+# SMEPilot - Knowledge Base Application
 
 ## 📋 Overview
 
-DocuPilot is a SharePoint-integrated solution that automatically formats documents into organizational templates. It processes documents uploaded to SharePoint, applies template formatting, and makes them ready for O365 Copilot.
+SMEPilot is a knowledge base application for functional and technical documents with two main features:
 
-## ✅ Key Features
+1. **Document Enrichment** - Template-based formatting of uploaded documents
+2. **Copilot Agent** - O365 Copilot configured to assist users with questions
 
-- ✅ **No Database Required** - Works without any database
-- ✅ **No AI Required** - Rule-based template formatting only
-- ✅ **Multi-Format Support** - DOCX, PPTX, XLSX, PDF, Images (with OCR)
-- ✅ **Automatic Processing** - Webhook-triggered document processing
-- ✅ **Template Application** - Applies organizational template with proper formatting
-- ✅ **Copilot Ready** - Formatted documents available for O365 Copilot via SharePoint native search
+---
 
-## 🏗️ Architecture
+## 📚 Documentation
 
-### **Components:**
+All documentation is in the **`Knowledgebase/`** folder.
 
-1. **Azure Function App** (`SMEPilot.FunctionApp`)
-   - Processes SharePoint documents
-   - Applies template formatting
-   - Handles webhook subscriptions
+### Essential Documents (Read These)
 
-2. **SPFx Web Parts** (`SMEPilot.SPFx`)
-   - Document uploader
-   - Admin panel for status tracking
+1. **`Knowledgebase/REQUIREMENTS_AND_ARCHITECTURE.md`** ⭐ **START HERE**
+   - Complete requirements, architecture, and configuration
+   - All you need to understand the system
+
+2. **`Knowledgebase/QUICK_START_COPILOT.md`** 
+   - Step-by-step guide for Copilot Agent setup
+   - O365 Copilot Studio configuration
+
+3. **`Knowledgebase/ARCHITECTURE_DIAGRAM.md`**
+   - System architecture and component diagrams
+   - Visual representation of the system
+
+### Reference Documentation
+
+- **`Knowledgebase/EDGE_CASES_AND_PERMISSIONS.md`** - Edge cases handling and permissions (reference when needed)
+- **`Knowledgebase/INSTALLATION_AND_CONFIGURATION.md`** - Installation and configuration guide
+- **`Knowledgebase/QA_CHECKLIST.md`** - QA checklist for testing
+- **`Knowledgebase/ConfigureAzureServices.md`** - ⚠️ **OUTDATED** - Azure OpenAI/CosmosDB setup (NOT USED in current implementation - kept for reference only)
+
+---
+
+## 🚀 Quick Start
+
+### For Developers
+1. Read `Knowledgebase/REQUIREMENTS_AND_ARCHITECTURE.md` for complete understanding
+2. Review `Knowledgebase/ARCHITECTURE_DIAGRAM.md` for system design
+3. Follow implementation in code
+
+### For Configuration
+1. Read `Knowledgebase/QUICK_START_COPILOT.md` for Copilot setup
+2. Follow step-by-step instructions
+
+---
+
+## 🎯 Current Status
+
+- ✅ **Document Enrichment:** Fully implemented
+- ⚠️ **Copilot Agent:** Needs configuration (see `Knowledgebase/QUICK_START_COPILOT.md`)
+
+---
 
 ## 📁 Project Structure
 
 ```
-DocuPilot/
-├── README.md                    # This file
-├── Knowledgebase/              # All documentation
-├── SMEPilot.FunctionApp/       # Azure Functions backend
-│   ├── Functions/              # Azure Functions
-│   ├── Helpers/               # Helper classes
-│   └── Models/                # Data models
-└── SMEPilot.SPFx/             # SharePoint Framework frontend
+SMEPilot.FunctionApp/
+├── Functions/          # Azure Functions
+├── Helpers/            # Helper classes
+├── Services/           # Service classes
+├── Models/             # Data models
+└── Templates/          # Word templates
 ```
-
-## 🚀 Quick Start
-
-### **Prerequisites:**
-- .NET 8.0 SDK
-- Azure Functions Core Tools
-- Node.js 18+ (for SPFx)
-- SharePoint site with appropriate permissions
-
-### **Configuration:**
-
-1. **Function App Configuration** (`local.settings.json`):
-   ```json
-   {
-     "Values": {
-       "Graph_TenantId": "your-tenant-id",
-       "Graph_ClientId": "your-client-id",
-       "Graph_ClientSecret": "your-client-secret",
-       "EnrichedFolderRelativePath": "/Shared Documents/ProcessedDocs",
-       "AzureVision_Endpoint": "",  // Optional: For OCR
-       "AzureVision_Key": ""         // Optional: For OCR
-     }
-   }
-   ```
-
-2. **Run Function App:**
-   ```bash
-   cd SMEPilot.FunctionApp
-   func start
-   ```
-
-3. **Setup Webhook Subscription:**
-   ```powershell
-   .\SetupSubscription.ps1
-   ```
-
-## 📚 Documentation
-
-All documentation is available in the `Knowledgebase/` folder:
-
-- **Status & Requirements:** See `Knowledgebase/FINAL_COMPLETION_STATUS.md`
-- **Implementation Guides:** See `Knowledgebase/MULTI_FORMAT_SUPPORT_IMPLEMENTED.md`
-- **Technical Details:** See `Knowledgebase/` folder for all documentation
-
-## 🎯 Current Status
-
-**✅ 100% Complete** - All requirements implemented and verified.
-
-- ✅ No database dependencies
-- ✅ No AI dependencies
-- ✅ Template formatting working
-- ✅ Multi-format support complete
-- ✅ SharePoint integration complete
-- ✅ SPFx UI ready
-
-## 📝 License
-
-[Your License Here]
 
 ---
 
-**For detailed documentation, see the `Knowledgebase/` folder.**
+## 🔧 Key Requirements
+
+- **Source Folder:** Where documents are uploaded (configurable)
+- **Destination Folder:** "SMEPilot Enriched Docs" (required for Copilot)
+- **Template:** UniversalOrgTemplate.dotx
+- **Copilot:** O365 Copilot with custom instructions
+
+---
+
+**Last Updated:** Based on current implementation requirements

@@ -1,0 +1,411 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0" version="24.0.0">
+  <diagram name="SMEPilot Complete Architecture" id="smepilot-complete-v2">
+    <mxGraphModel dx="2400" dy="2200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="2100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- Main Title -->
+        <mxCell id="main-title" value="SMEPilot - Complete System Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=32;fontStyle=1;fontColor=#1a1a1a;" vertex="1" parent="1">
+          <mxGeometry x="600" y="20" width="800" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="subtitle" value="Knowledge Base for Functional &amp; Technical Documents" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="600" y="70" width="800" height="30" as="geometry" />
+        </mxCell>
+        
+        <!-- INSTALLATION CONFIGURATION SECTION -->
+        <mxCell id="install-section" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#e65100;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="50" y="120" width="1900" height="150" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="install-title" value="📋 INSTALLATION CONFIGURATION - All Settings Provided During App Installation (6 Items)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=20;fontStyle=1;fontColor=#e65100;" vertex="1" parent="1">
+          <mxGeometry x="80" y="140" width="1100" height="30" as="geometry" />
+        </mxCell>
+        
+        <!-- Config Items Row 1 -->
+        <mxCell id="config1" value="📁 Source Folder&#xa;(User Selected)&#xa;Input Documents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#01579b;strokeWidth=2;fontSize=12;align=center;" vertex="1" parent="1">
+          <mxGeometry x="80" y="190" width="250" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="config2" value="📁 Destination Folder&#xa;(User Selected)&#xa;Enriched Output" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#01579b;strokeWidth=2;fontSize=12;align=center;" vertex="1" parent="1">
+          <mxGeometry x="360" y="190" width="250" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="config3" value="📄 Template File&#xa;Company Template&#xa;(.dotx file)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#01579b;strokeWidth=2;fontSize=12;align=center;" vertex="1" parent="1">
+          <mxGeometry x="640" y="190" width="250" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="config4" value="⚙️ Processing Settings&#xa;Max Size: 50MB&#xa;Timeout: 60s, Retries: 3" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#01579b;strokeWidth=2;fontSize=11;align=center;" vertex="1" parent="1">
+          <mxGeometry x="920" y="190" width="250" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="config5" value="🤖 Copilot Agent Prompt&#xa;Custom Instructions&#xa;(Always Enabled)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;strokeWidth=2;fontSize=11;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="190" width="250" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="config6" value="📍 Access Points&#xa;Teams/Web/O365&#xa;(Configurable)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;strokeWidth=2;fontSize=11;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1480" y="190" width="250" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- TWO MAIN FUNCTIONALITIES -->
+        <mxCell id="main-func-title" value="🎯 TWO MAIN FUNCTIONALITIES - Both Work After Installation" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#2e7d32;" vertex="1" parent="1">
+          <mxGeometry x="600" y="300" width="800" height="40" as="geometry" />
+        </mxCell>
+        
+        <!-- LEFT SIDE: DOCUMENT ENRICHMENT -->
+        <mxCell id="enrichment-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5ff;strokeColor=#01579b;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="50" y="370" width="920" height="900" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="enrich-title" value="1️⃣ DOCUMENT ENRICHMENT FUNCTIONALITY" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#01579b;" vertex="1" parent="1">
+          <mxGeometry x="250" y="390" width="520" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="enrich-desc" value="Simple template-based formatting | Rule-based processing (NO AI) | OpenXML | Automatic on upload" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="150" y="430" width="720" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- User -->
+        <mxCell id="enrich-user" value="Business User&#xa;Uploads Documents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="490" width="160" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- SharePoint -->
+        <mxCell id="enrich-sp-box" value="SharePoint Online" style="swimlane;fontStyle=1;fontSize=16;fillColor=#ffffff;strokeColor=#01579b;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="80" y="570" width="860" height="220" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="sp-source" value="Source Folder&#xa;(User Selected)&#xa;Input Documents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5ff;strokeColor=#01579b;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-sp-box">
+          <mxGeometry x="20" y="40" width="130" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="sp-template" value="Templates Library&#xa;Company Templates&#xa;(.dotx files)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5ff;strokeColor=#01579b;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-sp-box">
+          <mxGeometry x="170" y="40" width="130" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="sp-enriched" value="Destination Folder&#xa;(User Selected)&#xa;Enriched Output" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5ff;strokeColor=#01579b;strokeWidth=2;fontSize=11;align=center;" vertex="1" parent="enrich-sp-box">
+          <mxGeometry x="320" y="40" width="150" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="sp-config" value="SMEPilotConfig&#xa;Configuration List&#xa;All Settings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f57f17;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-sp-box">
+          <mxGeometry x="490" y="40" width="130" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="sp-metadata" value="Source Metadata&#xa;Status, Links&#xa;Processed Date" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1f5ff;strokeColor=#01579b;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-sp-box">
+          <mxGeometry x="640" y="40" width="130" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="sp-errors" value="Error Folders&#xa;RejectedDocs&#xa;FailedDocs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffebee;strokeColor=#c62828;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-sp-box">
+          <mxGeometry x="20" y="130" width="130" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="sp-search" value="Microsoft Search&#xa;Enterprise Search&#xa;Indexing Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8eaf6;strokeColor=#3f51b5;strokeWidth=2;fontSize=11;align=center;" vertex="1" parent="enrich-sp-box">
+          <mxGeometry x="320" y="130" width="150" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- Function App -->
+        <mxCell id="enrich-func-box" value="Azure Function App (.NET)" style="swimlane;fontStyle=1;fontSize=16;fillColor=#e3f2fd;strokeColor=#1565c0;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="80" y="820" width="860" height="200" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="func-webhook" value="ProcessSharePointFile&#xa;HTTP Trigger&#xa;Webhook Handler" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1565c0;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-func-box">
+          <mxGeometry x="20" y="40" width="150" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="func-enricher" value="Document Enricher&#xa;Rule-Based&#xa;OpenXML (NO AI)&#xa;Third-Party Libs OK" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1565c0;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-func-box">
+          <mxGeometry x="190" y="40" width="150" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="func-graph" value="GraphHelper&#xa;Graph API Client&#xa;File Operations" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1565c0;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-func-box">
+          <mxGeometry x="360" y="40" width="150" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="func-config" value="ConfigService&#xa;Read Config&#xa;SMEPilotConfig" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1565c0;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-func-box">
+          <mxGeometry x="530" y="40" width="150" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="func-error" value="Error Handler&#xa;Retry Logic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1565c0;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-func-box">
+          <mxGeometry x="20" y="120" width="150" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="func-insights" value="Application Insights&#xa;Logging&#xa;Monitoring" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1565c0;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-func-box">
+          <mxGeometry x="190" y="120" width="150" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="func-idempotent" value="Idempotency Check&#xa;Deduplication&#xa;Safe Reprocessing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1565c0;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-func-box">
+          <mxGeometry x="360" y="120" width="150" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="func-webhook-renewal" value="Webhook Renewal&#xa;Every 2 Days&#xa;Auto-Renew" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1565c0;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-func-box">
+          <mxGeometry x="530" y="120" width="150" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- Platform Services -->
+        <mxCell id="enrich-platform-box" value="Platform Services" style="swimlane;fontStyle=1;fontSize=16;fillColor=#f3e5f5;strokeColor=#7b1fa2;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="80" y="1050" width="860" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="platform-ad" value="Azure AD&#xa;App-Only Auth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#7b1fa2;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-platform-box">
+          <mxGeometry x="20" y="40" width="200" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="platform-graph" value="Microsoft Graph API&#xa;Webhooks, Files, Metadata" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#7b1fa2;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-platform-box">
+          <mxGeometry x="240" y="40" width="200" height="50" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="platform-insights" value="Application Insights&#xa;Telemetry &amp; Monitoring" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#7b1fa2;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="enrich-platform-box">
+          <mxGeometry x="460" y="40" width="200" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Edge Cases for Enrichment -->
+        <mxCell id="enrich-edge" value="⚠️ Edge Cases: Large files (>50MB) → Rejected | Locked files → Retry | Duplicate webhooks → Idempotency | Missing template → Failed folder | Processing timeout (>60s) → Failed folder" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffebee;strokeColor=#c62828;strokeWidth=2;fontSize=11;align=center;" vertex="1" parent="1">
+          <mxGeometry x="80" y="1180" width="860" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- RIGHT SIDE: COPILOT AGENT -->
+        <mxCell id="copilot-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="370" width="920" height="900" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot-title" value="2️⃣ COPILOT AGENT FUNCTIONALITY" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#c2185b;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="390" width="520" height="40" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot-desc" value="Copilot Agent with Prompt | User asks question → Analyzes enriched docs → Provides answer | Always Enabled | Direct SharePoint query" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="430" width="720" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- End User -->
+        <mxCell id="copilot-user" value="End User&#xa;Asks Questions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;strokeWidth=2;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="490" width="160" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Access Points -->
+        <mxCell id="copilot-access-box" value="Access Points (Configurable During Installation)" style="swimlane;fontStyle=1;fontSize=16;fillColor=#ffffff;strokeColor=#c2185b;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="570" width="860" height="120" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="access-teams" value="Microsoft Teams&#xa;Chat &amp; Channels&#xa;@SMEPilot" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="copilot-access-box">
+          <mxGeometry x="20" y="40" width="180" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="access-web" value="Web Interface&#xa;SharePoint Portal&#xa;Direct Access" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="copilot-access-box">
+          <mxGeometry x="220" y="40" width="180" height="60" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="access-o365" value="O365 Copilot&#xa;Word, Excel, PPT&#xa;Office Apps" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="copilot-access-box">
+          <mxGeometry x="420" y="40" width="180" height="60" as="geometry" />
+        </mxCell>
+        
+        <!-- Copilot Configuration -->
+        <mxCell id="copilot-config-box" value="Microsoft 365 Copilot Agent" style="swimlane;fontStyle=1;fontSize=16;fillColor=#fce4ec;strokeColor=#c2185b;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="720" width="860" height="200" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot-studio" value="Copilot Studio&#xa;Configuration&#xa;Data Source Setup" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c2185b;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="copilot-config-box">
+          <mxGeometry x="20" y="40" width="180" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot-instructions" value="Custom Prompt&#xa;System Prompt&#xa;Analyzes Enriched Docs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#e65100;strokeWidth=2;fontSize=11;align=center;fontStyle=1;" vertex="1" parent="copilot-config-box">
+          <mxGeometry x="220" y="40" width="180" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot-query" value="Query Processing&#xa;User Asks Question&#xa;Natural Language" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c2185b;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="copilot-config-box">
+          <mxGeometry x="420" y="40" width="180" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot-answer" value="Document Analysis&#xa;Analyzes Enriched Docs&#xa;Answer with Citations" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c2185b;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="copilot-config-box">
+          <mxGeometry x="620" y="40" width="180" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot-search" value="Microsoft Search&#xa;Query Destination Folder&#xa;Full-Text Search" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8eaf6;strokeColor=#3f51b5;strokeWidth=2;fontSize=11;align=center;" vertex="1" parent="copilot-config-box">
+          <mxGeometry x="20" y="120" width="180" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot-direct" value="Direct SharePoint Query&#xa;NO Function App&#xa;Real-Time Access" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#e65100;strokeWidth=2;fontSize=11;align=center;fontStyle=1;" vertex="1" parent="copilot-config-box">
+          <mxGeometry x="220" y="120" width="180" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot-security" value="Security Trimming&#xa;User Permissions&#xa;Access Control" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c2185b;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="copilot-config-box">
+          <mxGeometry x="420" y="120" width="180" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot-context" value="Contextual Memory&#xa;Conversation History&#xa;Follow-up Questions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c2185b;strokeWidth=1;fontSize=11;align=center;" vertex="1" parent="copilot-config-box">
+          <mxGeometry x="620" y="120" width="180" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- Data Source Connection -->
+        <mxCell id="copilot-datasource-box" value="Data Source" style="swimlane;fontStyle=1;fontSize=16;fillColor=#ffebee;strokeColor=#c62828;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="950" width="860" height="100" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="datasource-enriched" value="Destination Folder&#xa;(User-Selected)&#xa;Indexed by Microsoft Search" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c62828;strokeWidth=2;fontSize=12;align=center;fontStyle=1;" vertex="1" parent="copilot-datasource-box">
+          <mxGeometry x="270" y="40" width="320" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- Copilot Permissions -->
+        <mxCell id="copilot-perm-box" value="Permissions" style="swimlane;fontStyle=1;fontSize=16;fillColor=#fff9c4;strokeColor=#f57f17;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="1080" width="860" height="70" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="copilot-perm" value="End Users: Read Access to Destination Folder | No SharePoint Admin Required | Uses Existing M365 Copilot License | Always Enabled for Everyone" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=11;fontColor=#555555;" vertex="1" parent="copilot-perm-box">
+          <mxGeometry x="50" y="35" width="760" height="25" as="geometry" />
+        </mxCell>
+        
+        <!-- Edge Cases for Copilot -->
+        <mxCell id="copilot-edge" value="⚠️ Edge Cases: No relevant docs → Copilot says &quot;no results&quot; | User lacks permissions → Security trimming | Indexing delay (up to 15 min) → Recent docs may not appear | Large result set → Copilot ranks by relevance" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffebee;strokeColor=#c62828;strokeWidth=2;fontSize=11;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="1180" width="920" height="70" as="geometry" />
+        </mxCell>
+        
+        <!-- ARROWS - Enrichment Flow -->
+        <mxCell id="arrow-e1" value="1. Upload" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.1;entryY=0;entryDx=0;entryDy=0;strokeWidth=3;strokeColor=#1976d2;fontSize=12;fontColor=#0d47a1;fontStyle=1;" edge="1" parent="1" source="enrich-user" target="enrich-sp-box">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="500" y="800" as="sourcePoint" />
+            <mxPoint x="550" y="750" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-e2" value="2. Webhook" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=3;strokeColor=#1976d2;fontSize=12;fontColor=#0d47a1;fontStyle=1;" edge="1" parent="1" source="enrich-sp-box" target="enrich-func-box">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="500" y="900" as="sourcePoint" />
+            <mxPoint x="550" y="850" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-e3" value="3. Enrich &amp; Upload" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.9;entryY=1;entryDx=0;entryDy=0;strokeWidth=3;strokeColor=#c62828;fontSize=12;fontColor=#b71c1c;fontStyle=1;" edge="1" parent="1" source="enrich-func-box" target="enrich-sp-box">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="500" y="1000" as="sourcePoint" />
+            <mxPoint x="550" y="950" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-e4" value="4. Index" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=2;strokeColor=#3f51b5;fontSize=11;fontColor=#1a237e;" edge="1" parent="1" source="sp-enriched" target="sp-search">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="500" y="800" as="sourcePoint" />
+            <mxPoint x="550" y="750" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- ARROWS - Copilot Flow -->
+        <mxCell id="arrow-c1" value="5. Query" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=3;strokeColor=#c2185b;fontSize=12;fontColor=#880e4f;fontStyle=1;dashed=1;" edge="1" parent="1" source="copilot-user" target="copilot-access-box">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1500" y="800" as="sourcePoint" />
+            <mxPoint x="1550" y="750" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-c2" value="6. Process Query" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeWidth=3;strokeColor=#c2185b;fontSize=12;fontColor=#880e4f;fontStyle=1;dashed=1;" edge="1" parent="1" source="copilot-access-box" target="copilot-config-box">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1500" y="850" as="sourcePoint" />
+            <mxPoint x="1550" y="800" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-c3" value="7. Analyze Docs" style="endArrow=classic;html=1;rounded=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=3;strokeColor=#c2185b;fontSize=12;fontColor=#880e4f;fontStyle=1;dashed=1;" edge="1" parent="1" source="copilot-datasource-box" target="copilot-search">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1000" y="900" as="sourcePoint" />
+            <mxPoint x="1050" y="850" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        
+        <mxCell id="arrow-c4" value="8. Answer" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.9;entryY=1;entryDx=0;entryDy=0;strokeWidth=3;strokeColor=#c2185b;fontSize=12;fontColor=#880e4f;fontStyle=1;dashed=1;" edge="1" parent="1" source="copilot-config-box" target="copilot-user">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1500" y="1100" as="sourcePoint" />
+            <mxPoint x="1550" y="1050" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1490" y="1050" />
+              <mxPoint x="1700" y="1050" />
+              <mxPoint x="1700" y="540" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- Connection Between Parts -->
+        <mxCell id="arrow-connect" value="Enriched Documents Feed Copilot" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=4;strokeColor=#2e7d32;fontSize=14;fontColor=#1b5e20;fontStyle=1;" edge="1" parent="1" source="sp-enriched" target="datasource-enriched">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1000" y="800" as="sourcePoint" />
+            <mxPoint x="1050" y="750" as="targetPoint" />
+            <Array as="points">
+              <mxPoint x="1000" y="695" />
+              <mxPoint x="1000" y="1015" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- BOTTOM SUMMARY -->
+        <mxCell id="summary-title" value="📋 SUMMARY &amp; KEY INFORMATION" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=20;fontStyle=1;fontColor=#1a1a1a;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1280" width="600" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="summary-principles" value="Key Principles: Rule-Based Processing (NO AI) | No Database (SharePoint Only) | Event-Driven (Webhooks) | Serverless (Azure Functions) | Copilot Agent Queries SharePoint Directly (NO Function App) | Copilot Agent Always Enabled" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#e65100;strokeWidth=2;fontSize=12;align=center;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1330" width="1900" height="50" as="geometry" />
+        </mxCell>
+        
+        <!-- DETAILED PERMISSIONS SECTION -->
+        <mxCell id="perms-title" value="🔐 MINIMAL PERMISSIONS REQUIRED (Detailed)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;fontColor=#f57f17;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1400" width="600" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="perms-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f57f17;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1450" width="1900" height="180" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="perms-admin" value="📋 SharePoint Admin (Installation Only - One Time)&#xa;• Site Collection Admin OR Site Owner&#xa;• Required for: Install SPFx app, Create SMEPilotConfig list, Create metadata columns, Grant app permissions&#xa;• NOT Required After Installation: No ongoing admin permissions needed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f57f17;strokeWidth=2;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="70" y="1470" width="600" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="perms-azure" value="☁️ Azure AD App Registration (Application Permissions)&#xa;• Sites.ReadWrite.All - Read/write SharePoint files and metadata&#xa;• Files.ReadWrite.All - Read/write files&#xa;• Webhooks.ReadWrite.All - Create/manage webhook subscriptions&#xa;• Note: These are MINIMAL permissions - app can only access SharePoint, nothing else" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f57f17;strokeWidth=2;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="690" y="1470" width="600" height="80" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="perms-users" value="👥 End User Permissions (Runtime)&#xa;• Business Users: Contribute access to Source Folder (upload documents)&#xa;• End Users: Read access to Destination Folder (query via Copilot)&#xa;• No SharePoint Admin Required: Users only need read/contribute permissions&#xa;• Uses Existing M365 Copilot License: No additional licenses needed" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f57f17;strokeWidth=2;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="1310" y="1470" width="600" height="80" as="geometry" />
+        </mxCell>
+        
+        <!-- COPILOT ACCESS POINTS SECTION -->
+        <mxCell id="access-title" value="📍 COPILOT AGENT ACCESS POINTS (Where Users Can Access Once Installed)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;fontColor=#c2185b;" vertex="1" parent="1">
+          <mxGeometry x="600" y="1650" width="800" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="access-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fce4ec;strokeColor=#c2185b;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1700" width="1900" height="120" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="access-teams-detail" value="1️⃣ Microsoft Teams&#xa;• Location: Teams app installed in tenant&#xa;• Access: Via Teams chat or dedicated channel&#xa;• Usage: Users can ask questions in Teams&#xa;• Example: &quot;@SMEPilot What is the alert configuration?&quot;&#xa;• Always Enabled: No enable/disable option" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c2185b;strokeWidth=2;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="70" y="1720" width="600" height="90" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="access-web-detail" value="2️⃣ Web Interface&#xa;• Location: SharePoint web part or standalone page&#xa;• Access: Via SharePoint site navigation&#xa;• Usage: Users can query via web interface&#xa;• Example: Search box on SharePoint page&#xa;• Always Enabled: No enable/disable option" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c2185b;strokeWidth=2;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="690" y="1720" width="600" height="90" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="access-o365-detail" value="3️⃣ O365 Copilot (Office Apps)&#xa;• Location: Integrated with Microsoft Copilot&#xa;• Access: Via Copilot interface in Office apps&#xa;• Usage: Users can query from Word, Excel, PPT, etc.&#xa;• Example: Ask questions while working in documents&#xa;• Always Enabled: No enable/disable option" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c2185b;strokeWidth=2;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="1310" y="1720" width="600" height="90" as="geometry" />
+        </mxCell>
+        
+        <!-- EDGE CASES SECTION -->
+        <mxCell id="edge-title" value="⚠️ EDGE CASES &amp; ERROR HANDLING (Detailed)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;fontColor=#c62828;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1840" width="600" height="30" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="edge-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffebee;strokeColor=#c62828;strokeWidth=3;" vertex="1" parent="1">
+          <mxGeometry x="50" y="1890" width="1900" height="140" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="edge-enrichment" value="📄 Document Enrichment Edge Cases:&#xa;• Large files (>50MB) → Validation check → Move to RejectedDocs folder&#xa;• Locked files → Retry logic (up to 3 times) → If still locked → FailedDocs folder&#xa;• Duplicate webhooks → Idempotency check (checks processed status) → Skip processing, log duplicate&#xa;• Missing template → Validation check → Move to FailedDocs folder&#xa;• Processing timeout (>60s) → Timeout check → Move to FailedDocs folder&#xa;• Invalid file format → Format validation → Move to RejectedDocs folder&#xa;• Network errors → Retry logic → Retry up to 3 times, then FailedDocs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c62828;strokeWidth=2;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="70" y="1910" width="900" height="110" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="edge-copilot" value="🤖 Copilot Agent Edge Cases:&#xa;• No relevant documents → Search returns empty → Copilot says &quot;I couldn't find a definitive answer in SMEPilot docs.&quot;&#xa;• User lacks permissions → Security trimming → User only sees documents they have access to&#xa;• Indexing delay (up to 15 min) → Search may not find recent docs → Recent documents may not appear in results immediately&#xa;• Large result set → Microsoft Search ranking → Copilot ranks results by relevance, shows top matches" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#c62828;strokeWidth=2;fontSize=10;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10" vertex="1" parent="1">
+          <mxGeometry x="990" y="1910" width="900" height="110" as="geometry" />
+        </mxCell>
+        
+        <mxCell id="summary-config" value="⚙️ All Configuration During Installation: Source folder (user-selected), Destination folder (user-selected), Template, Copilot Agent prompt, Access points, Processing limits - Configured via SPFx Admin Panel" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#2e7d32;strokeWidth=2;fontSize=12;align=center;" vertex="1" parent="1">
+          <mxGeometry x="50" y="2050" width="1900" height="40" as="geometry" />
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

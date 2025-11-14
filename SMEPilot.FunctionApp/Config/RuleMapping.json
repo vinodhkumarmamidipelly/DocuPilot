@@ -1,0 +1,21 @@
+{
+  "HeaderMappings": {
+    "symptom": "Symptoms",
+    "error": "Symptoms",
+    "issue": "Symptoms",
+    "steps": "Steps to Reproduce",
+    "reproduce": "Steps to Reproduce",
+    "troubleshoot": "Resolution",
+    "workaround": "Resolution",
+    "architecture": "Architecture",
+    "design": "Architecture",
+    "overview": "Overview",
+    "summary": "Overview",
+    "user": "User Scenarios",
+    "function": "User Scenarios",
+    "screenshot": "Screenshots",
+    "image": "Screenshots",
+    "dashboard": "Screenshots"
+  }
+}
+

@@ -26,7 +26,11 @@ namespace SMEPilot.FunctionApp.Functions
         private readonly Config _cfg;
         private readonly HybridEnricher? _hybridEnricher;
         private readonly OcrHelper? _ocrHelper;
+        private readonly RuleBasedFormatter? _ruleBasedFormatter;
         private readonly ILogger<ProcessSharePointFile> _logger;
+        private readonly TelemetryService? _telemetry;
+        private readonly NotificationService? _notifications;
+        private readonly RateLimitingService? _rateLimiter;
         
         // In-memory semaphore to prevent concurrent processing of the same file
         private static readonly ConcurrentDictionary<string, SemaphoreSlim> _processingLocks = new ConcurrentDictionary<string, SemaphoreSlim>();
@@ -65,7 +69,11 @@ namespace SMEPilot.FunctionApp.Functions
             Config cfg, 
             ILogger<ProcessSharePointFile> logger,
             HybridEnricher? hybridEnricher = null, 
-            OcrHelper? ocrHelper = null)
+            OcrHelper? ocrHelper = null,
+            RuleBasedFormatter? ruleBasedFormatter = null,
+            TelemetryService? telemetry = null,
+            NotificationService? notifications = null,
+            RateLimitingService? rateLimiter = null)
         {
             _graph = graph;
             _extractor = extractor;
@@ -73,11 +81,54 @@ namespace SMEPilot.FunctionApp.Functions
             _logger = logger;
             _hybridEnricher = hybridEnricher;
             _ocrHelper = ocrHelper;
+            _ruleBasedFormatter = ruleBasedFormatter;
+            _telemetry = telemetry;
+            _notifications = notifications;
+            _rateLimiter = rateLimiter;
         }
 
         [Function("ProcessSharePointFile")]
         public async Task<HttpResponseData> Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", "options")] HttpRequestData req)
         {
+            // CRITICAL: Handle webhook validation FIRST - must respond within 10 seconds!
+            // Graph API sends validation token via GET request with query parameter
+            // This ONLY happens during initial subscription creation (one-time validation)
+            // After that, all notifications come as POST with empty query string (data in body)
+            var query = req.Url.Query;
+            
+            // Check for validation token IMMEDIATELY (before any other processing)
+            if (!string.IsNullOrEmpty(query))
+            {
+                var queryString = query.TrimStart('?');
+                var validationTokenMatch = System.Text.RegularExpressions.Regex.Match(queryString, @"validationToken=([^&]*)");
+
+                if (validationTokenMatch.Success)
+                {
+                    var encodedToken = validationTokenMatch.Groups[1].Value;
+                    _logger.LogInformation("=== VALIDATION REQUEST (Subscription Setup) ===");
+                    _logger.LogInformation("Received validation token (length: {Length})", encodedToken.Length);
+
+                    // Properly decode URL-encoded token (+ becomes space, %XX becomes characters)
+                    var validationToken = encodedToken
+                        .Replace("+", " ")
+                        .Replace("%3a", ":", StringComparison.OrdinalIgnoreCase)
+                        .Replace("%3A", ":")
+                        .Replace("%2F", "/")
+                        .Replace("%2f", "/");
+                    validationToken = Uri.UnescapeDataString(validationToken);
+
+                    // Return validation token as plain text (decoded) - REQUIRED by Graph API
+                    // MUST respond within 10 seconds - this is the fastest possible response
+                    var vresp = req.CreateResponse(HttpStatusCode.OK);
+                    vresp.Headers.Add("Content-Type", "text/plain; charset=utf-8");
+                    AddCorsHeaders(vresp, req);
+                    await vresp.WriteStringAsync(validationToken);
+                    _logger.LogInformation("✅ Validation token returned to Graph API (immediate response)");
+                    _logger.LogInformation("=== END VALIDATION ===");
+                    return vresp;
+                }
+            }
+
             // Handle CORS preflight requests
             if (req.Method == "OPTIONS")
             {
@@ -86,55 +137,34 @@ namespace SMEPilot.FunctionApp.Functions
                 return corsResp;
             }
 
+            // If GET request without validation token, return OK (for Graph API health checks)
+            if (req.Method == "GET")
+            {
+                _logger.LogInformation("Health check request received");
+                var okResp = req.CreateResponse(HttpStatusCode.OK);
+                AddCorsHeaders(okResp, req);
+                await okResp.WriteStringAsync("SMEPilot ProcessSharePointFile endpoint is ready");
+                return okResp;
+            }
+
+            // Rate limiting (by IP or source) - AFTER validation check
+            var clientIdentifier = req.Headers.TryGetValues("X-Forwarded-For", out var forwardedFor) 
+                ? forwardedFor.FirstOrDefault() 
+                : req.Headers.TryGetValues("X-Real-IP", out var realIp) 
+                    ? realIp.FirstOrDefault() 
+                    : "unknown";
+            
+            if (_rateLimiter != null && _rateLimiter.IsRateLimited(clientIdentifier ?? "unknown", out var rateLimitReason))
+            {
+                _logger.LogWarning("🚫 [RateLimit] Request rate limited: {Reason}", rateLimitReason);
+                var rateLimitResp = req.CreateResponse(HttpStatusCode.TooManyRequests);
+                AddCorsHeaders(rateLimitResp, req);
+                await rateLimitResp.WriteStringAsync($"Rate limit exceeded: {rateLimitReason}");
+                return rateLimitResp;
+            }
+
             try
             {
-                // Step 1: Handle Graph subscription validation handshake
-                // Graph API sends validation token via GET request with query parameter
-                // This ONLY happens during initial subscription creation (one-time validation)
-                // After that, all notifications come as POST with empty query string (data in body)
-                var query = req.Url.Query;
-
-                // Check for validation token (only during initial subscription validation)
-                if (!string.IsNullOrEmpty(query))
-                {
-                    var queryString = query.TrimStart('?');
-                    var validationTokenMatch = System.Text.RegularExpressions.Regex.Match(queryString, @"validationToken=([^&]*)");
-
-                    if (validationTokenMatch.Success)
-                    {
-                        var encodedToken = validationTokenMatch.Groups[1].Value;
-                        _logger.LogInformation("=== VALIDATION REQUEST (Subscription Setup) ===");
-
-                        // Properly decode URL-encoded token (+ becomes space, %XX becomes characters)
-                        var validationToken = encodedToken
-                            .Replace("+", " ")
-                            .Replace("%3a", ":", StringComparison.OrdinalIgnoreCase)
-                            .Replace("%3A", ":")
-                            .Replace("%2F", "/")
-                            .Replace("%2f", "/");
-                        validationToken = Uri.UnescapeDataString(validationToken);
-
-                        // Return validation token as plain text (decoded) - REQUIRED by Graph API
-                        var vresp = req.CreateResponse(HttpStatusCode.OK);
-                        vresp.Headers.Add("Content-Type", "text/plain; charset=utf-8");
-                        AddCorsHeaders(vresp, req);
-                        await vresp.WriteStringAsync(validationToken);
-                        _logger.LogInformation("✅ Validation token returned to Graph API");
-                        _logger.LogInformation("=== END VALIDATION ===");
-                        return vresp;
-                    }
-                }
-
-                // If GET request without validation token, return OK (for Graph API health checks)
-                if (req.Method == "GET")
-                {
-                    _logger.LogInformation("Health check request received");
-                    var okResp = req.CreateResponse(HttpStatusCode.OK);
-                    AddCorsHeaders(okResp, req);
-                    await okResp.WriteStringAsync("SMEPilot ProcessSharePointFile endpoint is ready");
-                    return okResp;
-                }
-
                 // Step 2: Parse request body
                 var body = await new StreamReader(req.Body).ReadToEndAsync();
                 
@@ -332,6 +362,28 @@ namespace SMEPilot.FunctionApp.Functions
                             // Get tenant ID from resource path or use default
                             var tenantId = ExtractTenantIdFromResource(notification.Resource) ?? "default";
 
+                            // Load SharePoint configuration for this site
+                            try
+                            {
+                                var siteId = await _graph.GetSiteIdFromDriveAsync(driveId);
+                                if (!string.IsNullOrWhiteSpace(siteId))
+                                {
+                                    _logger.LogInformation("🔄 [CONFIG] Loading SharePoint configuration for site {SiteId}", siteId);
+                                    await _cfg.LoadSharePointConfigAsync(_graph, siteId, _logger);
+                                    _logger.LogInformation("✅ [CONFIG] SharePoint configuration loaded. Source: {SourcePath}, Destination: {DestPath}, MaxSize: {MaxSize}MB", 
+                                        _cfg.SourceFolderPath, _cfg.EnrichedFolderRelativePath, _cfg.MaxFileSizeBytes / 1024 / 1024);
+                                }
+                                else
+                                {
+                                    _logger.LogWarning("⚠️ [CONFIG] Could not determine siteId from drive {DriveId}. Using environment variables/defaults.", driveId);
+                                }
+                            }
+                            catch (Exception configEx)
+                            {
+                                _logger.LogWarning(configEx, "⚠️ [CONFIG] Failed to load SharePoint configuration. Using environment variables/defaults. Error: {Error}", configEx.Message);
+                                // Continue processing with defaults - don't fail the entire request
+                            }
+
                             _logger.LogDebug("✅ Processing Graph notification: File {FileName} (ID: {ItemId}) in Drive {DriveId}, ChangeType: {ChangeType}", 
                                 fileName, itemId, driveId, notification.ChangeType);
 
@@ -347,16 +399,76 @@ namespace SMEPilot.FunctionApp.Functions
                                 {
                                     _logger.LogInformation("📋 [IDEMPOTENCY] Metadata found for {FileName}. Keys: {Keys}", fileName, string.Join(", ", existingMetadata.Keys));
                                     
-                                    // Check if already enriched
+                                    // Check if already enriched - with versioning detection
                                     if (existingMetadata.ContainsKey("SMEPilot_Enriched"))
                                     {
                                         var enrichedValue = existingMetadata["SMEPilot_Enriched"]?.ToString();
                                         _logger.LogInformation("🔍 [IDEMPOTENCY] SMEPilot_Enriched value: '{EnrichedValue}' (Type: {Type})", enrichedValue, enrichedValue?.GetType().Name ?? "null");
                                         var isEnriched = enrichedValue == "True" || enrichedValue == "true" || enrichedValue == "1";
+                                        
                                         if (isEnriched)
                                         {
-                                            _logger.LogInformation("⏭️ [IDEMPOTENCY] File {FileName} already processed (SMEPilot_Enriched={EnrichedValue}), skipping", fileName, enrichedValue);
-                                            shouldSkip = true;
+                                            // Versioning detection: Check if file was modified after last enrichment
+                                            var driveItem = await _graph.GetDriveItemAsync(driveId, itemId);
+                                            if (driveItem?.LastModifiedDateTime != null)
+                                            {
+                                                var lastModified = driveItem.LastModifiedDateTime.Value.DateTime;
+                                                
+                                                // Get last enriched time from metadata
+                                                DateTime? lastEnrichedTime = null;
+                                                if (existingMetadata.ContainsKey("SMEPilot_LastEnrichedTime"))
+                                                {
+                                                    var lastEnrichedValue = existingMetadata["SMEPilot_LastEnrichedTime"];
+                                                    if (lastEnrichedValue != null)
+                                                    {
+                                                        if (lastEnrichedValue is DateTime dt)
+                                                        {
+                                                            lastEnrichedTime = dt;
+                                                        }
+                                                        else if (DateTime.TryParse(lastEnrichedValue.ToString(), out var parsedTime))
+                                                        {
+                                                            lastEnrichedTime = parsedTime;
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                if (lastEnrichedTime.HasValue)
+                                                {
+                                                    if (lastModified > lastEnrichedTime.Value)
+                                                    {
+                                                        // File was modified after last enrichment - reprocess (new version)
+                                                        _logger.LogInformation("🔄 [VERSIONING] File {FileName} was modified after last enrichment (LastModified: {LastModified}, LastEnriched: {LastEnriched}). Reprocessing as new version.", 
+                                                            fileName, lastModified, lastEnrichedTime.Value);
+                                                        shouldSkip = false; // Process the new version
+                                                    }
+                                                    else if (lastModified == lastEnrichedTime.Value || Math.Abs((lastModified - lastEnrichedTime.Value).TotalSeconds) < 5)
+                                                    {
+                                                        // File unchanged - skip (duplicate)
+                                                        _logger.LogInformation("⏭️ [IDEMPOTENCY] File {FileName} already processed and unchanged (LastModified: {LastModified}, LastEnriched: {LastEnriched}). Skipping duplicate.", 
+                                                            fileName, lastModified, lastEnrichedTime.Value);
+                                                        shouldSkip = true;
+                                                    }
+                                                    else
+                                                    {
+                                                        // File modified before last enrichment (shouldn't happen, but handle gracefully)
+                                                        _logger.LogWarning("⚠️ [VERSIONING] File {FileName} LastModified ({LastModified}) is before LastEnriched ({LastEnriched}). This is unexpected. Skipping.", 
+                                                            fileName, lastModified, lastEnrichedTime.Value);
+                                                        shouldSkip = true;
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    // No LastEnrichedTime - treat as already processed (legacy file)
+                                                    _logger.LogInformation("⏭️ [IDEMPOTENCY] File {FileName} already processed (SMEPilot_Enriched={EnrichedValue}) but no LastEnrichedTime. Skipping.", fileName, enrichedValue);
+                                                    shouldSkip = true;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                // Can't get LastModified - skip to be safe
+                                                _logger.LogInformation("⏭️ [IDEMPOTENCY] File {FileName} already processed (SMEPilot_Enriched={EnrichedValue}), skipping", fileName, enrichedValue);
+                                                shouldSkip = true;
+                                            }
                                         }
                                         else
                                         {
@@ -391,7 +503,7 @@ namespace SMEPilot.FunctionApp.Functions
                                             _logger.LogInformation("⏭️ [IDEMPOTENCY] File {FileName} was enriched but metadata save failed (SMEPilot_Status=MetadataUpdateFailed), skipping to prevent reprocessing", fileName);
                                             shouldSkip = true;
                                         }
-                                        else if (statusValue == "Retry")
+                                        else if (statusValue == "Retrying" || statusValue == "Retry") // Support both for backward compatibility
                                         {
                                             // Transient failure - allow retry (but check if too many retries)
                                             var lastErrorTime = existingMetadata.ContainsKey("SMEPilot_LastErrorTime") 
@@ -460,7 +572,7 @@ namespace SMEPilot.FunctionApp.Functions
                                     {
                                         _logger.LogInformation("📋 [IDEMPOTENCY] Double-check metadata found. Keys: {Keys}", string.Join(", ", existingMetadata.Keys));
                                         
-                                        // Check if already enriched (another process might have completed)
+                                        // Check if already enriched (another process might have completed) - with versioning detection
                                         if (existingMetadata.ContainsKey("SMEPilot_Enriched"))
                                         {
                                             var enrichedValue = existingMetadata["SMEPilot_Enriched"]?.ToString();
@@ -468,8 +580,50 @@ namespace SMEPilot.FunctionApp.Functions
                                             var isEnriched = enrichedValue == "True" || enrichedValue == "true" || enrichedValue == "1";
                                             if (isEnriched)
                                             {
-                                                _logger.LogInformation("⏭️ [IDEMPOTENCY] File {FileName} was processed by another instance (SMEPilot_Enriched={EnrichedValue}), skipping", fileName, enrichedValue);
-                                                continue;
+                                                // Versioning detection: Check if file was modified after last enrichment
+                                                var driveItem = await _graph.GetDriveItemAsync(driveId, itemId);
+                                                if (driveItem?.LastModifiedDateTime != null)
+                                                {
+                                                    var lastModified = driveItem.LastModifiedDateTime.Value.DateTime;
+                                                    
+                                                    // Get last enriched time from metadata
+                                                    DateTime? lastEnrichedTime = null;
+                                                    if (existingMetadata.ContainsKey("SMEPilot_LastEnrichedTime"))
+                                                    {
+                                                        var lastEnrichedValue = existingMetadata["SMEPilot_LastEnrichedTime"];
+                                                        if (lastEnrichedValue != null)
+                                                        {
+                                                            if (lastEnrichedValue is DateTime dt)
+                                                            {
+                                                                lastEnrichedTime = dt;
+                                                            }
+                                                            else if (DateTime.TryParse(lastEnrichedValue.ToString(), out var parsedTime))
+                                                            {
+                                                                lastEnrichedTime = parsedTime;
+                                                            }
+                                                        }
+                                                    }
+                                                    
+                                                    if (lastEnrichedTime.HasValue && lastModified > lastEnrichedTime.Value)
+                                                    {
+                                                        // File was modified after last enrichment - reprocess (new version)
+                                                        _logger.LogInformation("🔄 [VERSIONING] File {FileName} was modified after last enrichment (LastModified: {LastModified}, LastEnriched: {LastEnriched}). Reprocessing as new version.", 
+                                                            fileName, lastModified, lastEnrichedTime.Value);
+                                                        // Continue processing - don't skip
+                                                    }
+                                                    else
+                                                    {
+                                                        // File unchanged or no timestamp - skip (duplicate or legacy)
+                                                        _logger.LogInformation("⏭️ [IDEMPOTENCY] File {FileName} was processed by another instance (SMEPilot_Enriched={EnrichedValue}), skipping", fileName, enrichedValue);
+                                                        continue;
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    // Can't get LastModified - skip to be safe
+                                                    _logger.LogInformation("⏭️ [IDEMPOTENCY] File {FileName} was processed by another instance (SMEPilot_Enriched={EnrichedValue}), skipping", fileName, enrichedValue);
+                                                    continue;
+                                                }
                                             }
                                         }
                                         
@@ -496,7 +650,7 @@ namespace SMEPilot.FunctionApp.Functions
                                                 _logger.LogInformation("⏭️ [IDEMPOTENCY] File {FileName} was enriched but metadata save failed (SMEPilot_Status=MetadataUpdateFailed), skipping to prevent reprocessing", fileName);
                                                 continue;
                                             }
-                                            else if (statusValue == "Retry")
+                                            else if (statusValue == "Retrying" || statusValue == "Retry") // Support both for backward compatibility
                                             {
                                                 // Transient failure - allow retry (but check if too many retries)
                                                 var lastErrorTime = existingMetadata.ContainsKey("SMEPilot_LastErrorTime") 
@@ -547,6 +701,8 @@ namespace SMEPilot.FunctionApp.Functions
                                 {
                                     _logger.LogError("❌ Failed to process {FileName}: {ErrorMessage}", fileName, result.ErrorMessage);
                                     
+                                    // Error notification already sent in ProcessFileAsync
+                                    
                                     // Determine if this is a permanent failure (should not retry) or transient (can retry)
                                     bool isPermanentFailure = result.ErrorMessage != null && (
                                         result.ErrorMessage.Contains("Unsupported file type") ||
@@ -585,13 +741,13 @@ namespace SMEPilot.FunctionApp.Functions
                                             var retryMetadata = new Dictionary<string, object>
                                             {
                                                 {"SMEPilot_Enriched", false},
-                                                {"SMEPilot_Status", "Retry"},
+                                                {"SMEPilot_Status", "Retrying"},
                                                 {"SMEPilot_ErrorMessage", result.ErrorMessage ?? "Unknown error"},
                                                 {"SMEPilot_LastErrorTime", DateTime.UtcNow.ToString("O")}
                                             };
                                             
                                             await _graph.UpdateListItemFieldsAsync(driveId, itemId, retryMetadata);
-                                            _logger.LogInformation("✅ [METADATA] Successfully marked {FileName} (ItemId: {ItemId}) as Retry - will attempt again on next notification", fileName, itemId);
+                                            _logger.LogInformation("✅ [METADATA] Successfully marked {FileName} (ItemId: {ItemId}) as Retrying - will attempt again on next notification", fileName, itemId);
                                         }
                                         catch (Exception ex)
                                         {
@@ -639,6 +795,28 @@ namespace SMEPilot.FunctionApp.Functions
                         hint = "Expected Graph notification or SharePointEvent format"
                     }));
                     return bad;
+                }
+
+                // Load SharePoint configuration for manual processing
+                try
+                {
+                    var siteId = await _graph.GetSiteIdFromDriveAsync(evt.driveId);
+                    if (!string.IsNullOrWhiteSpace(siteId))
+                    {
+                        _logger.LogInformation("🔄 [CONFIG] Loading SharePoint configuration for site {SiteId} (manual processing)", siteId);
+                        await _cfg.LoadSharePointConfigAsync(_graph, siteId, _logger);
+                        _logger.LogInformation("✅ [CONFIG] SharePoint configuration loaded. Source: {SourcePath}, Destination: {DestPath}, MaxSize: {MaxSize}MB", 
+                            _cfg.SourceFolderPath, _cfg.EnrichedFolderRelativePath, _cfg.MaxFileSizeBytes / 1024 / 1024);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("⚠️ [CONFIG] Could not determine siteId from drive {DriveId}. Using environment variables/defaults.", evt.driveId);
+                    }
+                }
+                catch (Exception configEx)
+                {
+                    _logger.LogWarning(configEx, "⚠️ [CONFIG] Failed to load SharePoint configuration. Using environment variables/defaults. Error: {Error}", configEx.Message);
+                    // Continue processing with defaults - don't fail the entire request
                 }
 
                 // Process manual payload
@@ -702,22 +880,31 @@ namespace SMEPilot.FunctionApp.Functions
         private async Task<(bool Success, string? EnrichedUrl, string? ErrorMessage)> ProcessFileAsync(
             string driveId, string itemId, string fileName, string uploaderEmail, string tenantId)
         {
-            // Input validation
-            if (string.IsNullOrWhiteSpace(driveId))
+            var processingStartTime = DateTimeOffset.UtcNow;
+            long fileSizeBytes = 0;
+            string? enrichedUrl = null;
+            
+            try
             {
-                _logger.LogError("❌ [VALIDATION] driveId is null or empty");
-                return (false, null, "driveId is required");
-            }
-            if (string.IsNullOrWhiteSpace(itemId))
-            {
-                _logger.LogError("❌ [VALIDATION] itemId is null or empty");
-                return (false, null, "itemId is required");
-            }
-            if (string.IsNullOrWhiteSpace(fileName))
-            {
-                _logger.LogError("❌ [VALIDATION] fileName is null or empty");
-                return (false, null, "fileName is required");
-            }
+                // Input validation
+                if (string.IsNullOrWhiteSpace(driveId))
+                {
+                    _logger.LogError("❌ [VALIDATION] driveId is null or empty");
+                    _telemetry?.TrackProcessingFailure(itemId, fileName, "driveId is required");
+                    return (false, null, "driveId is required");
+                }
+                if (string.IsNullOrWhiteSpace(itemId))
+                {
+                    _logger.LogError("❌ [VALIDATION] itemId is null or empty");
+                    _telemetry?.TrackProcessingFailure(itemId ?? "unknown", fileName ?? "unknown", "itemId is required");
+                    return (false, null, "itemId is required");
+                }
+                if (string.IsNullOrWhiteSpace(fileName))
+                {
+                    _logger.LogError("❌ [VALIDATION] fileName is null or empty");
+                    _telemetry?.TrackProcessingFailure(itemId, "unknown", "fileName is required");
+                    return (false, null, "fileName is required");
+                }
             
             // Sanitize file name (remove path traversal attempts)
             var sanitizedFileName = Path.GetFileName(fileName);
@@ -735,6 +922,8 @@ namespace SMEPilot.FunctionApp.Functions
             }
             // Skip folders - only process files
             // Also check if file was deleted (item no longer exists)
+            // CRITICAL: Capture site ID from source file for destination folder resolution
+            string? sourceSiteId = null;
             try
             {
                 var driveItem = await _graph.GetDriveItemAsync(driveId, itemId);
@@ -748,6 +937,32 @@ namespace SMEPilot.FunctionApp.Functions
                     _logger.LogDebug("⏭️ Skipping folder: {FileName}", fileName);
                     return (false, null, "Item is a folder, not a file");
                 }
+                
+                // Extract site ID from source file's drive item for destination folder resolution
+                sourceSiteId = driveItem.ParentReference?.SiteId;
+                if (!string.IsNullOrWhiteSpace(sourceSiteId))
+                {
+                    _logger.LogInformation("✅ [SITE_ID] Captured site ID from source file: {SiteId}", sourceSiteId);
+                    
+                    // PERMANENT FIX: Load SharePoint configuration using the captured site ID
+                    // This ensures we get the correct DestinationFolderPath from SharePoint config
+                    try
+                    {
+                        _logger.LogInformation("🔄 [CONFIG] Loading SharePoint configuration using captured site ID: {SiteId}", sourceSiteId);
+                        await _cfg.LoadSharePointConfigAsync(_graph, sourceSiteId, _logger, forceRefresh: true);
+                        _logger.LogInformation("✅ [CONFIG] SharePoint configuration loaded. Source: {SourcePath}, Destination: {DestPath}, MaxSize: {MaxSize}MB", 
+                            _cfg.SourceFolderPath, _cfg.EnrichedFolderRelativePath, _cfg.MaxFileSizeBytes / 1024 / 1024);
+                    }
+                    catch (Exception configEx)
+                    {
+                        _logger.LogWarning(configEx, "⚠️ [CONFIG] Failed to load SharePoint configuration with captured site ID. Using cached/defaults. Error: {Error}", configEx.Message);
+                        // Continue with cached/default config - don't fail processing
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("⚠️ [SITE_ID] Could not extract site ID from source file's ParentReference");
+                }
             }
             catch (Exception ex)
             {
@@ -760,9 +975,7 @@ namespace SMEPilot.FunctionApp.Functions
                 _logger.LogWarning(ex, "⚠️ Warning: Could not verify item type (will proceed): {Error}", ex.Message);
             }
 
-            try
-            {
-                // 0. Mark file as "processing" immediately to prevent concurrent processing
+            // 0. Mark file as "processing" immediately to prevent concurrent processing
                 _logger.LogDebug("📝 [METADATA] Marking file as 'Processing' to prevent duplicate processing...");
                 try
                 {
@@ -780,15 +993,27 @@ namespace SMEPilot.FunctionApp.Functions
 
                 // 1. Download file
                 _logger.LogDebug("📥 [DOWNLOAD] Downloading file: {FileName}", fileName);
+                var downloadStartTime = DateTimeOffset.UtcNow;
                 using var fileStream = await _graph.DownloadFileStreamAsync(driveId, itemId);
+                fileSizeBytes = fileStream.Length;
+                var downloadDuration = DateTimeOffset.UtcNow - downloadStartTime;
+                _telemetry?.TrackDependency("GraphAPI", "DownloadFile", driveId, downloadStartTime, downloadDuration, true);
                 _logger.LogDebug("✅ [DOWNLOAD] File downloaded. Size: {Size} bytes", fileStream.Length);
 
-                // Check file size - if large, return 202 Accepted for async processing
+                // Check file size - if large, reject
                 if (fileStream.Length > _cfg.MaxFileSizeBytes)
                 {
-                    _logger.LogWarning("File {FileName} is too large ({Size} bytes, max: {MaxSize} bytes), will process asynchronously", 
+                    var errorMessage = $"File too large for processing (max: {_cfg.MaxFileSizeBytes / 1024 / 1024}MB)";
+                    _logger.LogWarning("File {FileName} is too large ({Size} bytes, max: {MaxSize} bytes), rejecting", 
                         fileName, fileStream.Length, _cfg.MaxFileSizeBytes);
-                    return (false, null, $"File too large for single-run processing (max: {_cfg.MaxFileSizeBytes / 1024 / 1024}MB)");
+                    _telemetry?.TrackProcessingFailure(itemId, fileName, errorMessage);
+                    // Fire-and-forget notification (don't block on email send)
+                    if (_notifications != null)
+                    {
+                        var notificationService = _notifications; // Capture for closure
+                        _ = Task.Run(async () => await notificationService.SendProcessingFailureNotificationAsync(fileName, itemId, errorMessage));
+                    }
+                    return (false, null, errorMessage);
                 }
 
                 // 2. Extract text & images based on file type
@@ -803,13 +1028,28 @@ namespace SMEPilot.FunctionApp.Functions
                 // For .docx files, save to temp file first (needed for DocumentEnricherService)
                 if (fileExtension == ".docx")
                 {
-                    tempInputPath = Path.Combine(Path.GetTempPath(), $"input_{fileId}_{Path.GetFileName(fileName)}");
+                    // Sanitize filename to avoid issues with special characters in temp path
+                    var safeTempFileName = string.Join("_", Path.GetFileName(fileName).Split(Path.GetInvalidFileNameChars()));
+                    tempInputPath = Path.Combine(Path.GetTempPath(), $"input_{fileId}_{safeTempFileName}");
+                    
+                    _logger.LogDebug("💾 [EXTRACTION] Saving .docx to temp file: {TempPath} (original: {OriginalName})", tempInputPath, fileName);
+                    
                     fileStream.Position = 0;
-                    using (var tempFileStream = File.Create(tempInputPath))
+                    // Write file in binary mode to ensure no encoding issues
+                    using (var tempFileStream = new FileStream(tempInputPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.SequentialScan))
                     {
                         await fileStream.CopyToAsync(tempFileStream);
+                        await tempFileStream.FlushAsync();
                     }
-                    _logger.LogDebug("💾 [EXTRACTION] Saved .docx to temp file for processing: {TempPath}", tempInputPath);
+                    
+                    // Verify file was written correctly
+                    var fileInfo = new FileInfo(tempInputPath);
+                    if (!fileInfo.Exists || fileInfo.Length != fileStream.Length)
+                    {
+                        throw new InvalidOperationException($"Failed to save temp file correctly. Expected {fileStream.Length} bytes, got {fileInfo.Length} bytes.");
+                    }
+                    
+                    _logger.LogDebug("✅ [EXTRACTION] Saved .docx to temp file. Size: {Size} bytes", fileInfo.Length);
                     
                     // Reset stream position and extract from stream
                     fileStream.Position = 0;
@@ -874,18 +1114,15 @@ namespace SMEPilot.FunctionApp.Functions
                 // 3. Optionally OCR images here (skipped in POC)
                 var imageOcrs = new List<string>();
 
-                // 4. Rule-based sectioning and template formatting (NO AI, NO DATABASE)
+                // 4. Rule-based enrichment (NO AI, NO DATABASE)
                 byte[] enrichedBytes;
                 string enrichedName;
                 DocumentModel? docModel = null; // Declare at higher scope for classification
                 
-                _logger.LogDebug("📄 [TEMPLATE] Starting template formatting for file: {FileName}", fileName);
-                _logger.LogDebug("   File ID: {FileId}", fileId);
-                _logger.LogDebug("   Extracted text length: {TextLength} characters", text?.Length ?? 0);
-                _logger.LogDebug("   Images extracted: {ImageCount}", imagesBytes?.Count ?? 0);
+                _logger.LogInformation("Starting rule-based enrichment (no AI, no DB).");
                 
-                // For .docx files, use DocumentEnricherService (production-ready rule-based enrichment)
-                if (fileExtension == ".docx")
+                // For .docx files, use RuleBasedFormatter (stream-based, no temp files)
+                if (fileExtension == ".docx" && _ruleBasedFormatter != null)
                 {
                     try
                     {
@@ -894,12 +1131,69 @@ namespace SMEPilot.FunctionApp.Functions
                         // Paths (ensure these files exist in the function app deployment package)
                         var repoRoot = AppDomain.CurrentDomain.BaseDirectory ?? Directory.GetCurrentDirectory();
                         var mappingJsonPath = Path.Combine(repoRoot, "Config", "mapping.json");
-                        var templatePath = Path.Combine(repoRoot, "Templates", "SMEPilot_OrgTemplate_RuleBased.dotx");
+                        
+                        // Try to get template from SharePoint config first
+                        string? templatePath = null;
+                        if (!string.IsNullOrWhiteSpace(sourceSiteId))
+                        {
+                            _logger.LogInformation("📥 [TEMPLATE] Attempting to download template from SharePoint config...");
+                            templatePath = await _graph.DownloadTemplateFileAsync(
+                                sourceSiteId,
+                                _cfg.TemplateLibraryPath,
+                                _cfg.TemplateFileName,
+                                _cfg.TemplateFileUrl);
+                            
+                            if (!string.IsNullOrWhiteSpace(templatePath) && File.Exists(templatePath))
+                            {
+                                _logger.LogInformation("✅ [TEMPLATE] Using template from SharePoint: {TemplatePath}", templatePath);
+                            }
+                            else
+                            {
+                                _logger.LogWarning("⚠️ [TEMPLATE] Could not download template from SharePoint, falling back to local files");
+                                templatePath = null;
+                            }
+                        }
+                        
+                        // Fallback to local template files if SharePoint download failed
+                        if (string.IsNullOrWhiteSpace(templatePath) || !File.Exists(templatePath))
+                        {
+                            _logger.LogInformation("📂 [TEMPLATE] Looking for local template files...");
+                            var templateDir = Path.Combine(repoRoot, "Templates");
+                            templatePath = Path.Combine(templateDir, "SMEPilot_OrgTemplate_RuleBased.dotx");
+                            if (!File.Exists(templatePath))
+                            {
+                                templatePath = Path.Combine(templateDir, "UniversalOrgTemplate.dotx");
+                            }
+                            if (!File.Exists(templatePath))
+                            {
+                                // Try to find any .dotx file in Templates folder
+                                var dotxFiles = Directory.GetFiles(templateDir, "*.dotx");
+                                if (dotxFiles.Length > 0)
+                                {
+                                    templatePath = dotxFiles[0];
+                                    _logger.LogInformation("📋 [ENRICHMENT] Using template file: {TemplatePath}", templatePath);
+                                }
+                            }
+                        }
+                        
+                        // Verify template file exists
+                        if (string.IsNullOrWhiteSpace(templatePath) || !File.Exists(templatePath))
+                        {
+                            _logger.LogError("❌ [ENRICHMENT] Template file not found: {TemplatePath}", templatePath ?? "null");
+                            return (false, null, $"Template file not found. Please ensure template is configured in SharePoint or deployed locally.");
+                        }
+                        
+                        // Verify mapping.json exists
+                        if (!File.Exists(mappingJsonPath))
+                        {
+                            _logger.LogError("❌ [ENRICHMENT] Mapping file not found: {MappingPath}", mappingJsonPath);
+                            return (false, null, $"Mapping file not found: {mappingJsonPath}. Please ensure mapping.json is deployed.");
+                        }
                         
                         // Create DocumentEnricherService instance
                         var enricher = new DocumentEnricherService(
                             mappingJsonPath, 
-                            File.Exists(templatePath) ? templatePath : null);
+                            templatePath);
                         
                         // Use the temp file we already saved during extraction
                         var tempOutputPath = Path.Combine(Path.GetTempPath(), $"enriched_{fileId}_{Path.GetFileNameWithoutExtension(fileName)}_enriched.docx");
@@ -1014,15 +1308,251 @@ namespace SMEPilot.FunctionApp.Functions
                         return (false, null, $"Template formatting failed: {ex.Message}");
                     }
 
-                    // 5. Build enriched docx bytes
-                    _logger.LogDebug("📝 [TEMPLATE] Building formatted document...");
-                    enrichedBytes = TemplateBuilder.BuildDocxBytes(docModel, imagesBytes);
-                    enrichedName = Path.GetFileNameWithoutExtension(fileName) + "_enriched.docx";
+                    // 5. Fill template using UniversalOrgTemplate.dotx
+                    _logger.LogDebug("📝 [TEMPLATE] Filling template with extracted content...");
+                    
+                    // Try to get template from SharePoint config first
+                    string? templatePath = null;
+                    if (!string.IsNullOrWhiteSpace(sourceSiteId))
+                    {
+                        _logger.LogInformation("📥 [TEMPLATE] Attempting to download template from SharePoint config...");
+                        templatePath = await _graph.DownloadTemplateFileAsync(
+                            sourceSiteId,
+                            _cfg.TemplateLibraryPath,
+                            _cfg.TemplateFileName,
+                            _cfg.TemplateFileUrl);
+                        
+                        if (!string.IsNullOrWhiteSpace(templatePath) && File.Exists(templatePath))
+                        {
+                            _logger.LogInformation("✅ [TEMPLATE] Using template from SharePoint: {TemplatePath}", templatePath);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("⚠️ [TEMPLATE] Could not download template from SharePoint, falling back to local files");
+                            templatePath = null;
+                        }
+                    }
+                    
+                    // Fallback to local template files if SharePoint download failed
+                    if (string.IsNullOrWhiteSpace(templatePath) || !File.Exists(templatePath))
+                    {
+                        _logger.LogInformation("📂 [TEMPLATE] Looking for local template files...");
+                        var repoRoot = AppDomain.CurrentDomain.BaseDirectory ?? Directory.GetCurrentDirectory();
+                        var templatesDir = Path.Combine(repoRoot, "Templates");
+                        templatePath = Directory.GetFiles(templatesDir, "UniversalOrgTemplate*.dotx")
+                            .FirstOrDefault() ?? Path.Combine(templatesDir, "UniversalOrgTemplate.dotx");
+                    }
+                    
+                    if (string.IsNullOrWhiteSpace(templatePath) || !File.Exists(templatePath))
+                    {
+                        _logger.LogWarning("⚠️ [TEMPLATE] Template file not found at {TemplatePath}, falling back to TemplateBuilder", templatePath ?? "null");
+                        // Fallback to old method if template not found
+                        enrichedBytes = TemplateBuilder.BuildDocxBytes(docModel, imagesBytes);
+                        enrichedName = Path.GetFileNameWithoutExtension(fileName) + "_enriched.docx";
+                    }
+                    else
+                    {
+                        // Get document type classification (use docModel sections if text not available)
+                        string fullText = text ?? string.Join("\n\n", docModel.Sections?.Select(s => $"{s.Heading}\n{s.Body}") ?? Enumerable.Empty<string>());
+                        var classification = _hybridEnricher?.ClassifyDocument(docModel.Title ?? "", fullText) ?? "Generic";
+                        
+                        // Create temp output path
+                        var tempOutputPath = Path.Combine(Path.GetTempPath(), $"enriched_{fileId}_{Path.GetFileNameWithoutExtension(fileName)}_enriched.docx");
+                        
+                        // Inspect template first to see what tags are available
+                        var availableTags = TemplateFiller.InspectTemplate(templatePath, _logger);
+                        _logger.LogInformation("🔍 [TEMPLATE] Template inspection complete. Available tags: {Tags}", 
+                            string.Join(", ", availableTags));
+                        
+                        // Build contentMap using simplified mapper
+                        var contentMap = SimplifiedContentMapper.BuildContentMap(
+                            docModel, 
+                            classification, 
+                            availableTags, 
+                            _logger);
+                        
+                        // Build revisions list
+                        var revisions = new List<(string version, string date, string author, string changes)>
+                        {
+                            ("1.0", DateTime.UtcNow.ToString("yyyy-MM-dd"), "SMEPilot", "Initial document enrichment")
+                        };
+                        
+                        // Fill template using TemplateFiller
+                        TemplateFiller.FillTemplate(
+                            templatePath,
+                            tempOutputPath,
+                            contentMap,
+                            imagesBytes,
+                            revisions,
+                            _logger);
+                        
+                        // Read filled document back to bytes
+                        enrichedBytes = await File.ReadAllBytesAsync(tempOutputPath);
+                        enrichedName = Path.GetFileNameWithoutExtension(fileName) + "_enriched.docx";
+                        
+                        // Clean up temp file
+                        try
+                        {
+                            if (File.Exists(tempOutputPath))
+                                File.Delete(tempOutputPath);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "⚠️ [TEMPLATE] Failed to delete temp file: {Path}", tempOutputPath);
+                        }
+                    }
+                    
                     _logger.LogDebug("✅ [TEMPLATE] Formatted document created. Size: {Size} bytes", enrichedBytes.Length);
                 }
+                
+                // Skip embedding generation/storage in no-DB mode (log only)
+                _logger.LogInformation("Skipping embeddings & DB storage (No DB mode).");
 
-                // 6. Upload to ProcessedDocs (with retry for locked files)
-                _logger.LogDebug("📤 [UPLOAD] Uploading formatted document to: {FolderPath}", _cfg.EnrichedFolderRelativePath);
+                // 6. Upload to destination folder (with retry for locked files)
+                // IMPORTANT: Resolve destination folder path to get the correct drive ID
+                // The source driveId is from the source library, but we need the destination library's drive ID
+                
+                // Normalize the destination folder path (remove duplicate folder names, normalize slashes)
+                var rawDestinationPath = _cfg.EnrichedFolderRelativePath;
+                _logger.LogInformation("📤 [UPLOAD] Raw destination folder path from config: '{RawPath}' (SiteId: {SiteId})", rawDestinationPath, sourceSiteId ?? "null");
+                
+                // Verify config was loaded correctly
+                if (string.IsNullOrWhiteSpace(rawDestinationPath) || rawDestinationPath == "/Shared Documents/SMEPilot Enriched Docs")
+                {
+                    _logger.LogWarning("⚠️ [UPLOAD] Destination path appears to be default value. Config may not have loaded correctly. RawPath: '{RawPath}'", rawDestinationPath);
+                }
+                
+                // Normalize path: remove /sites/SiteName/ prefix if present, and clean up duplicate folder names
+                var normalizedDestinationPath = rawDestinationPath.TrimStart('/').TrimEnd('/');
+                if (normalizedDestinationPath.StartsWith("sites/", StringComparison.OrdinalIgnoreCase))
+                {
+                    var pathParts = normalizedDestinationPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (pathParts.Length >= 3)
+                    {
+                        // Skip "sites" and site name, take the rest
+                        normalizedDestinationPath = string.Join("/", pathParts.Skip(2));
+                    }
+                }
+                
+                // Remove duplicate consecutive folder names (e.g., "Shared Documents/Shared Documents" -> "Shared Documents")
+                var folderParts = normalizedDestinationPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+                for (int i = folderParts.Count - 1; i > 0; i--)
+                {
+                    if (folderParts[i] == folderParts[i - 1])
+                    {
+                        _logger.LogWarning("⚠️ [UPLOAD] Found duplicate folder name '{FolderName}' in path, removing duplicate", folderParts[i]);
+                        folderParts.RemoveAt(i);
+                    }
+                }
+                normalizedDestinationPath = string.Join("/", folderParts);
+                
+                _logger.LogInformation("📤 [UPLOAD] Normalized destination folder path: '{NormalizedPath}'", normalizedDestinationPath);
+                
+                // Get site ID (we need it to resolve the destination folder)
+                // CRITICAL FIX: Use the site ID captured from the source file instead of trying to get it from drive
+                string? siteId = sourceSiteId;
+                if (string.IsNullOrWhiteSpace(siteId))
+                {
+                    // Fallback 1: Try to get site ID from drive
+                    _logger.LogDebug("🔍 [UPLOAD] Site ID not captured from source file, trying to get from drive...");
+                    siteId = await _graph.GetSiteIdFromDriveAsync(driveId);
+                    if (!string.IsNullOrWhiteSpace(siteId))
+                    {
+                        _logger.LogInformation("✅ [UPLOAD] Got site ID from drive: {SiteId}", siteId);
+                    }
+                }
+                
+                if (string.IsNullOrWhiteSpace(siteId))
+                {
+                    // Fallback 2: Try to get site ID from drive item directly (one more attempt)
+                    _logger.LogDebug("🔍 [UPLOAD] Site ID still not available, trying to get from drive item directly...");
+                    try
+                    {
+                        var driveItemForSiteId = await _graph.GetDriveItemAsync(driveId, itemId);
+                        siteId = driveItemForSiteId?.ParentReference?.SiteId;
+                        if (!string.IsNullOrWhiteSpace(siteId))
+                        {
+                            _logger.LogInformation("✅ [UPLOAD] Got site ID from drive item: {SiteId}", siteId);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "⚠️ [UPLOAD] Error getting site ID from drive item: {Error}", ex.Message);
+                    }
+                }
+                
+                if (string.IsNullOrWhiteSpace(siteId))
+                {
+                    _logger.LogError("❌ [UPLOAD] Could not determine site ID. Cannot resolve destination folder. Source site ID: {SourceSiteId}", sourceSiteId ?? "null");
+                    // This is a critical error - we cannot proceed without a valid site ID
+                    throw new InvalidOperationException("Cannot resolve destination folder: Site ID is required but could not be determined from source file or drive");
+                }
+                
+                _logger.LogInformation("✅ [UPLOAD] Using site ID for destination folder resolution: {SiteId}", siteId);
+                
+                // Resolve destination folder path to get its drive ID and correct path
+                string? destinationDriveId = null;
+                string? destinationItemId = null;
+                string destinationUploadPath = normalizedDestinationPath;
+                
+                try
+                {
+                    _logger.LogInformation("🔍 [UPLOAD] Resolving destination folder path: '{FolderPath}' for site: {SiteId}", 
+                        normalizedDestinationPath, siteId);
+                    
+                    var (resolvedDriveId, resolvedItemId) = await _graph.ResolveFolderPathAsync(siteId, normalizedDestinationPath);
+                    if (!string.IsNullOrWhiteSpace(resolvedDriveId))
+                    {
+                        destinationDriveId = resolvedDriveId;
+                        destinationItemId = resolvedItemId;
+                        
+                        // PERMANENT FIX: When we have a resolved itemId, we should use just the subfolder path
+                        // The resolved driveId is for the library, and itemId is for the subfolder
+                        // If itemId is null, it means we're uploading to the library root
+                        // If itemId is not null, we need to extract just the subfolder name for the upload path
+                        if (!string.IsNullOrWhiteSpace(resolvedItemId))
+                        {
+                            // Extract just the subfolder name from the path (e.g., "ProcessedDocs" from "Shared Documents/ProcessedDocs")
+                            var pathParts = normalizedDestinationPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (pathParts.Length > 1)
+                            {
+                                // Use just the last part (subfolder name) as the upload path
+                                destinationUploadPath = pathParts[pathParts.Length - 1];
+                                _logger.LogInformation("✅ [UPLOAD] Resolved destination folder. DriveId: {DriveId}, ItemId: {ItemId}, UploadPath: '{UploadPath}' (extracted subfolder)", 
+                                    destinationDriveId, destinationItemId, destinationUploadPath);
+                            }
+                            else
+                            {
+                                // This shouldn't happen, but if it does, use empty path (upload to drive root)
+                                destinationUploadPath = "";
+                                _logger.LogWarning("⚠️ [UPLOAD] Unexpected path format, using empty path for upload");
+                            }
+                        }
+                        else
+                        {
+                            // Uploading to library root - use empty path
+                            destinationUploadPath = "";
+                            _logger.LogInformation("✅ [UPLOAD] Resolved destination folder to library root. DriveId: {DriveId}, UploadPath: '' (library root)", 
+                                destinationDriveId);
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning("⚠️ [UPLOAD] Could not resolve destination folder path '{FolderPath}', using source driveId (may upload to wrong location)", 
+                            normalizedDestinationPath);
+                        destinationDriveId = driveId; // Fallback to source drive
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "❌ [UPLOAD] Error resolving destination folder path '{FolderPath}', using source driveId (may upload to wrong location). Error: {Error}", 
+                        normalizedDestinationPath, ex.Message);
+                    destinationDriveId = driveId; // Fallback to source drive
+                }
+                
+                _logger.LogInformation("📤 [UPLOAD] Uploading formatted document '{FileName}' to path: '{UploadPath}' in drive {DriveId}", 
+                    enrichedName, destinationUploadPath, destinationDriveId);
+                
                 DriveItem? uploaded = null;
                 int uploadRetries = 0;
                 int maxUploadRetries = _cfg.MaxUploadRetries;
@@ -1030,7 +1560,7 @@ namespace SMEPilot.FunctionApp.Functions
                 {
                     try
                     {
-                        uploaded = await _graph.UploadFileBytesAsync(driveId, _cfg.EnrichedFolderRelativePath, enrichedName, enrichedBytes);
+                        uploaded = await _graph.UploadFileBytesAsync(destinationDriveId!, destinationUploadPath, enrichedName, enrichedBytes);
                         _logger.LogDebug("✅ [UPLOAD] File uploaded successfully: {EnrichedName}", enrichedName);
                         break; // Success!
                     }
@@ -1044,7 +1574,7 @@ namespace SMEPilot.FunctionApp.Functions
                             await Task.Delay(_cfg.FileLockWaitSeconds * 1000);
                             try
                             {
-                                uploaded = await _graph.UploadFileBytesAsync(driveId, _cfg.EnrichedFolderRelativePath, enrichedName, enrichedBytes);
+                                uploaded = await _graph.UploadFileBytesAsync(destinationDriveId!, destinationUploadPath, enrichedName, enrichedBytes);
                                 _logger.LogDebug("✅ [UPLOAD] File uploaded successfully on final attempt");
                             }
                             catch (Exception finalEx)
@@ -1055,9 +1585,8 @@ namespace SMEPilot.FunctionApp.Functions
                         }
                         else
                         {
-                            var waitTime = (int)Math.Pow(2, uploadRetries) * 1000; // Exponential backoff: 2s, 4s, 8s, 16s
-                            _logger.LogWarning("⚠️ [UPLOAD] File locked (attempt {Attempt}/{MaxRetries}). Waiting {WaitTime}s before retry...", uploadRetries, maxUploadRetries, waitTime/1000);
-                            await Task.Delay(waitTime);
+                            _logger.LogDebug("⏳ [UPLOAD] File locked, retrying in 2 seconds... (Attempt {Retry}/{MaxRetries})", uploadRetries, maxUploadRetries);
+                            await Task.Delay(2000);
                         }
                     }
                 }
@@ -1069,11 +1598,13 @@ namespace SMEPilot.FunctionApp.Functions
 
                 // 7. Update original item metadata (mark as processed to prevent reprocessing)
                 _logger.LogInformation("📝 [METADATA] Updating SharePoint metadata for {FileName} (ItemId: {ItemId}) to mark as processed...", fileName, itemId);
+                var enrichedTime = DateTime.UtcNow;
                 var metadata = new Dictionary<string, object>
                 {
                     {"SMEPilot_Enriched", true},
-                    {"SMEPilot_Status", "Completed"},
+                    {"SMEPilot_Status", "Succeeded"},
                     {"SMEPilot_EnrichedFileUrl", uploaded.WebUrl},
+                    {"SMEPilot_LastEnrichedTime", enrichedTime}, // Required for versioning detection
                     {"SMEPilot_EnrichedJobId", fileId},
                     {"SMEPilot_Confidence", 0.0}
                 };
@@ -1174,7 +1705,8 @@ namespace SMEPilot.FunctionApp.Functions
                         {
                             {"SMEPilot_Status", "MetadataUpdateFailed"},
                             {"SMEPilot_Enriched", true}, // Document was enriched, just metadata save failed
-                            {"SMEPilot_EnrichedFileUrl", uploaded.WebUrl ?? ""}
+                            {"SMEPilot_EnrichedFileUrl", uploaded.WebUrl ?? ""},
+                            {"SMEPilot_LastEnrichedTime", enrichedTime} // Include timestamp even in fallback
                         };
                         await _graph.UpdateListItemFieldsAsync(driveId, itemId, fallbackMetadata);
                         _logger.LogInformation("✅ [METADATA] Fallback metadata set successfully - file will NOT be reprocessed");
@@ -1186,13 +1718,24 @@ namespace SMEPilot.FunctionApp.Functions
                 }
 
                 _logger.LogDebug("✅ Successfully processed {FileName}, enriched document: {Url}", fileName, uploaded.WebUrl);
+                
+                // Track successful processing
+                var processingDuration = DateTimeOffset.UtcNow - processingStartTime;
+                enrichedUrl = uploaded.WebUrl;
+                _telemetry?.TrackDocumentProcessing(itemId, fileName, fileSizeBytes, "Succeeded", processingDuration);
+                
                 return (true, uploaded.WebUrl, null);
             }
             catch (Exception ex)
             {
+                // Track processing failure
+                var processingDuration = DateTimeOffset.UtcNow - processingStartTime;
+                string errorMessage;
+                
                 // Enhanced error logging for Graph API errors
                 if (ex is ODataError odataError)
                 {
+                    errorMessage = $"Graph API Error: {odataError.Error?.Code ?? "Unknown"} - {odataError.Error?.Message ?? ex.Message}";
                     _logger.LogError(odataError, "❌ [GRAPH ERROR] ODataError processing file {FileName}: Code={Code}, Message={Message}", 
                         fileName, odataError.Error?.Code ?? "Unknown", odataError.Error?.Message ?? ex.Message);
                     if (odataError.Error?.AdditionalData != null)
@@ -1202,14 +1745,180 @@ namespace SMEPilot.FunctionApp.Functions
                             _logger.LogDebug("   Additional Data: {Key}={Value}", kvp.Key, kvp.Value);
                         }
                     }
-                    return (false, null, $"Graph API Error: {odataError.Error?.Code ?? "Unknown"} - {odataError.Error?.Message ?? ex.Message}");
+                    
+                    _telemetry?.TrackProcessingFailure(itemId, fileName, errorMessage, odataError);
+                    // Fire-and-forget notification (don't block on email send)
+                    if (_notifications != null)
+                    {
+                        var notificationService = _notifications; // Capture for closure
+                        _ = Task.Run(async () => await notificationService.SendProcessingFailureNotificationAsync(fileName, itemId, errorMessage, odataError.StackTrace));
+                    }
+                    
+                    return (false, null, errorMessage);
                 }
                 else
                 {
+                    errorMessage = ex.Message;
                     _logger.LogError(ex, "❌ Error processing file {FileName}: {ErrorType}: {Message}", fileName, ex.GetType().Name, ex.Message);
+                    
+                    _telemetry?.TrackProcessingFailure(itemId, fileName, errorMessage, ex);
+                    // Fire-and-forget notification (don't block on email send)
+                    if (_notifications != null)
+                    {
+                        var notificationService = _notifications; // Capture for closure
+                        _ = Task.Run(async () => await notificationService.SendProcessingFailureNotificationAsync(fileName, itemId, errorMessage, ex.StackTrace));
+                    }
                 }
-                return (false, null, ex.Message);
+                
+                return (false, null, errorMessage);
             }
+            finally
+            {
+                // Track processing attempt (even if failed)
+                var processingDuration = DateTimeOffset.UtcNow - processingStartTime;
+                if (enrichedUrl == null) // Only track if not already tracked (failure case)
+                {
+                    // Already tracked in catch block
+                }
+            }
+        }
+
+        /// <summary>
+        /// Builds a content map from DocumentModel for TemplateFiller
+        /// Maps sections to template content control tags
+        /// </summary>
+        private Dictionary<string, string> BuildContentMapForTemplateFiller(DocumentModel docModel, string? documentType)
+        {
+            var contentMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var usedContent = new HashSet<string>(); // Track content to prevent duplicates
+
+            // Document metadata
+            if (!string.IsNullOrWhiteSpace(docModel.Title))
+                contentMap["DocumentTitle"] = docModel.Title;
+
+            if (!string.IsNullOrWhiteSpace(documentType))
+                contentMap["DocumentType"] = documentType;
+
+            if (docModel.Sections == null || docModel.Sections.Count == 0)
+                return contentMap;
+
+            // First pass: Map sections with explicit headings/keywords
+            foreach (var section in docModel.Sections)
+            {
+                var heading = section.Heading ?? "";
+                var body = section.Body ?? "";
+                if (string.IsNullOrWhiteSpace(body)) continue;
+
+                var headingLower = heading.ToLowerInvariant();
+                var bodyLower = body.ToLowerInvariant();
+
+                // Skip if this content was already mapped
+                var contentHash = body.Trim().Substring(0, Math.Min(100, body.Trim().Length));
+                if (usedContent.Contains(contentHash)) continue;
+
+                string? targetTag = null;
+
+                // Check for explicit section markers in content
+                if (bodyLower.Contains("functional overview:") || bodyLower.Contains("functional details:"))
+                {
+                    targetTag = "Functional";
+                    body = ExtractAfterMarker(body, new[] { "Functional Overview:", "Functional Details:" });
+                }
+                else if (bodyLower.Contains("technical implementation:") || bodyLower.Contains("technical details:"))
+                {
+                    targetTag = "Technical";
+                    body = ExtractAfterMarker(body, new[] { "Technical Implementation:", "Technical Details:" });
+                }
+                else if (bodyLower.Contains("troubleshooting:") || bodyLower.Contains("known issues:"))
+                {
+                    targetTag = "Findings";
+                }
+                else if (bodyLower.Contains("references:") || bodyLower.Contains("reference:") || bodyLower.StartsWith("http"))
+                {
+                    targetTag = "References";
+                }
+                // Check heading keywords
+                else if (headingLower.Contains("overview") || headingLower.Contains("summary") || headingLower.Contains("introduction"))
+                {
+                    targetTag = "Overview";
+                }
+                else if (headingLower.Contains("functional") && !headingLower.Contains("technical"))
+                {
+                    targetTag = "Functional";
+                }
+                else if (headingLower.Contains("technical") || headingLower.Contains("implementation") || headingLower.Contains("api") || headingLower.Contains("endpoint"))
+                {
+                    targetTag = "Technical";
+                }
+                else if (headingLower.Contains("reference") || headingLower.Contains("link") || headingLower.Contains("documentation"))
+                {
+                    targetTag = "References";
+                }
+                // Content-based analysis
+                else if (bodyLower.Contains("api") || bodyLower.Contains("endpoint") || bodyLower.Contains("cron") || bodyLower.Contains("webhook") || bodyLower.Contains("microservice"))
+                {
+                    targetTag = "Technical";
+                }
+                else if (bodyLower.Contains("functional") || bodyLower.Contains("feature") || bodyLower.Contains("workflow"))
+                {
+                    targetTag = "Functional";
+                }
+                else if (bodyLower.Contains("http://") || bodyLower.Contains("https://") || bodyLower.Contains("intranet"))
+                {
+                    targetTag = "References";
+                }
+
+                // Map to target tag if found
+                if (targetTag != null && !string.IsNullOrWhiteSpace(body))
+                {
+                    if (contentMap.ContainsKey(targetTag))
+                    {
+                        contentMap[targetTag] = contentMap[targetTag] + "\n\n" + body;
+                    }
+                    else
+                    {
+                        contentMap[targetTag] = body;
+                    }
+                    usedContent.Add(contentHash);
+                }
+            }
+
+            // Second pass: Map unmapped sections to Overview if empty
+            foreach (var section in docModel.Sections)
+            {
+                var body = section.Body ?? "";
+                if (string.IsNullOrWhiteSpace(body)) continue;
+
+                var contentHash = body.Trim().Substring(0, Math.Min(100, body.Trim().Length));
+                if (usedContent.Contains(contentHash)) continue;
+
+                if (!contentMap.ContainsKey("Overview") && body.Length > 50)
+                {
+                    contentMap["Overview"] = body;
+                    usedContent.Add(contentHash);
+                }
+            }
+
+            return contentMap;
+        }
+
+        /// <summary>
+        /// Extracts content after a marker for TemplateFiller
+        /// </summary>
+        private string ExtractAfterMarker(string text, string[] markers)
+        {
+            var textLower = text.ToLowerInvariant();
+            foreach (var marker in markers)
+            {
+                var markerLower = marker.ToLowerInvariant();
+                var index = textLower.IndexOf(markerLower);
+                if (index >= 0)
+                {
+                    var startIndex = index + marker.Length;
+                    return text.Substring(startIndex).Trim();
+                }
+            }
+            return text;
         }
     }
 }

@@ -25,7 +25,7 @@ class DocumentUploaderWebPart extends BaseClientSideWebPart<IDocumentUploaderWeb
       // Use configured value, or default to ngrok URL for local testing
       // For production, configure Azure Function App URL via web part properties
       this._functionAppUrl = this.properties.functionAppUrl || 
-        'https://a5fb7edc07fe.ngrok-free.app'; // Ngrok URL for local Function App testing
+        'https://078dcba0929b.ngrok-free.app'; // Ngrok URL for local Function App testing
     });
   }
 

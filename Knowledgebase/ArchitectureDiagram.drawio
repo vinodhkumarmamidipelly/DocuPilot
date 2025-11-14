@@ -1,0 +1,60 @@
+{
+  "diagram": {
+    "title": "SMEPilot Architecture Diagram",
+    "elements": [
+      {
+        "type": "User",
+        "label": "User (Employee / Admin)"
+      },
+      {
+        "type": "SharePoint",
+        "label": "SharePoint Library (ScratchDocs)"
+      },
+      {
+        "type": "Azure Function",
+        "label": "Azure Function - ProcessSharePointFile"
+      },
+      {
+        "type": "Note",
+        "label": "Note: No AI/DB - Template formatting only"
+      },
+      {
+        "type": "SharePoint",
+        "label": "SMEPilot Enriched Docs Library"
+      },
+      {
+        "type": "Teams / Copilot",
+        "label": "Teams / Copilot"
+      },
+      {
+        "connections": [
+          [
+            "User",
+            "SharePoint Library (ScratchDocs)",
+            "Upload Doc"
+          ],
+          [
+            "SharePoint Library (ScratchDocs)",
+            "Azure Function - ProcessSharePointFile",
+            "Trigger via Graph"
+          ],
+          [
+            "Azure Function - ProcessSharePointFile",
+            "Note: No AI/DB - Template formatting only",
+            "Apply Template"
+          ],
+          [
+            "Azure Function - ProcessSharePointFile",
+            "SMEPilot Enriched Docs Library",
+            "Upload Enriched Doc"
+          ],
+          [
+            "Teams / Copilot",
+            "SMEPilot Enriched Docs Library",
+            "Query / Search"
+          ]
+        ]
+      }
+    ]
+  }
+}

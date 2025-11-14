@@ -26,7 +26,11 @@ using System.Collections.Generic;
 
 using System.IO;
 
+using System.IO.Compression;
+
 using System.Linq;
+
+using System.Text;
 
 using System.Xml.Linq;
 
@@ -35,6 +39,8 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 
 using DocumentFormat.OpenXml.Wordprocessing;
+
+using Microsoft.Extensions.Logging;
 
 using Newtonsoft.Json;
 
@@ -56,13 +62,15 @@ namespace SMEPilot.FunctionApp.Services
 
         private readonly MappingConfig _config;
 
-        private readonly string _templatePath;
+        private readonly string? _templatePath;
+        
+        private readonly Microsoft.Extensions.Logging.ILogger<DocumentEnricherService>? _logger;
 
         private const string EnrichedMarkerProperty = "SMEPilot_Enriched";
 
 
 
-        public DocumentEnricherService(string mappingJsonPath, string templatePath = null)
+        public DocumentEnricherService(string mappingJsonPath, string? templatePath = null)
 
         {
 
@@ -138,11 +146,33 @@ namespace SMEPilot.FunctionApp.Services
 
                     var main = doc.MainDocumentPart ?? doc.AddMainDocumentPart();
 
-                    if (main.Document == null) main.Document = new Document(new Body());
+                    // Try to access Document property - this may fail if XML is corrupted
+                    Document? document = null;
+                    try
+                    {
+                        document = main.Document;
+                    }
+                    catch (System.Xml.XmlException xmlEx)
+                    {
+                        // Template or existing document has corrupted XML - replace it
+                        _logger?.LogWarning("⚠️ [ENRICHMENT] Output document has corrupted XML, replacing with new document. Error: {Error}", xmlEx.Message);
+                        document = null; // Force creation of new document
+                    }
+                    catch (Exception ex)
+                    {
+                        // Other errors accessing document
+                        _logger?.LogWarning("⚠️ [ENRICHMENT] Error accessing document, replacing with new document. Error: {Error}", ex.Message);
+                        document = null; // Force creation of new document
+                    }
 
+                    if (document == null)
+                    {
+                        // Create a new document (either because it was null or because it was corrupted)
+                        document = new Document(new Body());
+                        main.Document = document;
+                    }
 
-
-                    var body = main.Document.Body;
+                    var body = document.Body;
 
 
 
@@ -248,6 +278,42 @@ namespace SMEPilot.FunctionApp.Services
 
 
 
+        /// <summary>
+        /// Attempt to repair corrupted document XML by reading it directly from ZIP and fixing common entity issues
+        /// </summary>
+        private void RepairDocumentXml(string path)
+        {
+            // Read the document XML directly from the ZIP archive
+            using (var zipArchive = ZipFile.Open(path, ZipArchiveMode.Update))
+            {
+                var documentEntry = zipArchive.GetEntry("word/document.xml");
+                if (documentEntry == null) throw new InvalidOperationException("Could not find word/document.xml in the document archive");
+
+                string xmlContent;
+                using (var stream = documentEntry.Open())
+                using (var reader = new StreamReader(stream, Encoding.UTF8))
+                {
+                    xmlContent = reader.ReadToEnd();
+                }
+                
+                // Fix common XML entity issues: replace unescaped & with &amp;
+                // But preserve existing entities like &amp;, &lt;, &gt;, &quot;, &apos;, and numeric entities
+                var repairedXml = System.Text.RegularExpressions.Regex.Replace(
+                    xmlContent,
+                    @"&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)",
+                    "&amp;"
+                );
+
+                // Write the repaired XML back
+                documentEntry.Delete();
+                var newEntry = zipArchive.CreateEntry("word/document.xml");
+                using (var writer = new StreamWriter(newEntry.Open(), Encoding.UTF8))
+                {
+                    writer.Write(repairedXml);
+                }
+            }
+        }
+
         #region Extraction Helpers
 
 
@@ -258,30 +324,126 @@ namespace SMEPilot.FunctionApp.Services
 
             var paragraphs = new List<string>();
 
-            using (var doc = WordprocessingDocument.Open(path, false))
-
+            try
             {
-
-                var body = doc.MainDocumentPart?.Document?.Body;
-
-                if (body == null) return paragraphs;
-
-
-
-                // Keep paragraph boundaries. Filter out tiny paragraphs (less than 2 chars).
-
-                foreach (var p in body.Elements<Paragraph>())
-
+                // Try opening without OpenSettings first (simpler, may work for most documents)
+                WordprocessingDocument? doc = null;
+                Document? document = null;
+                bool needsRepair = false;
+                
+                try
+                {
+                    doc = WordprocessingDocument.Open(path, false);
+                    try
+                    {
+                        document = doc.MainDocumentPart?.Document;
+                    }
+                    catch (System.Xml.XmlException xmlEx)
+                    {
+                        // Document XML is corrupted - mark for repair
+                        _logger?.LogWarning("⚠️ [EXTRACTION] Document has XML parsing error at line {Line}, position {Position}. Attempting repair...", xmlEx.LineNumber, xmlEx.LinePosition);
+                        needsRepair = true;
+                        doc.Dispose();
+                        doc = null;
+                    }
+                }
+                catch (System.Xml.XmlException)
+                {
+                    // Opening failed - try with OpenSettings (more lenient)
+                    try
+                    {
+                        var openSettings = new DocumentFormat.OpenXml.Packaging.OpenSettings
+                        {
+                            AutoSave = false,
+                            MarkupCompatibilityProcessSettings = new DocumentFormat.OpenXml.Packaging.MarkupCompatibilityProcessSettings(
+                                DocumentFormat.OpenXml.Packaging.MarkupCompatibilityProcessMode.ProcessAllParts,
+                                DocumentFormat.OpenXml.FileFormatVersions.Office2016)
+                        };
+                        doc = WordprocessingDocument.Open(path, false, openSettings);
+                        document = doc.MainDocumentPart?.Document;
+                    }
+                    catch (System.Xml.XmlException xmlEx2)
+                    {
+                        // Still failed - try repair
+                        _logger?.LogWarning("⚠️ [EXTRACTION] Document has XML parsing error even with OpenSettings. Attempting repair...", xmlEx2.LineNumber, xmlEx2.LinePosition);
+                        needsRepair = true;
+                    }
+                }
+                
+                // If repair is needed, do it now
+                if (needsRepair && doc == null)
+                {
+                    try
+                    {
+                        RepairDocumentXml(path);
+                        _logger?.LogInformation("✅ [EXTRACTION] Successfully repaired corrupted document XML");
+                        
+                        // Reopen the repaired document
+                        doc = WordprocessingDocument.Open(path, false);
+                        document = doc.MainDocumentPart?.Document;
+                    }
+                    catch (Exception repairEx)
+                    {
+                        // Repair failed - provide helpful error message
+                        var errorMessage = $"Document contains corrupted XML and could not be repaired. " +
+                            $"The document file may contain unescaped entities (like '&' without 'amp;'). " +
+                            $"Repair attempt failed: {repairEx.Message}. " +
+                            $"Please try opening the document in Microsoft Word and saving it again - Word will automatically repair the XML.";
+                        throw new InvalidOperationException(errorMessage, repairEx);
+                    }
+                }
+                
+                if (doc == null || document == null)
+                {
+                    throw new InvalidOperationException("Failed to open document - could not access document content.");
+                }
+                
+                using (doc)
                 {
 
-                    var txt = p.InnerText?.Trim();
+                    var body = document?.Body;
 
-                    if (!string.IsNullOrWhiteSpace(txt))
+                    if (body == null) return paragraphs;
 
-                        paragraphs.Add(txt);
+                    // Try to extract paragraphs - if this fails, fall back to InnerText
+                    try
+                    {
+                        // Keep paragraph boundaries. Filter out tiny paragraphs (less than 2 chars).
+                        foreach (var p in body.Elements<Paragraph>())
+                        {
+                            var txt = p.InnerText?.Trim();
+                            if (!string.IsNullOrWhiteSpace(txt))
+                                paragraphs.Add(txt);
+                        }
+                    }
+                    catch (System.Xml.XmlException)
+                    {
+                        // If iterating paragraphs fails, try to get all text at once (loses paragraph boundaries but gets content)
+                        var allText = body.InnerText;
+                        if (!string.IsNullOrWhiteSpace(allText))
+                        {
+                            // Split by newlines and filter
+                            var lines = allText.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                            foreach (var line in lines)
+                            {
+                                var trimmed = line.Trim();
+                                if (trimmed.Length >= 2)
+                                    paragraphs.Add(trimmed);
+                            }
+                        }
+                    }
 
                 }
-
+            }
+            catch (System.Xml.XmlException xmlEx)
+            {
+                // Document has corrupted XML - cannot be processed
+                throw new InvalidOperationException($"Document contains corrupted XML and cannot be processed. The document file may be damaged. Error: {xmlEx.Message}", xmlEx);
+            }
+            catch (Exception ex)
+            {
+                // Other errors opening the document
+                throw new InvalidOperationException($"Failed to open document for processing. Error: {ex.Message}", ex);
             }
 
             return paragraphs;
@@ -296,13 +458,24 @@ namespace SMEPilot.FunctionApp.Services
 
             var images = new List<byte[]>();
 
-            using (var doc = WordprocessingDocument.Open(path, false))
-
+            try
             {
+                // Use OpenSettings to be more lenient with XML parsing
+                var openSettings = new DocumentFormat.OpenXml.Packaging.OpenSettings
+                {
+                    AutoSave = false,
+                    MarkupCompatibilityProcessSettings = new DocumentFormat.OpenXml.Packaging.MarkupCompatibilityProcessSettings(
+                        DocumentFormat.OpenXml.Packaging.MarkupCompatibilityProcessMode.ProcessAllParts,
+                        DocumentFormat.OpenXml.FileFormatVersions.Office2016)
+                };
+                
+                using (var doc = WordprocessingDocument.Open(path, false, openSettings))
 
-                var part = doc.MainDocumentPart;
+                {
 
-                if (part == null) return images;
+                    var part = doc.MainDocumentPart;
+
+                    if (part == null) return images;
 
                 foreach (var imgPart in part.ImageParts)
 
@@ -317,7 +490,18 @@ namespace SMEPilot.FunctionApp.Services
                     images.Add(ms.ToArray());
 
                 }
-
+            }
+            }
+            catch (System.Xml.XmlException xmlEx)
+            {
+                // Document has corrupted XML - return empty images list (images are optional)
+                // The error will be caught when extracting paragraphs
+                return images;
+            }
+            catch (Exception ex)
+            {
+                // Other errors - return empty images list (images are optional)
+                return images;
             }
 
             return images;
