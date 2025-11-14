@@ -68,6 +68,120 @@ namespace SMEPilot.FunctionApp.Helpers
             }
         }
 
+        /// <summary>
+        /// Checks if a file is in the configured source folder
+        /// Returns true if file is in source folder, false if not, null if cannot determine (fail open)
+        /// </summary>
+        public async Task<bool?> IsFileInSourceFolderAsync(string driveId, string itemId, string? sourceFolderPath, string? siteId = null)
+        {
+            _logger?.LogInformation("🔍 [IsFileInSourceFolderAsync] Checking if file {ItemId} (DriveId: {DriveId}) is in source folder '{SourceFolder}' (SiteId: {SiteId})", 
+                itemId, driveId, sourceFolderPath ?? "null", siteId ?? "null");
+            
+            if (!_hasCredentials)
+            {
+                _logger?.LogWarning("⚠️ [IsFileInSourceFolderAsync] No credentials available, allowing processing (mock mode)");
+                return null; // Mock mode - fail open
+            }
+
+            // If source folder path is not configured, allow processing (fail open)
+            if (string.IsNullOrWhiteSpace(sourceFolderPath))
+            {
+                _logger?.LogWarning("⚠️ [IsFileInSourceFolderAsync] Source folder path not configured, allowing processing");
+                return null; // Fail open - don't block if config is missing
+            }
+
+            try
+            {
+                // Get the file's DriveItem to access its parent reference
+                _logger?.LogInformation("🔍 [IsFileInSourceFolderAsync] Getting file item {ItemId} from drive {DriveId}", itemId, driveId);
+                var fileItem = await GetDriveItemAsync(driveId, itemId);
+                if (fileItem == null)
+                {
+                    _logger?.LogWarning("⚠️ [IsFileInSourceFolderAsync] Could not get file item {ItemId}, allowing processing", itemId);
+                    return null; // Fail open - if we can't get the file, allow processing
+                }
+
+                // Get the file's parent folder ID
+                var fileParentId = fileItem.ParentReference?.Id;
+                var fileParentPath = fileItem.ParentReference?.Path;
+                _logger?.LogInformation("🔍 [IsFileInSourceFolderAsync] File {ItemId} - ParentId: {ParentId}, ParentPath: {ParentPath}", 
+                    itemId, fileParentId ?? "null", fileParentPath ?? "null");
+                
+                if (string.IsNullOrWhiteSpace(fileParentId))
+                {
+                    _logger?.LogWarning("⚠️ [IsFileInSourceFolderAsync] File {ItemId} has no parent ID, allowing processing", itemId);
+                    return null; // Fail open - if we can't determine parent, allow processing
+                }
+
+                // Get site ID if not provided
+                if (string.IsNullOrWhiteSpace(siteId))
+                {
+                    siteId = fileItem.ParentReference?.SiteId;
+                    _logger?.LogInformation("🔍 [IsFileInSourceFolderAsync] SiteId from file: {SiteId}", siteId ?? "null");
+                    if (string.IsNullOrWhiteSpace(siteId))
+                    {
+                        _logger?.LogWarning("⚠️ [IsFileInSourceFolderAsync] Could not determine site ID, allowing processing");
+                        return null; // Fail open
+                    }
+                }
+
+                // Resolve the source folder path to get its item ID
+                _logger?.LogInformation("🔍 [IsFileInSourceFolderAsync] Resolving source folder path '{SourceFolder}' for site {SiteId}", sourceFolderPath, siteId);
+                var (sourceDriveId, sourceFolderItemId) = await ResolveFolderPathAsync(siteId, sourceFolderPath);
+                _logger?.LogInformation("🔍 [IsFileInSourceFolderAsync] Resolved source folder - DriveId: {SourceDriveId}, FolderItemId: {SourceFolderItemId}", 
+                    sourceDriveId ?? "null", sourceFolderItemId ?? "null");
+                
+                // If source folder is library root (sourceFolderItemId is null), check if file is in the same drive
+                if (string.IsNullOrWhiteSpace(sourceFolderItemId))
+                {
+                    // Source folder is library root - check if file is in the same drive
+                    if (driveId == sourceDriveId)
+                    {
+                        _logger?.LogInformation("✅ [IsFileInSourceFolderAsync] File {ItemId} is in source folder (library root) of drive {DriveId}", itemId, driveId);
+                        return true;
+                    }
+                    else
+                    {
+                        _logger?.LogInformation("⏭️ [IsFileInSourceFolderAsync] File {ItemId} is NOT in source folder. File drive: {FileDriveId}, Source drive: {SourceDriveId}", 
+                            itemId, driveId, sourceDriveId);
+                        return false;
+                    }
+                }
+
+                // Source folder is a subfolder - check if file's parent matches source folder
+                // We need to check if the file's parent folder is the source folder or a descendant
+                // For simplicity, we'll check if the parent ID matches or if we can traverse up
+                if (fileParentId == sourceFolderItemId)
+                {
+                    _logger?.LogInformation("✅ [IsFileInSourceFolderAsync] File {ItemId} is directly in source folder (ItemId: {SourceFolderId})", itemId, sourceFolderItemId);
+                    return true;
+                }
+
+                // Check if file's parent is a descendant of source folder by checking parent chain
+                // This is a simplified check - we'll verify the parent is in the source folder's drive
+                if (driveId == sourceDriveId)
+                {
+                    // File is in the same drive as source folder
+                    // For now, we'll allow it if it's in the same drive (fail open for subfolders)
+                    // A more precise check would require traversing the parent chain
+                    _logger?.LogDebug("🔍 [IsFileInSourceFolderAsync] File {ItemId} is in same drive as source folder, allowing processing (parent: {ParentId}, source: {SourceId})", 
+                        itemId, fileParentId, sourceFolderItemId);
+                    return null; // Fail open - if in same drive but parent doesn't match, allow (could be in subfolder)
+                }
+                else
+                {
+                    _logger?.LogInformation("⏭️ [IsFileInSourceFolderAsync] File {ItemId} is NOT in source folder. File drive: {FileDriveId}, Source drive: {SourceDriveId}", 
+                        itemId, driveId, sourceDriveId);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "⚠️ [IsFileInSourceFolderAsync] Error checking if file {ItemId} is in source folder: {Error}. Allowing processing.", itemId, ex.Message);
+                return null; // Fail open - if there's an error, allow processing
+            }
+        }
+
         public async Task<Stream> DownloadFileStreamAsync(string driveId, string itemId)
         {
             if (!_hasCredentials)

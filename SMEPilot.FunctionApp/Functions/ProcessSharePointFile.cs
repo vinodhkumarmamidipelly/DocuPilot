@@ -362,26 +362,102 @@ namespace SMEPilot.FunctionApp.Functions
                             // Get tenant ID from resource path or use default
                             var tenantId = ExtractTenantIdFromResource(notification.Resource) ?? "default";
 
-                            // Load SharePoint configuration for this site
+                            // CRITICAL: Capture site ID from file's DriveItem BEFORE loading config (needed for validation)
+                            // This is the same approach used in ProcessFileAsync
+                            string? siteId = null;
                             try
                             {
-                                var siteId = await _graph.GetSiteIdFromDriveAsync(driveId);
-                                if (!string.IsNullOrWhiteSpace(siteId))
+                                var driveItem = await _graph.GetDriveItemAsync(driveId, itemId);
+                                if (driveItem != null)
+                                {
+                                    siteId = driveItem.ParentReference?.SiteId;
+                                    if (!string.IsNullOrWhiteSpace(siteId))
+                                    {
+                                        _logger.LogInformation("✅ [SITE_ID] Captured site ID from source file: {SiteId}", siteId);
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "⚠️ [SITE_ID] Could not get site ID from file DriveItem: {Error}", ex.Message);
+                            }
+
+                            // Fallback: Try to get site ID from drive if not captured from file
+                            if (string.IsNullOrWhiteSpace(siteId))
+                            {
+                                try
+                                {
+                                    siteId = await _graph.GetSiteIdFromDriveAsync(driveId);
+                                    if (!string.IsNullOrWhiteSpace(siteId))
+                                    {
+                                        _logger.LogInformation("✅ [SITE_ID] Got site ID from drive: {SiteId}", siteId);
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogWarning(ex, "⚠️ [SITE_ID] Could not get site ID from drive: {Error}", ex.Message);
+                                }
+                            }
+
+                            // Load SharePoint configuration for this site (now that we have siteId)
+                            if (!string.IsNullOrWhiteSpace(siteId))
+                            {
+                                try
                                 {
                                     _logger.LogInformation("🔄 [CONFIG] Loading SharePoint configuration for site {SiteId}", siteId);
                                     await _cfg.LoadSharePointConfigAsync(_graph, siteId, _logger);
                                     _logger.LogInformation("✅ [CONFIG] SharePoint configuration loaded. Source: {SourcePath}, Destination: {DestPath}, MaxSize: {MaxSize}MB", 
                                         _cfg.SourceFolderPath, _cfg.EnrichedFolderRelativePath, _cfg.MaxFileSizeBytes / 1024 / 1024);
                                 }
-                                else
+                                catch (Exception configEx)
                                 {
-                                    _logger.LogWarning("⚠️ [CONFIG] Could not determine siteId from drive {DriveId}. Using environment variables/defaults.", driveId);
+                                    _logger.LogWarning(configEx, "⚠️ [CONFIG] Failed to load SharePoint configuration. Using environment variables/defaults. Error: {Error}", configEx.Message);
+                                    // Continue processing with defaults - don't fail the entire request
                                 }
                             }
-                            catch (Exception configEx)
+                            else
                             {
-                                _logger.LogWarning(configEx, "⚠️ [CONFIG] Failed to load SharePoint configuration. Using environment variables/defaults. Error: {Error}", configEx.Message);
-                                // Continue processing with defaults - don't fail the entire request
+                                _logger.LogWarning("⚠️ [CONFIG] Could not determine siteId. Using environment variables/defaults.");
+                            }
+
+                            // Validate that file is in the configured source folder (if configured)
+                            if (!string.IsNullOrWhiteSpace(_cfg.SourceFolderPath))
+                            {
+                                _logger.LogInformation("🔍 [VALIDATION] Starting validation for file {FileName} (ItemId: {ItemId}) against source folder '{SourceFolder}'", 
+                                    fileName, itemId, _cfg.SourceFolderPath);
+                                try
+                                {
+                                    var isInSourceFolder = await _graph.IsFileInSourceFolderAsync(driveId, itemId, _cfg.SourceFolderPath, siteId);
+                                    
+                                    if (isInSourceFolder == false)
+                                    {
+                                        // File is definitively NOT in source folder - skip processing
+                                        _logger.LogInformation("⏭️ [VALIDATION] File {FileName} (ItemId: {ItemId}) is NOT in configured source folder '{SourceFolder}'. Skipping processing.", 
+                                            fileName, itemId, _cfg.SourceFolderPath);
+                                        continue; // Skip this notification
+                                    }
+                                    else if (isInSourceFolder == true)
+                                    {
+                                        _logger.LogInformation("✅ [VALIDATION] File {FileName} (ItemId: {ItemId}) IS in configured source folder '{SourceFolder}'. Proceeding with processing.", 
+                                            fileName, itemId, _cfg.SourceFolderPath);
+                                    }
+                                    else if (isInSourceFolder == null)
+                                    {
+                                        // Couldn't determine - fail open and allow processing
+                                        _logger.LogWarning("⚠️ [VALIDATION] Could not determine if file {FileName} (ItemId: {ItemId}) is in source folder '{SourceFolder}'. Allowing processing (fail open).", 
+                                            fileName, itemId, _cfg.SourceFolderPath);
+                                    }
+                                }
+                                catch (Exception validationEx)
+                                {
+                                    _logger.LogWarning(validationEx, "⚠️ [VALIDATION] Error validating source folder for file {FileName} (ItemId: {ItemId}): {Error}. Allowing processing (fail open).", 
+                                        fileName, itemId, validationEx.Message);
+                                    // Fail open - if validation fails, allow processing to continue
+                                }
+                            }
+                            else
+                            {
+                                _logger.LogInformation("ℹ️ [VALIDATION] Source folder path not configured, skipping validation for file {FileName} (ItemId: {ItemId})", fileName, itemId);
                             }
 
                             _logger.LogDebug("✅ Processing Graph notification: File {FileName} (ID: {ItemId}) in Drive {DriveId}, ChangeType: {ChangeType}", 
