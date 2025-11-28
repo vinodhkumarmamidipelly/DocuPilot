@@ -22,11 +22,10 @@ namespace SMEPilot.FunctionApp.Functions
     public class ProcessSharePointFile
     {
         private readonly GraphHelper _graph;
-        private readonly SimpleExtractor _extractor; 
+        private readonly DocumentExtractor _extractor; 
         private readonly Config _cfg;
-        private readonly HybridEnricher? _hybridEnricher;
-        private readonly OcrHelper? _ocrHelper;
-        private readonly RuleBasedFormatter? _ruleBasedFormatter;
+        private readonly DocumentEnricher? _documentEnricher;
+        private readonly TemplateProcessor? _templateProcessor;
         private readonly ILogger<ProcessSharePointFile> _logger;
         private readonly TelemetryService? _telemetry;
         private readonly NotificationService? _notifications;
@@ -65,12 +64,11 @@ namespace SMEPilot.FunctionApp.Functions
 
         public ProcessSharePointFile(
             GraphHelper graph, 
-            SimpleExtractor extractor, 
+            DocumentExtractor extractor, 
             Config cfg, 
             ILogger<ProcessSharePointFile> logger,
-            HybridEnricher? hybridEnricher = null, 
-            OcrHelper? ocrHelper = null,
-            RuleBasedFormatter? ruleBasedFormatter = null,
+            DocumentEnricher? documentEnricher = null,
+            TemplateProcessor? templateProcessor = null,
             TelemetryService? telemetry = null,
             NotificationService? notifications = null,
             RateLimitingService? rateLimiter = null)
@@ -79,9 +77,8 @@ namespace SMEPilot.FunctionApp.Functions
             _extractor = extractor;
             _cfg = cfg;
             _logger = logger;
-            _hybridEnricher = hybridEnricher;
-            _ocrHelper = ocrHelper;
-            _ruleBasedFormatter = ruleBasedFormatter;
+            _documentEnricher = documentEnricher;
+            _templateProcessor = templateProcessor;
             _telemetry = telemetry;
             _notifications = notifications;
             _rateLimiter = rateLimiter;
@@ -996,6 +993,127 @@ namespace SMEPilot.FunctionApp.Functions
                 _logger.LogError("❌ [VALIDATION] driveId or itemId exceeds maximum length");
                 return (false, null, "Invalid driveId or itemId format");
             }
+            
+            // TODO: TEMPORARILY DISABLED - 'temp' itemId resolution logic
+            // This logic was added to support manual uploads via DocumentUploader component
+            // which is not part of base requirements. Hidden for now, can be re-enabled later.
+            // Base requirement: Files should be uploaded to SharePoint and processed via webhooks
+            // which provide correct driveId and itemId automatically.
+            /*
+            // Handle 'temp' itemId case - resolve file by name
+            if (itemId == "temp" || string.IsNullOrWhiteSpace(itemId))
+            {
+                _logger.LogInformation("🔍 [RESOLVE] itemId is 'temp', resolving file by name: {FileName}", fileName);
+                
+                // Get site ID from driveId
+                string? siteIdForResolve = null;
+                try
+                {
+                    siteIdForResolve = await _graph.GetSiteIdFromDriveAsync(driveId);
+                    if (!string.IsNullOrWhiteSpace(siteIdForResolve))
+                    {
+                        _logger.LogInformation("✅ [RESOLVE] Got site ID from drive: {SiteId}", siteIdForResolve);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "⚠️ [RESOLVE] Could not get site ID from drive: {Error}", ex.Message);
+                }
+                
+                // Load configuration to get source folder path
+                if (!string.IsNullOrWhiteSpace(siteIdForResolve))
+                {
+                    try
+                    {
+                        await _cfg.LoadSharePointConfigAsync(_graph, siteIdForResolve, _logger, forceRefresh: true);
+                        _logger.LogInformation("✅ [RESOLVE] Configuration loaded. Source folder: {SourcePath}", _cfg.SourceFolderPath);
+                    }
+                    catch (Exception configEx)
+                    {
+                        _logger.LogWarning(configEx, "⚠️ [RESOLVE] Failed to load configuration: {Error}", configEx.Message);
+                    }
+                }
+                
+                // Try to resolve file by name in the source folder
+                if (!string.IsNullOrWhiteSpace(_cfg.SourceFolderPath) && !string.IsNullOrWhiteSpace(siteIdForResolve))
+                {
+                    try
+                    {
+                        // Resolve source folder to get drive ID
+                        var (sourceDriveId, sourceFolderItemId) = await _graph.ResolveFolderPathAsync(siteIdForResolve, _cfg.SourceFolderPath);
+                        if (!string.IsNullOrWhiteSpace(sourceDriveId))
+                        {
+                            _logger.LogInformation("✅ [RESOLVE] Resolved source folder. DriveId: {DriveId}", sourceDriveId);
+                            
+                            // Extract just the file name (no path)
+                            var sanitizedFileName = Path.GetFileName(fileName);
+                            
+                            // Try to get file by name in the drive root (if source folder is library root)
+                            // or in the subfolder if sourceFolderItemId is set
+                            try
+                            {
+                                DriveItem? fileItem = null;
+                                if (string.IsNullOrWhiteSpace(sourceFolderItemId))
+                                {
+                                    // File is in library root
+                                    fileItem = await _graph.GetDriveItemByPathAsync(sourceDriveId, sanitizedFileName);
+                                }
+                                else
+                                {
+                                    // File is in a subfolder - need to construct path
+                                    // Get folder name from source folder path
+                                    var folderParts = _cfg.SourceFolderPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                                    var folderName = folderParts.Length > 0 ? folderParts[folderParts.Length - 1] : "";
+                                    var filePath = string.IsNullOrWhiteSpace(folderName) ? sanitizedFileName : $"{folderName}/{sanitizedFileName}";
+                                    fileItem = await _graph.GetDriveItemByPathAsync(sourceDriveId, filePath);
+                                }
+                                
+                                if (fileItem != null && !string.IsNullOrWhiteSpace(fileItem.Id))
+                                {
+                                    // Update driveId and itemId with resolved values
+                                    driveId = sourceDriveId;
+                                    itemId = fileItem.Id;
+                                    _logger.LogInformation("✅ [RESOLVE] Successfully resolved file. New DriveId: {DriveId}, ItemId: {ItemId}", driveId, itemId);
+                                }
+                                else
+                                {
+                                    _logger.LogWarning("⚠️ [RESOLVE] File item found but ID is null or empty");
+                                    return (false, null, $"File '{fileName}' not found in source folder '{_cfg.SourceFolderPath}'");
+                                }
+                            }
+                            catch (ODataError odataError) when (odataError.Error?.Code == "itemNotFound" || odataError.Error?.Code == "NotFound")
+                            {
+                                _logger.LogWarning("⚠️ [RESOLVE] File '{FileName}' not found in source folder '{SourcePath}'", fileName, _cfg.SourceFolderPath);
+                                return (false, null, $"File '{fileName}' not found in source folder '{_cfg.SourceFolderPath}'. Please ensure the file was uploaded successfully.");
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogWarning("⚠️ [RESOLVE] Could not resolve source folder path: {SourcePath}", _cfg.SourceFolderPath);
+                            return (false, null, $"Could not resolve source folder path: '{_cfg.SourceFolderPath}'. Please check configuration.");
+                        }
+                    }
+                    catch (Exception resolveEx)
+                    {
+                        _logger.LogError(resolveEx, "❌ [RESOLVE] Error resolving file by name: {Error}", resolveEx.Message);
+                        return (false, null, $"Failed to resolve file '{fileName}': {resolveEx.Message}");
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("⚠️ [RESOLVE] Cannot resolve file - missing siteId or source folder path");
+                    return (false, null, "Cannot resolve file: siteId or source folder path is missing. Please check configuration.");
+                }
+            }
+            */
+            
+            // Reject 'temp' itemId - webhooks should provide correct itemId
+            if (itemId == "temp" || string.IsNullOrWhiteSpace(itemId))
+            {
+                _logger.LogWarning("⚠️ [VALIDATION] Invalid itemId '{ItemId}'. Webhooks should provide correct itemId. Manual uploads not supported.", itemId);
+                return (false, null, "Invalid itemId. Files must be uploaded to SharePoint source folder and processed via webhooks.");
+            }
+            
             // Skip folders - only process files
             // Also check if file was deleted (item no longer exists)
             // CRITICAL: Capture site ID from source file for destination folder resolution
@@ -1092,6 +1210,9 @@ namespace SMEPilot.FunctionApp.Functions
                     return (false, null, errorMessage);
                 }
 
+                // Feedback2: Use TempFileLease for all temp file operations
+                using var tempLease = new TempFileLease($"smepilot-{itemId}");
+                
                 // 2. Extract text & images based on file type
                 var fileExtension = Path.GetExtension(fileName).ToLower();
                 string text;
@@ -1104,9 +1225,9 @@ namespace SMEPilot.FunctionApp.Functions
                 // For .docx files, save to temp file first (needed for DocumentEnricherService)
                 if (fileExtension == ".docx")
                 {
-                    // Sanitize filename to avoid issues with special characters in temp path
+                    // Feedback2: Use TempFileLease instead of Path.GetTempPath()
                     var safeTempFileName = string.Join("_", Path.GetFileName(fileName).Split(Path.GetInvalidFileNameChars()));
-                    tempInputPath = Path.Combine(Path.GetTempPath(), $"input_{fileId}_{safeTempFileName}");
+                    tempInputPath = tempLease.GetPath($"input_{safeTempFileName}");
                     
                     _logger.LogDebug("💾 [EXTRACTION] Saving .docx to temp file: {TempPath} (original: {OriginalName})", tempInputPath, fileName);
                     
@@ -1118,6 +1239,25 @@ namespace SMEPilot.FunctionApp.Functions
                         await tempFileStream.FlushAsync();
                     }
                     
+                    // Feedback2: Content hash idempotency check - compute hash and check if already processed
+                    var currentHash = ContentHashHelper.ComputeSha256Hex(tempInputPath);
+                    var existingMetadata = await _graph.GetListItemFieldsAsync(driveId, itemId);
+                    if (existingMetadata != null && existingMetadata.TryGetValue("SMEPilot_ContentHash", out var existingHashObj))
+                    {
+                        var existingHash = existingHashObj?.ToString();
+                        if (!string.IsNullOrEmpty(existingHash) && string.Equals(existingHash, currentHash, StringComparison.OrdinalIgnoreCase))
+                        {
+                            _logger.LogInformation("⏭️ [IDEMPOTENCY] Skipping enrichment: content hash unchanged (file already processed)");
+                            await _graph.UpdateListItemFieldsAsync(driveId, itemId, new Dictionary<string, object>
+                            {
+                                {"SMEPilot_Enriched", true},
+                                {"SMEPilot_Status", "Skipped"},
+                                {"SMEPilot_LastEnrichedTime", DateTime.UtcNow.ToString("o")}
+                            });
+                            return (true, null, "Skipped - duplicate content (content hash unchanged)");
+                        }
+                    }
+                    
                     // Verify file was written correctly
                     var fileInfo = new FileInfo(tempInputPath);
                     if (!fileInfo.Exists || fileInfo.Length != fileStream.Length)
@@ -1125,7 +1265,7 @@ namespace SMEPilot.FunctionApp.Functions
                         throw new InvalidOperationException($"Failed to save temp file correctly. Expected {fileStream.Length} bytes, got {fileInfo.Length} bytes.");
                     }
                     
-                    _logger.LogDebug("✅ [EXTRACTION] Saved .docx to temp file. Size: {Size} bytes", fileInfo.Length);
+                    _logger.LogDebug("✅ [EXTRACTION] Saved .docx to temp file. Size: {Size} bytes, Hash: {Hash}", fileInfo.Length, currentHash);
                     
                     // Reset stream position and extract from stream
                     fileStream.Position = 0;
@@ -1171,8 +1311,8 @@ namespace SMEPilot.FunctionApp.Functions
                     case ".tiff":
                     case ".tif":
                         _logger.LogDebug("🖼️ [EXTRACTION] Processing image file...");
-                        (text, imagesBytes) = await _extractor.ExtractImageAsync(fileStream, _ocrHelper);
-                        if (_ocrHelper != null && !string.IsNullOrWhiteSpace(text) && !text.Contains("[Image file - OCR not configured"))
+                        (text, imagesBytes) = await _extractor.ExtractImageAsync(fileStream);
+                        if (!string.IsNullOrWhiteSpace(text) && !text.Contains("[Image file - OCR not configured"))
                         {
                             _logger.LogDebug("✅ [EXTRACTION] Processed image file with OCR - extracted {TextLength} characters", text.Length);
                         }
@@ -1191,164 +1331,138 @@ namespace SMEPilot.FunctionApp.Functions
                 var imageOcrs = new List<string>();
 
                 // 4. Rule-based enrichment (NO AI, NO DATABASE)
-                byte[] enrichedBytes;
-                string enrichedName;
+                byte[]? enrichedBytes = null;
+                string? enrichedName = null;
                 DocumentModel? docModel = null; // Declare at higher scope for classification
                 
                 _logger.LogInformation("Starting rule-based enrichment (no AI, no DB).");
                 
-                // For .docx files, use RuleBasedFormatter (stream-based, no temp files)
-                if (fileExtension == ".docx" && _ruleBasedFormatter != null)
+                // For .docx files, use DocumentEnricher (keyword-based enrichment)
+                // CRITICAL FIX: Use template-driven approach for ALL file types including .docx
+                // The old keyword-based EnrichFile() approach doesn't properly fill templates
+                if (fileExtension == ".docx")
                 {
+                    // For .docx files, extract structured data and use template-driven approach
                     try
                     {
-                        _logger.LogDebug("📋 [ENRICHMENT] Using DocumentEnricherService for .docx file...");
+                        _logger.LogInformation("📋 [TEMPLATE] Processing .docx file using template-driven approach...");
                         
-                        // Paths (ensure these files exist in the function app deployment package)
+                        // Step 1: Extract structured data from DOCX
+                        using var inputStream = File.OpenRead(tempInputPath);
+                        var (paras, tables, extractedImages) = _extractor.ExtractDocxStructured(inputStream);
+                        
+                        // Step 2: Create DocumentEnricher for sectioning
                         var repoRoot = AppDomain.CurrentDomain.BaseDirectory ?? Directory.GetCurrentDirectory();
                         var mappingJsonPath = Path.Combine(repoRoot, "Config", "mapping.json");
                         
-                        // Try to get template from SharePoint config first
-                        string? templatePath = null;
-                        if (!string.IsNullOrWhiteSpace(sourceSiteId))
-                        {
-                            _logger.LogInformation("📥 [TEMPLATE] Attempting to download template from SharePoint config...");
-                            templatePath = await _graph.DownloadTemplateFileAsync(
-                                sourceSiteId,
-                                _cfg.TemplateLibraryPath,
-                                _cfg.TemplateFileName,
-                                _cfg.TemplateFileUrl);
-                            
-                            if (!string.IsNullOrWhiteSpace(templatePath) && File.Exists(templatePath))
-                            {
-                                _logger.LogInformation("✅ [TEMPLATE] Using template from SharePoint: {TemplatePath}", templatePath);
-                            }
-                            else
-                            {
-                                _logger.LogWarning("⚠️ [TEMPLATE] Could not download template from SharePoint, falling back to local files");
-                                templatePath = null;
-                            }
-                        }
-                        
-                        // Fallback to local template files if SharePoint download failed
-                        if (string.IsNullOrWhiteSpace(templatePath) || !File.Exists(templatePath))
-                        {
-                            _logger.LogInformation("📂 [TEMPLATE] Looking for local template files...");
-                            var templateDir = Path.Combine(repoRoot, "Templates");
-                            templatePath = Path.Combine(templateDir, "SMEPilot_OrgTemplate_RuleBased.dotx");
-                            if (!File.Exists(templatePath))
-                            {
-                                templatePath = Path.Combine(templateDir, "UniversalOrgTemplate.dotx");
-                            }
-                            if (!File.Exists(templatePath))
-                            {
-                                // Try to find any .dotx file in Templates folder
-                                var dotxFiles = Directory.GetFiles(templateDir, "*.dotx");
-                                if (dotxFiles.Length > 0)
-                                {
-                                    templatePath = dotxFiles[0];
-                                    _logger.LogInformation("📋 [ENRICHMENT] Using template file: {TemplatePath}", templatePath);
-                                }
-                            }
-                        }
-                        
-                        // Verify template file exists
-                        if (string.IsNullOrWhiteSpace(templatePath) || !File.Exists(templatePath))
-                        {
-                            _logger.LogError("❌ [ENRICHMENT] Template file not found: {TemplatePath}", templatePath ?? "null");
-                            return (false, null, $"Template file not found. Please ensure template is configured in SharePoint or deployed locally.");
-                        }
-                        
-                        // Verify mapping.json exists
                         if (!File.Exists(mappingJsonPath))
                         {
-                            _logger.LogError("❌ [ENRICHMENT] Mapping file not found: {MappingPath}", mappingJsonPath);
-                            return (false, null, $"Mapping file not found: {mappingJsonPath}. Please ensure mapping.json is deployed.");
+                            _logger.LogError("❌ [TEMPLATE] Mapping file not found: {MappingPath}", mappingJsonPath);
+                            return (false, null, $"Mapping file not found: {mappingJsonPath}");
                         }
                         
-                        // Create DocumentEnricherService instance
-                        var enricher = new DocumentEnricherService(
-                            mappingJsonPath, 
-                            templatePath);
+                        // Create DocumentEnricher (logger is optional)
+                        var enricher = new DocumentEnricher(mappingJsonPath, null, null);
                         
-                        // Use the temp file we already saved during extraction
-                        var tempOutputPath = Path.Combine(Path.GetTempPath(), $"enriched_{fileId}_{Path.GetFileNameWithoutExtension(fileName)}_enriched.docx");
+                        // Step 3: Parse sections from structured paragraphs
+                        var sections = enricher.ParseSections(paras, tables, extractedImages);
                         
-                        try
+                        // Step 4: Build DocumentModel
+                        var title = sections.FirstOrDefault()?.Heading ?? Path.GetFileNameWithoutExtension(fileName);
+                        docModel = new DocumentModel
                         {
-                            _logger.LogDebug("💾 [ENRICHMENT] Using temp input file: {TempPath}", tempInputPath);
-                            
-                            // Enrich the document
-                            var result = enricher.EnrichFile(tempInputPath, tempOutputPath, uploaderEmail ?? "AutomatedEnricher");
-                            
-                            if (!result.Success)
+                            Title = title,
+                            Sections = sections.Select((s, idx) => 
                             {
-                                _logger.LogError("❌ [ENRICHMENT] DocumentEnricherService failed: {Error}", result.ErrorMessage);
-                                await _graph.UpdateListItemFieldsAsync(driveId, itemId, new Dictionary<string, object>
+                                var firstPara = s.Paragraphs.FirstOrDefault();
+                                return new Section
                                 {
-                                    {"SMEPilot_Enriched", false},
-                                    {"SMEPilot_Status", "ManualReview"},
-                                    {"SMEPilot_EnrichedJobId", fileId}
-                                });
-                                return (false, null, $"Document enrichment failed: {result.ErrorMessage}");
-                            }
-                            
-                            // Read enriched file back to bytes
-                            enrichedBytes = await File.ReadAllBytesAsync(tempOutputPath);
-                            enrichedName = Path.GetFileNameWithoutExtension(fileName) + "_enriched.docx";
-                            
-                            _logger.LogDebug("✅ [ENRICHMENT] Document enriched successfully. Size: {Size} bytes", enrichedBytes.Length);
-                            _logger.LogDebug("   Document Type: {DocType}, Status: {Status}", result.DocumentType, result.Status);
-                            
-                            // Clean up temp files
-                            try
-                            {
-                                if (File.Exists(tempInputPath)) File.Delete(tempInputPath);
-                                if (File.Exists(tempOutputPath)) File.Delete(tempOutputPath);
-                            }
-                            catch (Exception cleanupEx)
-                            {
-                                _logger.LogWarning(cleanupEx, "⚠️ [ENRICHMENT] Could not clean up temp files: {Error}", cleanupEx.Message);
-                            }
-                        }
-                        finally
+                                    Id = $"s{idx + 1}",
+                                    Heading = s.Heading ?? "Content",
+                                    Body = string.Join("\n", s.Paragraphs),
+                                    Summary = firstPara != null && firstPara.Length > 0 
+                                        ? firstPara.Substring(0, Math.Min(200, firstPara.Length)) 
+                                        : ""
+                                };
+                            }).ToList(),
+                            Images = extractedImages.Select(img => new ImageData { Bytes = img.Bytes, Id = img.Id, Alt = "" }).ToList()
+                        };
+                        
+                        _logger.LogInformation("🔍 [DIAGNOSTIC] Document Model Details:");
+                        _logger.LogInformation("   - Title: {Title}", docModel.Title ?? "No title");
+                        _logger.LogInformation("   - Section Count: {Count}", docModel.Sections?.Count ?? 0);
+                        if (docModel.Sections != null && docModel.Sections.Count > 0)
                         {
-                            // Ensure cleanup even on error
-                            try
+                            _logger.LogInformation("   - First 5 sections:");
+                            foreach (var section in docModel.Sections.Take(5))
                             {
-                                if (tempInputPath != null && File.Exists(tempInputPath)) File.Delete(tempInputPath);
-                                if (File.Exists(tempOutputPath)) File.Delete(tempOutputPath);
+                                _logger.LogInformation("     • '{Heading}' ({BodyLength} chars)", 
+                                    section.Heading ?? "No heading", section.Body?.Length ?? 0);
                             }
-                            catch { }
+                            if (docModel.Sections.Count > 5)
+                            {
+                                _logger.LogInformation("     ... and {MoreCount} more sections", docModel.Sections.Count - 5);
+                            }
                         }
+                        else
+                        {
+                            _logger.LogWarning("⚠️ [DIAGNOSTIC] NO SECTIONS FOUND - This will cause matching to fail!");
+                        }
+                        
+                        // Build full text for classification
+                        text = string.Join("\n\n", docModel.Sections?.Select(s => $"{s.Heading}\n{s.Body}") ?? Enumerable.Empty<string>());
+                        imagesBytes = extractedImages.Select(img => img.Bytes).ToList();
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "❌ [ENRICHMENT] DocumentEnricherService exception: {Error}", ex.Message);
+                        _logger.LogError(ex, "❌ [TEMPLATE] DOCX extraction/sectioning failed: {Error}", ex.Message);
                         await _graph.UpdateListItemFieldsAsync(driveId, itemId, new Dictionary<string, object>
                         {
                             {"SMEPilot_Enriched", false},
                             {"SMEPilot_Status", "ManualReview"},
                             {"SMEPilot_EnrichedJobId", fileId}
                         });
-                        return (false, null, $"Document enrichment failed: {ex.Message}");
+                        return (false, null, $"DOCX processing failed: {ex.Message}");
                     }
                 }
-                else
+                
+                // Now use template-driven approach for ALL files (including processed .docx)
+                // CRITICAL FIX: Only run sectioning for non-.docx files OR if docModel wasn't created above
+                if (fileExtension != ".docx" || docModel == null)
                 {
-                    // For non-.docx files, use existing HybridEnricher + TemplateBuilder flow
+                    // For non-.docx files, use DocumentEnricher + TemplateProcessor flow
                     
                     try
                     {
                         // Step 1: Rule-based sectioning (no AI)
-                        if (_hybridEnricher != null)
+                        if (_documentEnricher != null)
                         {
                             _logger.LogDebug("📋 [TEMPLATE] Step 1: Rule-based sectioning...");
-                            docModel = _hybridEnricher.SectionDocument(text, fileName);
-                            _logger.LogDebug("✅ [TEMPLATE] Created {SectionCount} sections using rule-based parsing", docModel.Sections.Count);
+                            docModel = _documentEnricher.SectionDocument(text, fileName);
+                            _logger.LogInformation("🔍 [DIAGNOSTIC] Document Model Details:");
+                            _logger.LogInformation("   - Title: {Title}", docModel.Title ?? "No title");
+                            _logger.LogInformation("   - Section Count: {Count}", docModel.Sections?.Count ?? 0);
+                            if (docModel.Sections != null && docModel.Sections.Count > 0)
+                            {
+                                _logger.LogInformation("   - First 5 sections:");
+                                foreach (var section in docModel.Sections.Take(5))
+                                {
+                                    _logger.LogInformation("     • '{Heading}' ({BodyLength} chars)", 
+                                        section.Heading ?? "No heading", section.Body?.Length ?? 0);
+                                }
+                                if (docModel.Sections.Count > 5)
+                                {
+                                    _logger.LogInformation("     ... and {MoreCount} more sections", docModel.Sections.Count - 5);
+                                }
+                            }
+                            else
+                            {
+                                _logger.LogWarning("⚠️ [DIAGNOSTIC] NO SECTIONS FOUND - This will cause matching to fail!");
+                            }
+                            _logger.LogDebug("✅ [TEMPLATE] Created {SectionCount} sections using rule-based parsing", docModel.Sections?.Count ?? 0);
                             
                             // Step 2: Classify document (keyword-based, no AI)
-                            var classification = _hybridEnricher.ClassifyDocument(docModel.Title, text);
+                            var classification = _documentEnricher.ClassifyDocument(docModel.Title, text);
                             _logger.LogDebug("📂 [TEMPLATE] Document classified as: {Classification}", classification);
                         }
                         else
@@ -1383,102 +1497,123 @@ namespace SMEPilot.FunctionApp.Functions
                         });
                         return (false, null, $"Template formatting failed: {ex.Message}");
                     }
+                }
 
-                    // 5. Fill template using UniversalOrgTemplate.dotx
-                    _logger.LogDebug("📝 [TEMPLATE] Filling template with extracted content...");
+                // 5. Fill template using UniversalOrgTemplate.dotx (for ALL files, including .docx)
+                _logger.LogDebug("📝 [TEMPLATE] Filling template with extracted content...");
+                
+                // Try to get template from SharePoint config first
+                string? templatePath = null;
+                if (!string.IsNullOrWhiteSpace(sourceSiteId))
+                {
+                    _logger.LogInformation("📥 [TEMPLATE] Attempting to download template from SharePoint config...");
+                    templatePath = await _graph.DownloadTemplateFileAsync(
+                        sourceSiteId,
+                        _cfg.TemplateLibraryPath,
+                        _cfg.TemplateFileName,
+                        _cfg.TemplateFileUrl);
                     
-                    // Try to get template from SharePoint config first
-                    string? templatePath = null;
-                    if (!string.IsNullOrWhiteSpace(sourceSiteId))
+                    if (!string.IsNullOrWhiteSpace(templatePath) && File.Exists(templatePath))
                     {
-                        _logger.LogInformation("📥 [TEMPLATE] Attempting to download template from SharePoint config...");
-                        templatePath = await _graph.DownloadTemplateFileAsync(
-                            sourceSiteId,
-                            _cfg.TemplateLibraryPath,
-                            _cfg.TemplateFileName,
-                            _cfg.TemplateFileUrl);
-                        
-                        if (!string.IsNullOrWhiteSpace(templatePath) && File.Exists(templatePath))
-                        {
-                            _logger.LogInformation("✅ [TEMPLATE] Using template from SharePoint: {TemplatePath}", templatePath);
-                        }
-                        else
-                        {
-                            _logger.LogWarning("⚠️ [TEMPLATE] Could not download template from SharePoint, falling back to local files");
-                            templatePath = null;
-                        }
-                    }
-                    
-                    // Fallback to local template files if SharePoint download failed
-                    if (string.IsNullOrWhiteSpace(templatePath) || !File.Exists(templatePath))
-                    {
-                        _logger.LogInformation("📂 [TEMPLATE] Looking for local template files...");
-                        var repoRoot = AppDomain.CurrentDomain.BaseDirectory ?? Directory.GetCurrentDirectory();
-                        var templatesDir = Path.Combine(repoRoot, "Templates");
-                        templatePath = Directory.GetFiles(templatesDir, "UniversalOrgTemplate*.dotx")
-                            .FirstOrDefault() ?? Path.Combine(templatesDir, "UniversalOrgTemplate.dotx");
-                    }
-                    
-                    if (string.IsNullOrWhiteSpace(templatePath) || !File.Exists(templatePath))
-                    {
-                        _logger.LogWarning("⚠️ [TEMPLATE] Template file not found at {TemplatePath}, falling back to TemplateBuilder", templatePath ?? "null");
-                        // Fallback to old method if template not found
-                        enrichedBytes = TemplateBuilder.BuildDocxBytes(docModel, imagesBytes);
-                        enrichedName = Path.GetFileNameWithoutExtension(fileName) + "_enriched.docx";
+                        _logger.LogInformation("✅ [TEMPLATE] Using template from SharePoint: {TemplatePath}", templatePath);
                     }
                     else
                     {
-                        // Get document type classification (use docModel sections if text not available)
-                        string fullText = text ?? string.Join("\n\n", docModel.Sections?.Select(s => $"{s.Heading}\n{s.Body}") ?? Enumerable.Empty<string>());
-                        var classification = _hybridEnricher?.ClassifyDocument(docModel.Title ?? "", fullText) ?? "Generic";
-                        
-                        // Create temp output path
-                        var tempOutputPath = Path.Combine(Path.GetTempPath(), $"enriched_{fileId}_{Path.GetFileNameWithoutExtension(fileName)}_enriched.docx");
-                        
-                        // Inspect template first to see what tags are available
-                        var availableTags = TemplateFiller.InspectTemplate(templatePath, _logger);
-                        _logger.LogInformation("🔍 [TEMPLATE] Template inspection complete. Available tags: {Tags}", 
-                            string.Join(", ", availableTags));
-                        
-                        // Build contentMap using simplified mapper
-                        var contentMap = SimplifiedContentMapper.BuildContentMap(
-                            docModel, 
-                            classification, 
-                            availableTags, 
-                            _logger);
-                        
-                        // Build revisions list
-                        var revisions = new List<(string version, string date, string author, string changes)>
-                        {
-                            ("1.0", DateTime.UtcNow.ToString("yyyy-MM-dd"), "SMEPilot", "Initial document enrichment")
-                        };
-                        
-                        // Fill template using TemplateFiller
-                        TemplateFiller.FillTemplate(
-                            templatePath,
-                            tempOutputPath,
-                            contentMap,
-                            imagesBytes,
-                            revisions,
-                            _logger);
-                        
-                        // Read filled document back to bytes
-                        enrichedBytes = await File.ReadAllBytesAsync(tempOutputPath);
-                        enrichedName = Path.GetFileNameWithoutExtension(fileName) + "_enriched.docx";
-                        
-                        // Clean up temp file
-                        try
-                        {
-                            if (File.Exists(tempOutputPath))
-                                File.Delete(tempOutputPath);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "⚠️ [TEMPLATE] Failed to delete temp file: {Path}", tempOutputPath);
-                        }
+                        _logger.LogWarning("⚠️ [TEMPLATE] Could not download template from SharePoint, falling back to local files");
+                        templatePath = null;
+                    }
+                }
+                
+                // Fallback to local template files if SharePoint download failed
+                if (string.IsNullOrWhiteSpace(templatePath) || !File.Exists(templatePath))
+                {
+                    _logger.LogInformation("📂 [TEMPLATE] Looking for local template files...");
+                    var repoRoot = AppDomain.CurrentDomain.BaseDirectory ?? Directory.GetCurrentDirectory();
+                    var templatesDir = Path.Combine(repoRoot, "Templates");
+                    templatePath = Directory.GetFiles(templatesDir, "UniversalOrgTemplate*.dotx")
+                        .FirstOrDefault() ?? Path.Combine(templatesDir, "UniversalOrgTemplate.dotx");
+                }
+                
+                if (string.IsNullOrWhiteSpace(templatePath) || !File.Exists(templatePath))
+                {
+                    _logger.LogWarning("⚠️ [TEMPLATE] Template file not found at {TemplatePath}, falling back to TemplateProcessor.BuildDocxBytes", templatePath ?? "null");
+                    // Fallback to building from scratch if template not found
+                    if (_templateProcessor != null)
+                    {
+                        enrichedBytes = _templateProcessor.BuildDocxBytes(docModel, imagesBytes);
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException("TemplateProcessor is not available and template file not found");
+                    }
+                    enrichedName = Path.GetFileNameWithoutExtension(fileName) + "_enriched.docx";
+                }
+                else
+                {
+                    if (_templateProcessor == null)
+                    {
+                        throw new InvalidOperationException("TemplateProcessor is required for template filling");
                     }
                     
-                    _logger.LogDebug("✅ [TEMPLATE] Formatted document created. Size: {Size} bytes", enrichedBytes.Length);
+                    // Get document type classification (use docModel sections if text not available)
+                    string fullText = text ?? string.Join("\n\n", docModel.Sections?.Select(s => $"{s.Heading}\n{s.Body}") ?? Enumerable.Empty<string>());
+                    var classification = _documentEnricher?.ClassifyDocument(docModel.Title ?? "", fullText) ?? "Generic";
+                    
+                    // Create temp output path
+                    // Feedback2: Use TempFileLease for output path
+                    var tempOutputPath = tempLease.GetPath($"enriched_{Path.GetFileNameWithoutExtension(fileName)}_enriched.docx");
+                    
+                    // Inspect template first to see what tags are available
+                    // TEMPLATE-DRIVEN APPROACH: Extract placeholders from template first,
+                    // then intelligently match content from document to each placeholder
+                    var contentMap = _templateProcessor.BuildContentMapFromTemplate(
+                        templatePath,
+                        docModel,
+                        classification,
+                        fullText);
+                    
+                    _logger.LogInformation("✅ [TEMPLATE] Content map built: {Count} placeholders filled", contentMap.Count);
+                    
+                    // Build revisions list
+                    var revisions = new List<(string version, string date, string author, string changes)>
+                    {
+                        ("1.0", DateTime.UtcNow.ToString("yyyy-MM-dd"), "SMEPilot", "Initial document enrichment")
+                    };
+                    
+                    // Fill template using TemplateProcessor
+                    _logger.LogInformation("🔧 [TEMPLATE] Starting FillTemplate for {FileName} with {PlaceholderCount} placeholders", 
+                        fileName, contentMap.Count);
+
+                    _templateProcessor.FillTemplate(
+                        templatePath,
+                        tempOutputPath,
+                        contentMap,
+                        imagesBytes,
+                        revisions);
+
+                    _logger.LogInformation("✅ [TEMPLATE] FillTemplate completed for {FileName}. Output: {OutputPath}", 
+                        fileName, tempOutputPath);
+                    
+                    // Read filled document back to bytes
+                    enrichedBytes = await File.ReadAllBytesAsync(tempOutputPath);
+                    enrichedName = Path.GetFileNameWithoutExtension(fileName) + "_enriched.docx";
+                    
+                    // Feedback2: Note - temp files cleaned up automatically by TempFileLease.Dispose()
+                }
+                
+                _logger.LogDebug("✅ [TEMPLATE] Formatted document created. Size: {Size} bytes", enrichedBytes?.Length ?? 0);
+                
+                // Ensure enrichedBytes and enrichedName are set
+                if (enrichedBytes == null || enrichedName == null)
+                {
+                    _logger.LogError("❌ [TEMPLATE] Failed to create enriched document - enrichedBytes or enrichedName is null");
+                    await _graph.UpdateListItemFieldsAsync(driveId, itemId, new Dictionary<string, object>
+                    {
+                        {"SMEPilot_Enriched", false},
+                        {"SMEPilot_Status", "ManualReview"},
+                        {"SMEPilot_EnrichedJobId", fileId}
+                    });
+                    return (false, null, "Failed to create enriched document");
                 }
                 
                 // Skip embedding generation/storage in no-DB mode (log only)
@@ -1675,6 +1810,15 @@ namespace SMEPilot.FunctionApp.Functions
                 // 7. Update original item metadata (mark as processed to prevent reprocessing)
                 _logger.LogInformation("📝 [METADATA] Updating SharePoint metadata for {FileName} (ItemId: {ItemId}) to mark as processed...", fileName, itemId);
                 var enrichedTime = DateTime.UtcNow;
+                
+                // Feedback2: Get content hash for idempotency (compute from tempInputPath if available, otherwise from original file)
+                string? contentHash = null;
+                if (tempInputPath != null && File.Exists(tempInputPath))
+                {
+                    contentHash = ContentHashHelper.ComputeSha256Hex(tempInputPath);
+                    _logger.LogDebug("🔐 [METADATA] Computed content hash: {Hash}", contentHash);
+                }
+                
                 var metadata = new Dictionary<string, object>
                 {
                     {"SMEPilot_Enriched", true},
@@ -1685,10 +1829,16 @@ namespace SMEPilot.FunctionApp.Functions
                     {"SMEPilot_Confidence", 0.0}
                 };
                 
-                // Add classification if available (only for non-.docx files where docModel was created)
-                if (_hybridEnricher != null && docModel != null)
+                // Feedback2: Add content hash for idempotency
+                if (!string.IsNullOrEmpty(contentHash))
                 {
-                    var classification = _hybridEnricher.ClassifyDocument(docModel.Title, text);
+                    metadata["SMEPilot_ContentHash"] = contentHash;
+                }
+                
+                // Add classification if available (only for non-.docx files where docModel was created)
+                if (_documentEnricher != null && docModel != null)
+                {
+                    var classification = _documentEnricher.ClassifyDocument(docModel.Title, text);
                     metadata["SMEPilot_Classification"] = classification;
                     _logger.LogInformation("📂 [METADATA] Document classified as: {Classification}", classification);
                 }

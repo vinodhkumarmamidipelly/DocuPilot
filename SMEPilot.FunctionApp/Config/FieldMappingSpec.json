@@ -1,0 +1,192 @@
+{
+  "PROJECT_NAME": {
+    "LabelPatterns": [ "Project Name" ]
+  },
+  "VERSION_NUMBER": {
+    "LabelPatterns": [ "Version" ],
+    "RegexPatterns": [ "\\b\\d+(?:\\.\\d+)*\\b" ]
+  },
+  "DATE": {
+    "LabelPatterns": [ "Date" ],
+    "RegexPatterns": [ "\\b(?:\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}|[A-Za-z]+\\s+\\d{4})\\b" ]
+  },
+  "STATUS": {
+    "LabelPatterns": [ "Status" ]
+  },
+  "DOCUMENT_TYPE": {
+    "LabelPatterns": [ "Document Type", "Functional Specification Document" ]
+  },
+  "SCOPE_ITEMS": {
+    "LabelPatterns": [ "In Scope" ]
+  },
+  "OUT_SCOPE_ITEMS": {
+    "LabelPatterns": [ "Out of Scope" ]
+  },
+  "IN_SCOPE_FEATURES": {
+    "LabelPatterns": [ "In Scope" ]
+  },
+  "OUT_SCOPE_FEATURES": {
+    "LabelPatterns": [ "Out of Scope" ]
+  },
+  "PROJECT_OBJECTIVES": {
+    "LabelPatterns": [ "Project Objectives" ]
+  },
+  "BUSINESS_GOALS": {
+    "LabelPatterns": [ "Business Goals", "Business Objectives" ]
+  },
+  "SUCCESS_METRICS": {
+    "LabelPatterns": [ "Success Metrics", "Key Success Metrics", "KPIs" ]
+  },
+  "PERSONAS": {
+    "LabelPatterns": [ "User Personas", "Personas" ]
+  },
+  "DATA_ENTITIES": {
+    "LabelPatterns": [ "Data Entities", "Domain Entities", "Entities" ]
+  },
+  "DB_TABLES": {
+    "LabelPatterns": [ "Data Entities", "Database Tables", "Entity Tables" ]
+  },
+  "REFERENCES": {
+    "LabelPatterns": [ "References", "Related Documents", "Additional Resources" ]
+  },
+  "RELATED_DOCUMENTS": {
+    "LabelPatterns": [ "References", "Related Documents" ]
+  },
+  "ADDITIONAL_RESOURCES": {
+    "LabelPatterns": [ "References", "Additional Resources" ]
+  },
+  "UI_DESIGN_PRINCIPLES": {
+    "LabelPatterns": [ "User Experience", "User Interface", "Design System", "Usability" ]
+  },
+  "UI_LAYOUT_REQUIREMENTS": {
+    "LabelPatterns": [ "Layout Requirements" ]
+  },
+  "UI_COMPONENT_SPECIFICATIONS": {
+    "LabelPatterns": [ "Components" ]
+  },
+  "VERSION_HISTORY": {
+    "LabelPatterns": [ "Document Version History", "Version History" ],
+    "HeaderPatterns": {
+      "VERSION_LABEL": [ "Version" ],
+      "VERSION_DATE": [ "Date" ],
+      "VERSION_AUTHOR": [ "Author" ],
+      "VERSION_CHANGES": [ "Changes" ]
+    }
+  },
+  "CHANGE_LOG": {
+    "LabelPatterns": [ "Change Log", "Revision History" ],
+    "HeaderPatterns": {
+      "CHANGE_NUMBER": [ "Change #", "Version" ],
+      "CHANGE_DATE": [ "Date" ],
+      "CHANGE_AUTHOR": [ "Author", "Owner" ],
+      "CHANGE_DESCRIPTION": [ "Changes", "Description" ],
+      "CHANGE_SECTION": [ "Section" ]
+    }
+  },
+  "OBJECTIVE": {
+    "LabelPatterns": [ "Project Objectives", "Objectives" ]
+  },
+  "VALIDATION_RULES": {
+    "LabelPatterns": [ "Validation Rules" ]
+  },
+  "GLOSSARY": {
+    "LabelPatterns": [ "Glossary" ]
+  },
+  "PROJECT_DESCRIPTION": {
+    "LabelPatterns": [ "Project Description" ]
+  },
+  "STORY_ACCEPTANCE_CRITERIA": {
+    "LabelPatterns": [ "User Story Acceptance Criteria Format", "Story Acceptance Criteria" ]
+  },
+  "ACCEPTANCE_CRITERIA": {
+    "LabelPatterns": [ "Acceptance Criteria" ]
+  },
+  "USER_STORY_ACCEPTANCE": {
+    "LabelPatterns": [ "User Story Acceptance" ]
+  },
+  "SYSTEM_ACCEPTANCE_CRITERIA": {
+    "LabelPatterns": [ "System Acceptance Criteria" ]
+  },
+  "EPICS": {
+    "LabelPatterns": [ "Epic Stories", "Epics" ]
+  },
+  "USER_STORIES": {
+    "LabelPatterns": [ "Feature Stories", "User Stories" ]
+  },
+  "FEATURES": {
+    "LabelPatterns": [ "Feature Acceptance Criteria", "Feature Stories", "Features" ]
+  },
+  "FEATURE_ACCEPTANCE": {
+    "LabelPatterns": [ "Feature Acceptance Criteria" ]
+  },
+  "WORKFLOWS": {
+    "LabelPatterns": [ "User Workflows", "Trainer Workflow", "Client Workflow" ]
+  },
+  "UX_FLOWS": {
+    "LabelPatterns": [ "User Workflows", "User Journey", "UX Flows" ]
+  },
+  "RELATIONSHIPS": {
+    "LabelPatterns": [ "Data Relationships", "Relationships" ]
+  },
+  "PERFORMANCE_RESPONSE_TIME": {
+    "LabelPatterns": [ "Response Time" ]
+  },
+  "PERFORMANCE_THROUGHPU": {
+    "LabelPatterns": [ "Throughput" ]
+  },
+  "PERFORMANCE_SCALABILITY": {
+    "LabelPatterns": [ "Scalability" ]
+  },
+  "NFR_RELIABILITY_UPTIME": {
+    "LabelPatterns": [ "System Uptime" ]
+  },
+  "NFR_RELIABILITY_ERROR_HANDLING": {
+    "LabelPatterns": [ "Error Handling" ]
+  },
+  "DESIGN_COLOR_PALETTE_PRIMARY_COLOR": {
+    "LabelPatterns": [ "Color Palette" ]
+  },
+  "DESIGN_COLOR_PALETTE_SECONDORY_COLOR": {
+    "LabelPatterns": [ "Color Palette" ]
+  },
+  "DESIGN_COLOR_PALETTE_ACCENT_COLOR": {
+    "LabelPatterns": [ "Color Palette" ]
+  },
+  "DESIGN_TYPOGRAPHY_HEADING_FONT": {
+    "LabelPatterns": [ "Typography" ]
+  },
+  "DESIGN_TYPOGRAPHY_BODY_FONT": {
+    "LabelPatterns": [ "Typography" ]
+  },
+  "DESIGN_COMPONENTS": {
+    "LabelPatterns": [ "Components" ]
+  },
+  "ACCESSIBILITY_WCAG": {
+    "LabelPatterns": [ "Accessibility" ]
+  },
+  "ACCESSIBILITY_KEYBOARD": {
+    "LabelPatterns": [ "Accessibility" ]
+  },
+  "ACCESSIBILITY_SCREEN_READER": {
+    "LabelPatterns": [ "Accessibility" ]
+  },
+  "ACCESSIBILITY_CONTRAST": {
+    "LabelPatterns": [ "Accessibility" ]
+  },
+  "COMPLIANCE_REGULATORY": {
+    "LabelPatterns": [ "Compliance" ]
+  },
+  "COMPLIANCE_INDUSTRY": {
+    "LabelPatterns": [ "Compliance" ]
+  },
+  "NFR_MAINTAINABILITY_CODE_QUALITY": {
+    "LabelPatterns": [ "Code Quality" ]
+  },
+  "NFR_MAINTAINABILITY_DOCSS": {
+    "LabelPatterns": [ "Documentation" ]
+  }
+}
+
+
+
+

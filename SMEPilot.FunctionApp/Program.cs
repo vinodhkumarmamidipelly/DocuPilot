@@ -105,25 +105,32 @@ try
                 var logger = sp.GetService<ILogger<GraphHelper>>();
                 return new GraphHelper(cfg, logger);
             });
-                   services.AddSingleton<SimpleExtractor>(sp => 
+                   // Add DocumentExtractor (consolidates SimpleExtractor + OcrHelper)
+                   services.AddSingleton<DocumentExtractor>(sp => 
                    {
-                       var logger = sp.GetService<ILogger<SimpleExtractor>>();
-                       return new SimpleExtractor(logger);
+                       var logger = sp.GetService<ILogger<DocumentExtractor>>();
+                       var cfg = sp.GetRequiredService<Config>();
+                       return new DocumentExtractor(logger, cfg);
                    });
-                   services.AddSingleton<TemplateBuilder>();
-                   services.AddSingleton<OcrHelper>(sp => 
+                   
+                   // Add DocumentEnricher (consolidates DocumentEnricherService + RuleBasedFormatter + HybridEnricher)
+                   // Note: DocumentEnricher is created per-use with mapping.json path, not singleton
+                   
+                   // Add AzureOpenAIService (optional - for enhanced enrichment)
+                   services.AddSingleton<AzureOpenAIService>(sp =>
                    {
                        var cfg = sp.GetRequiredService<Config>();
-                       var logger = sp.GetService<ILogger<OcrHelper>>();
-                       return new OcrHelper(cfg, logger);
-                   }); // OCR support (optional - requires AzureVision_Endpoint and AzureVision_Key)
+                       var logger = sp.GetService<ILogger<AzureOpenAIService>>();
+                       return new AzureOpenAIService(cfg, logger);
+                   });
                    
-                   // Add HybridEnricher for rule-based sectioning (NO AI)
-                   var cfg = new Config();
-                   services.AddSingleton<HybridEnricher>();
-                   
-                   // Add RuleBasedFormatter for rule-based document enrichment (NO AI, NO DB)
-                   services.AddSingleton<RuleBasedFormatter>();
+                   // Add TemplateProcessor (consolidates TemplateBuilder + TemplateFiller + SimplifiedContentMapper)
+                   services.AddSingleton<TemplateProcessor>(sp =>
+                   {
+                       var logger = sp.GetService<ILogger<TemplateProcessor>>();
+                       var openAIService = sp.GetService<AzureOpenAIService>();
+                       return new TemplateProcessor(logger, openAIService);
+                   });
                    
                    // SetupSubscription requires ILogger
                    services.AddSingleton<SMEPilot.FunctionApp.Functions.SetupSubscription>(sp =>
@@ -139,18 +146,19 @@ try
                    services.AddScoped<SMEPilot.FunctionApp.Functions.ProcessSharePointFile>(sp =>
                    {
                        var graph = sp.GetRequiredService<GraphHelper>();
-                       var extractor = sp.GetRequiredService<SimpleExtractor>();
+                       var extractor = sp.GetRequiredService<DocumentExtractor>();
                        var cfg = sp.GetRequiredService<Config>();
                        var logger = sp.GetService<ILogger<SMEPilot.FunctionApp.Functions.ProcessSharePointFile>>();
-                       var hybridEnricher = sp.GetService<HybridEnricher>();
-                       var ocrHelper = sp.GetService<OcrHelper>();
-                       var ruleBasedFormatter = sp.GetService<RuleBasedFormatter>();
+                       // DocumentEnricher is created per-use (not singleton) since it needs mapping.json path
+                       // TemplateProcessor is singleton
+                       var templateProcessor = sp.GetService<TemplateProcessor>();
                        var telemetry = sp.GetService<TelemetryService>();
                        var notifications = sp.GetService<NotificationService>();
                        var rateLimiter = sp.GetService<RateLimitingService>();
                        return new SMEPilot.FunctionApp.Functions.ProcessSharePointFile(
                            graph, extractor, cfg, logger,
-                           hybridEnricher, ocrHelper, ruleBasedFormatter,
+                           documentEnricher: null, // Created per-use in ProcessFileAsync
+                           templateProcessor,
                            telemetry, notifications, rateLimiter);
                    });
                    

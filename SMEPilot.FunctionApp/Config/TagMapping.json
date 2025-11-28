@@ -1,0 +1,28 @@
+{
+  "TagMappings": {
+    "DocumentTitle": ["PROJECT_NAME", "ProjectName", "Title", "DocumentTitle"],
+    "DocumentType": ["DocumentType", "DocType", "Type"],
+    "Overview": ["Overview", "ExecutiveSummary", "Summary", "Purpose"],
+    "Functional": ["Functional", "FunctionalRequirements", "Features"],
+    "Technical": ["Technical", "TechnicalSpecifications", "Implementation"],
+    "References": ["References", "RelatedDocuments", "Links"]
+  },
+  "MetadataMappings": {
+    "Version": ["VERSION_NUMBER", "Version", "VersionNumber"],
+    "Date": ["DATE", "Date", "DocumentDate"],
+    "Author": ["AUTHOR_NAME(S)", "Author", "AuthorName", "Authors"],
+    "Reviewer": ["REVIEWER_NAME(S)", "Reviewer", "ReviewerName", "Reviewers"],
+    "Approver": ["APPROVER_NAME(S)", "Approver", "ApproverName", "Approvers"],
+    "Status": ["DRAFT | REVIEW | APPROVED", "Status", "DocumentStatus"],
+    "DocumentId": ["DOCUMENT_ID", "DocumentId", "DocumentID", "DocId"],
+    "Classification": ["CONFIDENTIAL | INTERNAL | PUBLIC", "Classification", "DocClassification"]
+  }
+}
+
+
+
+
+
+
+
+

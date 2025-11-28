@@ -18,7 +18,7 @@ class AdminPanelWebPart extends BaseClientSideWebPart<IAdminPanelWebPartProps> {
         AdminPanel,
         {
           context: this.context,
-          functionAppUrl: this.properties.functionAppUrl || 'https://078dcba0929b.ngrok-free.app',
+          functionAppUrl: this.properties.functionAppUrl || 'https://9feeff5e6fdc.ngrok-free.app',
           httpClient: this.context.spHttpClient
         }
       );

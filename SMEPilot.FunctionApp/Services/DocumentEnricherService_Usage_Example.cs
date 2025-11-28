@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SMEPilot.FunctionApp.Services;
+using SMEPilot.FunctionApp.Models;
 
 namespace SMEPilot.FunctionApp.Services
 {
@@ -46,8 +47,10 @@ namespace SMEPilot.FunctionApp.Services
                     logger.LogInformation("Template generated at {Path}", templatePath);
                 }
 
-                // 3. Create enrichment service
-                var enricher = new DocumentEnricherService(mappingJsonPath, templatePath);
+                // 3. Create enrichment service (now DocumentEnricher)
+                // Note: Logger is optional - pass null if you don't have ILogger<DocumentEnricher>
+                // If you have ILoggerFactory, you can create: factory.CreateLogger<DocumentEnricher>()
+                var enricher = new DocumentEnricher(mappingJsonPath, templatePath, null);
 
                 // 4. Define output path (add _formatted suffix)
                 var outputPath = Path.ChangeExtension(downloadedFilePath, "_formatted.docx");

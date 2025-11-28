@@ -35,6 +35,17 @@ namespace SMEPilot.FunctionApp.Helpers
             // Split text into sections based on patterns
             var sections = ParseSections(text);
 
+            // Log parsing results for debugging
+            System.Diagnostics.Debug.WriteLine($"[SimpleEnricher] Parsed document '{title}': {sections.Count} sections");
+            foreach (var section in sections.Take(10)) // Log first 10 sections
+            {
+                System.Diagnostics.Debug.WriteLine($"  - Section: '{section.Heading}' ({section.Body?.Length ?? 0} chars)");
+            }
+            if (sections.Count > 10)
+            {
+                System.Diagnostics.Debug.WriteLine($"  ... and {sections.Count - 10} more sections");
+            }
+
             return new DocumentModel
             {
                 Title = title,
@@ -70,46 +81,66 @@ namespace SMEPilot.FunctionApp.Helpers
         private List<Section> ParseSections(string text)
         {
             var sections = new List<Section>();
-            var lines = text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            var lines = text.Split(new[] { '\n', '\r' }, StringSplitOptions.None);
 
             var currentSection = new StringBuilder();
             string? currentHeading = null;
             int sectionId = 1;
+            bool isFirstLine = true;
 
             foreach (var line in lines)
             {
                 var trimmed = line.Trim();
-                if (string.IsNullOrWhiteSpace(trimmed)) continue;
+                
+                // Skip empty lines but preserve them in section body
+                if (string.IsNullOrWhiteSpace(trimmed))
+                {
+                    if (currentSection.Length > 0)
+                    {
+                        currentSection.AppendLine();
+                    }
+                    continue;
+                }
 
-                // Detect potential headings (short lines, all caps, or numbered)
-                if (IsLikelyHeading(trimmed, currentSection.Length == 0))
+                // Detect headings (markdown, numbered, or heuristics)
+                if (IsLikelyHeading(trimmed, isFirstLine))
                 {
                     // Save previous section if exists
                     if (currentSection.Length > 0 && !string.IsNullOrWhiteSpace(currentHeading))
                     {
-                        sections.Add(CreateSection(sectionId++, currentHeading, currentSection.ToString()));
+                        var body = currentSection.ToString().Trim();
+                        if (!string.IsNullOrWhiteSpace(body))
+                        {
+                            sections.Add(CreateSection(sectionId++, currentHeading, body));
+                        }
                         currentSection.Clear();
                     }
-                    currentHeading = trimmed;
+                    
+                    // Clean up markdown heading markers
+                    currentHeading = Regex.Replace(trimmed, @"^#{1,6}\s+", "").Trim();
+                    isFirstLine = false;
                 }
                 else
                 {
                     // Add to current section body
                     if (currentSection.Length > 0) currentSection.AppendLine();
                     currentSection.Append(trimmed);
+                    isFirstLine = false;
                 }
             }
 
             // Add last section
-            if (currentSection.Length > 0)
+            if (currentSection.Length > 0 || !string.IsNullOrWhiteSpace(currentHeading))
             {
-                sections.Add(CreateSection(sectionId++, currentHeading ?? "Content", currentSection.ToString()));
+                var body = currentSection.ToString().Trim();
+                sections.Add(CreateSection(sectionId++, currentHeading ?? "Content", 
+                    !string.IsNullOrWhiteSpace(body) ? body : ""));
             }
 
             // If no sections found, create one from entire text
             if (sections.Count == 0)
             {
-                sections.Add(CreateSection(1, "Content", text));
+                sections.Add(CreateSection(1, "Content", text.Trim()));
             }
 
             return sections;
@@ -117,23 +148,25 @@ namespace SMEPilot.FunctionApp.Helpers
 
         private bool IsLikelyHeading(string line, bool isFirstLine)
         {
-            // Heuristics for detecting headings:
-            // 1. Short line (< 80 chars)
-            // 2. All caps (or mostly caps)
-            // 3. Starts with number (1., 2., etc.)
-            // 4. No ending punctuation
-            // 5. First line of document
+            var trimmed = line.Trim();
+            
+            // PRIORITY 1: Markdown headings (#, ##, ###, etc.)
+            if (Regex.IsMatch(trimmed, @"^#{1,6}\s+")) return true;
+            
+            // PRIORITY 2: Numbered headings (1., 1.1, 1.1.1, etc.)
+            if (Regex.IsMatch(trimmed, @"^\d+(\.\d+)*[\.\)]\s+[A-Z]")) return true;
+            
+            // PRIORITY 3: First line of document (if short and looks like title)
+            if (isFirstLine && trimmed.Length < 100 && !trimmed.Contains('.') && char.IsUpper(trimmed[0]))
+                return true;
+            
+            // PRIORITY 4: Short lines that look like headings
+            if (trimmed.Length > 80) return false;
+            if (trimmed.EndsWith(".") || trimmed.EndsWith(",")) return false;
 
-            if (isFirstLine && line.Length < 100) return true;
-            if (line.Length > 80) return false;
-            if (line.EndsWith(".") || line.EndsWith(",")) return false;
-
-            // Check for numbered headings
-            if (Regex.IsMatch(line, @"^\d+[\.\)]\s+[A-Z]")) return true;
-
-            // Check for all caps (likely heading)
-            var upperCount = line.Count(c => char.IsUpper(c));
-            if (upperCount > line.Length * 0.5 && line.Length > 5) return true;
+            // Check for all caps (likely heading) - but not if it's too short (might be acronym)
+            var upperCount = trimmed.Count(c => char.IsUpper(c));
+            if (upperCount > trimmed.Length * 0.5 && trimmed.Length > 5) return true;
 
             return false;
         }

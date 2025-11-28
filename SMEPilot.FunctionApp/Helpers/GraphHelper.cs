@@ -69,6 +69,26 @@ namespace SMEPilot.FunctionApp.Helpers
         }
 
         /// <summary>
+        /// Gets a drive item by file path within a drive
+        /// </summary>
+        public async Task<DriveItem?> GetDriveItemByPathAsync(string driveId, string filePath)
+        {
+            if (!_hasCredentials)
+            {
+                return null; // Mock mode - can't verify
+            }
+
+            try
+            {
+                return await _client!.Drives[driveId].Root.ItemWithPath(filePath).GetAsync();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Checks if a file is in the configured source folder
         /// Returns true if file is in source folder, false if not, null if cannot determine (fail open)
         /// </summary>
@@ -182,6 +202,9 @@ namespace SMEPilot.FunctionApp.Helpers
             }
         }
 
+        /// <summary>
+        /// Feedback2: Download file stream with retry policy
+        /// </summary>
         public async Task<Stream> DownloadFileStreamAsync(string driveId, string itemId)
         {
             if (!_hasCredentials)
@@ -202,7 +225,13 @@ namespace SMEPilot.FunctionApp.Helpers
                 return new MemoryStream(mockBytes);
             }
 
-            var stream = await _client!.Drives[driveId].Items[itemId].Content.GetAsync();
+            // Feedback2: Use retry policy for download
+            var stream = await RetryPolicyHelper.ExecuteWithRetryAsync(
+                _retryPolicy,
+                async () => await _client!.Drives[driveId].Items[itemId].Content.GetAsync(),
+                $"DownloadFileStreamAsync for ItemId: {itemId}",
+                _logger);
+            
             var ms = new MemoryStream();
             await stream.CopyToAsync(ms);
             ms.Position = 0;
@@ -447,8 +476,13 @@ namespace SMEPilot.FunctionApp.Helpers
             _logger?.LogInformation("📤 [UploadFileBytesAsync] Uploading to path: '{FullPath}' in drive {DriveId} (normalized from: '{OriginalPath}')", 
                 fullPath, driveId, folderPath);
             
+            // Feedback2: Use retry policy for upload
             using var ms = new MemoryStream(bytes);
-            var item = await _client!.Drives[driveId].Root.ItemWithPath(fullPath).Content.PutAsync(ms);
+            var item = await RetryPolicyHelper.ExecuteWithRetryAsync(
+                _retryPolicy,
+                async () => await _client!.Drives[driveId].Root.ItemWithPath(fullPath).Content.PutAsync(ms),
+                $"UploadFileBytesAsync to {fullPath}",
+                _logger);
             
             _logger?.LogInformation("✅ [UploadFileBytesAsync] File uploaded successfully. WebUrl: {WebUrl}, Id: {ItemId}, Name: {Name}", 
                 item.WebUrl, item.Id, item.Name);
@@ -798,6 +832,8 @@ namespace SMEPilot.FunctionApp.Helpers
                     new { Name = "SMEPilot_EnrichedFileUrl", Type = "url", DisplayName = "SMEPilot Enriched File URL", Description = "URL to the enriched document" },
                     new { Name = "SMEPilot_EnrichedJobId", Type = "text", DisplayName = "SMEPilot Enriched Job ID", Description = "Unique job ID for this processing run" },
                     new { Name = "SMEPilot_Confidence", Type = "number", DisplayName = "SMEPilot Confidence", Description = "Confidence score (0-100)" },
+                    new { Name = "SMEPilot_ContentHash", Type = "text", DisplayName = "SMEPilot Content Hash", Description = "SHA256 hash of file content for idempotency checks" },
+                    new { Name = "SMEPilot_LastEnrichedTime", Type = "dateTime", DisplayName = "SMEPilot Last Enriched Time", Description = "Timestamp when document was last enriched" },
                     new { Name = "SMEPilot_Classification", Type = "text", DisplayName = "SMEPilot Classification", Description = "Document classification: Functional, Technical, etc." },
                     new { Name = "SMEPilot_ErrorMessage", Type = "note", DisplayName = "SMEPilot Error Message", Description = "Error message if processing failed" },
                     new { Name = "SMEPilot_LastErrorTime", Type = "dateTime", DisplayName = "SMEPilot Last Error Time", Description = "Timestamp of last error (for retry logic)" }
