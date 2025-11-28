@@ -22,6 +22,7 @@ export interface WebhookSubscriptionRequest {
   tenantId?: string;
   functionAppUrl?: string;
   notificationUrl?: string;
+  subscriptionId?: string;
 }
 
 export interface WebhookSubscriptionResponse {
@@ -110,6 +111,9 @@ export class FunctionAppService {
       }
       if (request.tenantId) {
         requestBody.tenantId = request.tenantId;
+      }
+      if (request.subscriptionId) {
+        requestBody.subscriptionId = request.subscriptionId;
       }
       
       console.log('[FunctionAppService] Creating webhook subscription with body:', JSON.stringify(requestBody, null, 2));

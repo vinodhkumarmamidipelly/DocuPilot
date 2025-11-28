@@ -40,6 +40,7 @@ export interface IConfiguration {
   accessTeams: boolean;
   accessWeb: boolean;
   accessO365: boolean;
+   subscriptionId?: string;
 }
 
 export interface IAdminPanelState {
@@ -455,7 +456,7 @@ Remember: You can only access documents that the user has permission to view.`;
       await this.sharePointService.createErrorFolders(config.sourceFolderPath);
       steps.push('✓ Error folders created');
 
-      // Step 5: Create webhook subscription
+      // Step 5: Create webhook subscription (Function App will delete existing one if subscriptionId is provided)
       steps.push('Creating webhook subscription...');
       const tenantId = this.props.context.pageContext.aadInfo?.tenantId?.toString() || '';
       
@@ -475,7 +476,8 @@ Remember: You can only access documents that the user has permission to view.`;
         sourceFolderPath: config.sourceFolderPath,
         tenantId: tenantId,
         functionAppUrl: this.props.functionAppUrl,
-        notificationUrl: `${this.props.functionAppUrl}/api/ProcessSharePointFile`
+        notificationUrl: `${this.props.functionAppUrl}/api/ProcessSharePointFile`,
+        subscriptionId: config.subscriptionId
       });
 
       if (webhookResult.success && webhookResult.subscriptionId) {

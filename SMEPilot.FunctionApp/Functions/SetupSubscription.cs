@@ -43,6 +43,7 @@ namespace SMEPilot.FunctionApp.Functions
                 string? driveId = null;
                 string? notificationUrl = null;
                 string? sourceFolderPath = null;
+                string? existingSubscriptionId = null;
 
                 // Handle POST request (from SPFx) - read from body
                 string? functionAppUrl = null;
@@ -59,6 +60,7 @@ namespace SMEPilot.FunctionApp.Functions
                             notificationUrl = requestData?.GetValueOrDefault("notificationUrl");
                             sourceFolderPath = requestData?.GetValueOrDefault("sourceFolderPath");
                             functionAppUrl = requestData?.GetValueOrDefault("functionAppUrl");
+                            existingSubscriptionId = requestData?.GetValueOrDefault("subscriptionId");
                         }
                         catch (JsonException ex)
                         {
@@ -106,6 +108,7 @@ namespace SMEPilot.FunctionApp.Functions
 
                 // If driveId not provided but siteId and sourceFolderPath are, resolve folder path using Graph API
                 string? folderItemId = null;
+                string? libraryName = null;
                 if (string.IsNullOrWhiteSpace(driveId) && !string.IsNullOrWhiteSpace(siteId) && !string.IsNullOrWhiteSpace(sourceFolderPath))
                 {
                     _logger.LogInformation("🔍 [SetupSubscription] DriveId not provided, resolving folder path using Graph API");
@@ -122,38 +125,6 @@ namespace SMEPilot.FunctionApp.Functions
                     else
                     {
                         _logger.LogWarning("⚠️ [SetupSubscription] Could not resolve folder path: {SourceFolderPath} in site {SiteId}", sourceFolderPath, siteId);
-                        
-                        // Fallback: Try to extract library name and get drive ID (for backward compatibility)
-                        _logger.LogInformation("🔄 [SetupSubscription] Attempting fallback: extracting library name from path");
-                        var pathParts = sourceFolderPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-                        string? libraryName = null;
-                        
-                        if (pathParts.Length >= 3 && pathParts[0].Equals("sites", StringComparison.OrdinalIgnoreCase))
-                        {
-                            libraryName = pathParts[2];
-                        }
-                        else if (pathParts.Length >= 1)
-                        {
-                            libraryName = pathParts[0];
-                        }
-                        
-                        if (!string.IsNullOrWhiteSpace(libraryName))
-                        {
-                            _logger.LogInformation("🔄 [SetupSubscription] Extracted library name: '{LibraryName}' from path: {SourceFolderPath}", libraryName, sourceFolderPath);
-                            driveId = await _graph.GetDriveIdFromSiteAndLibraryAsync(siteId, libraryName, sourceFolderPath);
-                            if (!string.IsNullOrWhiteSpace(driveId))
-                            {
-                                _logger.LogInformation("✅ [SetupSubscription] Fallback successful: Got driveId: {DriveId} from siteId and library", driveId);
-                            }
-                            else
-                            {
-                                _logger.LogError("❌ [SetupSubscription] Fallback also failed: Could not get driveId for library '{LibraryName}' in site {SiteId}", libraryName, siteId);
-                            }
-                        }
-                        else
-                        {
-                            _logger.LogError("❌ [SetupSubscription] Could not extract library name from path: {SourceFolderPath}", sourceFolderPath);
-                        }
                     }
                 }
 
@@ -168,10 +139,65 @@ namespace SMEPilot.FunctionApp.Functions
                     }
                 }
 
-                // Log received parameters for debugging
-                _logger.LogInformation("📋 [SetupSubscription] Final parameters after resolution - siteId: {SiteId}, driveId: {DriveId}, folderItemId: {FolderItemId}, sourceFolderPath: {SourceFolderPath}, notificationUrl: {NotificationUrl}, functionAppUrl: {FunctionAppUrl}",
-                    siteId ?? "null", driveId ?? "null", folderItemId ?? "null", sourceFolderPath ?? "null", notificationUrl ?? "null", functionAppUrl ?? "null");
+                // Derive the library (document library) name from the sourceFolderPath so we can
+                // subscribe at the LIST level (recommended, works for all current and future subfolders).
+                if (!string.IsNullOrWhiteSpace(sourceFolderPath))
+                {
+                    var pathParts = sourceFolderPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (pathParts.Length >= 3 && pathParts[0].Equals("sites", StringComparison.OrdinalIgnoreCase))
+                    {
+                        libraryName = pathParts[2];
+                    }
+                    else if (pathParts.Length >= 1)
+                    {
+                        libraryName = pathParts[0];
+                    }
+                }
 
+                string? listId = null;
+                string? normalizedSiteId = null;
+
+                // 1) Best-effort: resolve listId directly from driveId (document library drive)
+                if (!string.IsNullOrWhiteSpace(driveId))
+                {
+                    listId = await _graph.GetListIdFromDriveAsync(driveId);
+                    if (!string.IsNullOrWhiteSpace(listId))
+                    {
+                        _logger.LogInformation("✅ [SetupSubscription] Resolved listId {ListId} from driveId {DriveId}", listId, driveId);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("⚠️ [SetupSubscription] Could not resolve listId from driveId {DriveId}. Will fall back to name-based lookup if possible.", driveId);
+                    }
+                }
+
+                // 2) Fallback: resolve listId by library (list) display name using siteId
+                if (string.IsNullOrWhiteSpace(listId) && !string.IsNullOrWhiteSpace(siteId) && !string.IsNullOrWhiteSpace(libraryName))
+                {
+                    normalizedSiteId = _graph.NormalizeSiteIdForResource(siteId, sourceFolderPath);
+                    _logger.LogInformation("🔍 [SetupSubscription] Resolving list ID for library '{LibraryName}' in site {SiteId}", libraryName, normalizedSiteId);
+                    listId = await _graph.GetListIdByNameAsync(siteId, libraryName, sourceFolderPath);
+                    if (!string.IsNullOrWhiteSpace(listId))
+                    {
+                        _logger.LogInformation("✅ [SetupSubscription] Resolved library '{LibraryName}' to listId {ListId} via name lookup", libraryName, listId);
+                    }
+                    else
+                    {
+                        _logger.LogError("❌ [SetupSubscription] Failed to resolve listId for library '{LibraryName}' in site {SiteId} via name lookup", libraryName, siteId);
+                    }
+                }
+
+                // Ensure we have a normalized siteId string for the /sites/{id}/lists/{listId}/items resource
+                if (normalizedSiteId == null && !string.IsNullOrWhiteSpace(siteId))
+                {
+                    normalizedSiteId = _graph.NormalizeSiteIdForResource(siteId, sourceFolderPath);
+                }
+
+                // Log received parameters for debugging
+                _logger.LogInformation("📋 [SetupSubscription] Final parameters after resolution - siteId: {SiteId}, driveId: {DriveId}, folderItemId: {FolderItemId}, libraryName: {LibraryName}, listId: {ListId}, sourceFolderPath: {SourceFolderPath}, notificationUrl: {NotificationUrl}, functionAppUrl: {FunctionAppUrl}",
+                    siteId ?? "null", driveId ?? "null", folderItemId ?? "null", libraryName ?? "null", listId ?? "null", sourceFolderPath ?? "null", notificationUrl ?? "null", functionAppUrl ?? "null");
+
+                // For drive-based subscriptions we just require driveId and notificationUrl.
                 if (string.IsNullOrWhiteSpace(driveId) || string.IsNullOrWhiteSpace(notificationUrl))
                 {
                     var bad = req.CreateResponse(HttpStatusCode.BadRequest);
@@ -182,6 +208,8 @@ namespace SMEPilot.FunctionApp.Functions
                         received = new
                         {
                             siteId = siteId ?? "null",
+                            listId = listId ?? "null",
+                            libraryName = libraryName ?? "null",
                             driveId = driveId ?? "null",
                             folderItemId = folderItemId ?? "null",
                             sourceFolderPath = sourceFolderPath ?? "null",
@@ -210,7 +238,21 @@ namespace SMEPilot.FunctionApp.Functions
                     return bad;
                 }
 
-                // Resource format: 
+                // If an existing subscription ID was provided, try to delete it first
+                if (!string.IsNullOrWhiteSpace(existingSubscriptionId))
+                {
+                    try
+                    {
+                        _logger.LogInformation("🗑️ [SetupSubscription] Deleting existing subscription before creating a new one. SubscriptionId: {SubscriptionId}", existingSubscriptionId);
+                        await _graph.DeleteSubscriptionAsync(existingSubscriptionId);
+                    }
+                    catch (Exception deleteEx)
+                    {
+                        _logger.LogWarning(deleteEx, "⚠️ [SetupSubscription] Failed to delete existing subscription {SubscriptionId}. Proceeding to create a new subscription.", existingSubscriptionId);
+                    }
+                }
+
+                // Resource format (drive-based, known to be supported):
                 // - If folderItemId is available: /drives/{driveId}/items/{folderItemId}/children (monitors changes inside the folder)
                 // - Otherwise: /drives/{driveId}/root (monitors changes in the root folder of the drive)
                 var resource = !string.IsNullOrWhiteSpace(folderItemId)
@@ -266,9 +308,9 @@ namespace SMEPilot.FunctionApp.Functions
                             var configItem = configItems.First();
                             var listItemId = configItem.Id;
                             
-                            // Get the list ID by name (pass sourceFolderPath to help normalize site ID)
-                            var listId = await _graph.GetListIdByNameAsync(siteId, "SMEPilotConfig", sourceFolderPath);
-                            if (!string.IsNullOrWhiteSpace(listId))
+                            // Get the list ID for SMEPilotConfig (pass sourceFolderPath to help normalize site ID)
+                            var configListId = await _graph.GetListIdByNameAsync(siteId, "SMEPilotConfig", sourceFolderPath);
+                            if (!string.IsNullOrWhiteSpace(configListId))
                             {
                                 // Update the subscription ID in the config item
                                 var updateFields = new Dictionary<string, object>
@@ -277,7 +319,7 @@ namespace SMEPilot.FunctionApp.Functions
                                     {"SubscriptionExpiration", subscription.ExpirationDateTime?.ToString("O") ?? ""}
                                 };
                                 
-                                await _graph.UpdateListItemFieldsByListIdAsync(siteId, listId, listItemId, updateFields, sourceFolderPath);
+                                await _graph.UpdateListItemFieldsByListIdAsync(siteId, configListId, listItemId, updateFields, sourceFolderPath);
                                 _logger.LogInformation("✅ [SetupSubscription] Successfully stored subscription ID {SubscriptionId} in SMEPilotConfig", subscription.Id);
                             }
                             else

@@ -30,7 +30,6 @@
     <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" Version="2.22.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" Version="1.4.0" />
     <PackageReference Include="Azure.Communication.Email" Version="1.0.1" />
-    <PackageReference Include="Azure.AI.OpenAI" Version="1.0.0-beta.17" />
   </ItemGroup>
 
   <ItemGroup>
@@ -47,15 +46,16 @@
     <None Update="Config\RuleMapping.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Config\FieldMappingSpec.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <None Update="Templates\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <Compile Remove="TestFiles\CreateWordFiles.cs" />
     <Compile Remove="TestFiles\CreateExampleFiles.cs" />
     <Compile Remove="TestFiles\GenerateExampleFiles.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Enriched\" />
   </ItemGroup>
 </Project>
 

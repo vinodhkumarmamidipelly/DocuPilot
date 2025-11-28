@@ -183,13 +183,6 @@ namespace SMEPilot.FunctionApp.Functions
                             _logger.LogDebug("Subscription ID: {SubscriptionId}, Change Type: {ChangeType}, Resource: {Resource}", 
                                 notification.SubscriptionId, notification.ChangeType, notification.Resource);
                             
-                            if (notification.ResourceData == null)
-                            {
-                                _logger.LogWarning("⚠️ Notification has no resource data: {SubscriptionId}", notification.SubscriptionId);
-                                _logger.LogDebug("Full notification JSON: {Json}", JsonConvert.SerializeObject(notification));
-                                continue;
-                            }
-                            
                             // Process "updated" events but filter out duplicates using idempotency check
                             // Graph API only supports "updated" for drive subscriptions (not "created")
                             // We use metadata check + semaphore lock to prevent duplicate processing
@@ -199,66 +192,130 @@ namespace SMEPilot.FunctionApp.Functions
                                 continue;
                             }
                             
-                            // Early deduplication: Check if we've seen this exact notification recently
-                            // Include itemId in key if available to make deduplication more precise
+                            // Early deduplication: Check if we've seen this exact notification recently.
+                            // Include itemId in key if available to make deduplication more precise.
+                            // IMPORTANT: For notifications without itemId (e.g. generic /root:updated),
+                            // we now *disable* dedup so that multiple uploads within the dedup window
+                            // still trigger processing; idempotency on the file metadata will guard us.
                             var itemIdForDedup = notification.ResourceData?.Id ?? "";
-                            var notificationKey = string.IsNullOrWhiteSpace(itemIdForDedup) 
-                                ? $"{notification.SubscriptionId}:{notification.Resource}:{notification.ChangeType}"
-                                : $"{notification.SubscriptionId}:{notification.Resource}:{notification.ChangeType}:{itemIdForDedup}";
-                            
-                            if (_processedNotifications.TryGetValue(notificationKey, out var lastProcessed))
+                            if (!string.IsNullOrWhiteSpace(itemIdForDedup))
                             {
-                                var timeSinceLastProcessed = DateTime.UtcNow - lastProcessed;
-                                var dedupWindow = TimeSpan.FromSeconds(_cfg.NotificationDedupWindowSeconds);
-                                if (timeSinceLastProcessed < dedupWindow)
+                                var notificationKey = $"{notification.SubscriptionId}:{notification.Resource}:{notification.ChangeType}:{itemIdForDedup}";
+                                
+                                if (_processedNotifications.TryGetValue(notificationKey, out var lastProcessed))
                                 {
-                                    _logger.LogInformation("⏭️ [DEDUP] Duplicate notification detected (processed {Seconds:F1}s ago, window: {WindowSeconds}s), skipping. Key: {Key}", 
-                                        timeSinceLastProcessed.TotalSeconds, _cfg.NotificationDedupWindowSeconds, notificationKey);
-                                    continue;
+                                    var timeSinceLastProcessed = DateTime.UtcNow - lastProcessed;
+                                    var dedupWindow = TimeSpan.FromSeconds(_cfg.NotificationDedupWindowSeconds);
+                                    if (timeSinceLastProcessed < dedupWindow)
+                                    {
+                                        _logger.LogInformation("⏭️ [DEDUP] Duplicate notification detected (processed {Seconds:F1}s ago, window: {WindowSeconds}s), skipping. Key: {Key}", 
+                                            timeSinceLastProcessed.TotalSeconds, _cfg.NotificationDedupWindowSeconds, notificationKey);
+                                        continue;
+                                    }
+                                }
+                                
+                                // Mark notification as processed (with timestamp)
+                                _processedNotifications.AddOrUpdate(notificationKey, DateTime.UtcNow, (key, oldValue) => DateTime.UtcNow);
+                                
+                                // Cleanup old entries (older than 5 minutes) to prevent memory leak
+                                var cutoffTime = DateTime.UtcNow - TimeSpan.FromMinutes(5);
+                                var keysToRemove = _processedNotifications
+                                    .Where(kvp => kvp.Value < cutoffTime)
+                                    .Select(kvp => kvp.Key)
+                                    .ToList();
+                                foreach (var key in keysToRemove)
+                                {
+                                    _processedNotifications.TryRemove(key, out _);
                                 }
                             }
                             
-                            // Mark notification as processed (with timestamp)
-                            _processedNotifications.AddOrUpdate(notificationKey, DateTime.UtcNow, (key, oldValue) => DateTime.UtcNow);
-                            
-                            // Cleanup old entries (older than 5 minutes) to prevent memory leak
-                            var cutoffTime = DateTime.UtcNow - TimeSpan.FromMinutes(5);
-                            var keysToRemove = _processedNotifications
-                                .Where(kvp => kvp.Value < cutoffTime)
-                                .Select(kvp => kvp.Key)
-                                .ToList();
-                            foreach (var key in keysToRemove)
-                            {
-                                _processedNotifications.TryRemove(key, out _);
-                            }
-                            
-                            _logger.LogDebug("ResourceData ID: {Id}, Name: {Name}, DriveId: {DriveId}", 
-                                notification.ResourceData.Id, notification.ResourceData.Name, notification.ResourceData.DriveId);
-                            
-                            // Extract file details from Graph notification
-                            string driveId = notification.ResourceData.DriveId ?? "";
-                            string itemId = notification.ResourceData.Id ?? "";
-                            string fileName = notification.ResourceData.Name ?? "";
-                            
-                            // CRITICAL FIX: Skip enriched files (files we created) - they end with "_enriched"
-                            if (!string.IsNullOrWhiteSpace(fileName) && 
-                                (fileName.EndsWith("_enriched.docx", StringComparison.OrdinalIgnoreCase) ||
-                                 fileName.EndsWith("_enriched.pptx", StringComparison.OrdinalIgnoreCase) ||
-                                 fileName.EndsWith("_enriched.xlsx", StringComparison.OrdinalIgnoreCase) ||
-                                 fileName.EndsWith("_enriched.pdf", StringComparison.OrdinalIgnoreCase)))
-                            {
-                                _logger.LogDebug("⏭️ Skipping enriched file (output file): {FileName}", fileName);
-                                continue;
-                            }
+                            // Extract file details from Graph notification (or fall back when resource data is missing)
+                            string driveId = "";
+                            string itemId = "";
+                            string fileName = "";
                             // Note: Graph SDK v5 Identity doesn't have Email property
                             // Use DisplayName from our custom model if available, otherwise empty string
                             string uploaderEmail = "";
-                            if (notification.ResourceData.CreatedBy?.User != null)
+
+                            if (notification.ResourceData != null)
                             {
-                                uploaderEmail = notification.ResourceData.CreatedBy.User.Email ?? notification.ResourceData.CreatedBy.User.DisplayName ?? "";
+                                _logger.LogDebug("ResourceData ID: {Id}, Name: {Name}, DriveId: {DriveId}, SiteId: {SiteId}, ListId: {ListId}", 
+                                    notification.ResourceData.Id, notification.ResourceData.Name, notification.ResourceData.DriveId, notification.ResourceData.SiteId, notification.ResourceData.ListId);
+
+                                // First, try to resolve list-based notifications (recommended pattern)
+                                string? listSiteId = notification.ResourceData.SiteId;
+                                string? listId = notification.ResourceData.ListId;
+                                string? listItemId = notification.ResourceData.Id;
+
+                                // If SiteId/ListId missing on resourceData, attempt to parse from resource path:
+                                // /sites/{siteId}/lists/{listId}/items/{itemId}
+                                if ((string.IsNullOrWhiteSpace(listSiteId) || string.IsNullOrWhiteSpace(listId)) && 
+                                    !string.IsNullOrWhiteSpace(notification.Resource) && 
+                                    notification.Resource.Contains("/lists/", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    var segments = notification.Resource.Trim('/').Split('/');
+                                    // Expect: ["sites", "{siteId}", "lists", "{listId}", "items", "{itemId}", ...]
+                                    var listsIndex = Array.IndexOf(segments, "lists");
+                                    var itemsIndex = Array.IndexOf(segments, "items");
+                                    if (listsIndex >= 0 && itemsIndex > listsIndex && itemsIndex + 1 < segments.Length)
+                                    {
+                                        listId ??= segments[listsIndex + 1];
+                                        listItemId ??= segments[itemsIndex + 1];
+                                    }
+                                    if (segments.Length >= 2 && segments[0].Equals("sites", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        listSiteId ??= segments[1];
+                                    }
+                                }
+
+                                if (!string.IsNullOrWhiteSpace(listSiteId) &&
+                                    !string.IsNullOrWhiteSpace(listId) &&
+                                    !string.IsNullOrWhiteSpace(listItemId))
+                                {
+                                    _logger.LogInformation("🔍 [LIST] Resolving driveItem for SiteId={SiteId}, ListId={ListId}, ListItemId={ListItemId}", 
+                                        listSiteId, listId, listItemId);
+
+                                    var driveItem = await _graph.GetDriveItemForListItemAsync(listSiteId, listId, listItemId, _cfg.SourceFolderPath);
+                                    if (driveItem != null)
+                                    {
+                                        driveId = driveItem.ParentReference?.DriveId ?? "";
+                                        itemId = driveItem.Id ?? "";
+                                        fileName = driveItem.Name ?? "";
+                                        _logger.LogInformation("✅ [LIST] Resolved list notification to DriveItem {ItemId} (Name={Name}, DriveId={DriveId})", itemId, fileName, driveId);
+
+                                        if (driveItem.CreatedBy?.User != null)
+                                        {
+                                            uploaderEmail = driveItem.CreatedBy.User.DisplayName ?? "";
+                                        }
+                                    }
+                                    else
+                                    {
+                                        _logger.LogWarning("⚠️ [LIST] Failed to resolve list notification to a DriveItem. Falling back to drive-based logic.");
+                                    }
+                                }
+
+                                // If not handled via list mapping, fall back to drive-based fields from resourceData.
+                                if (string.IsNullOrWhiteSpace(itemId))
+                                {
+                                    driveId = notification.ResourceData.DriveId ?? driveId;
+                                    itemId = notification.ResourceData.Id ?? itemId;
+                                    fileName = notification.ResourceData.Name ?? fileName;
+
+                                    if (notification.ResourceData.CreatedBy?.User != null)
+                                    {
+                                        uploaderEmail = notification.ResourceData.CreatedBy.User.Email ?? notification.ResourceData.CreatedBy.User.DisplayName ?? uploaderEmail;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Some notifications (especially for nested folders/files or list events) may arrive without resourceData.
+                                // Instead of skipping them, fall back to recent-items lookup based on the driveId.
+                                _logger.LogWarning("⚠️ Notification has no resource data: {SubscriptionId}. Will attempt recent-items fallback.", notification.SubscriptionId);
+                                _logger.LogDebug("Full notification JSON: {Json}", JsonConvert.SerializeObject(notification));
                             }
                             
-                            // If resourceData is missing fields, extract from resource path
+                            // If resourceData is missing fields, extract driveId from resource path
                             if (string.IsNullOrWhiteSpace(driveId) && !string.IsNullOrWhiteSpace(notification.Resource))
                             {
                                 var resourceParts = notification.Resource.Split('/');
@@ -271,15 +328,60 @@ namespace SMEPilot.FunctionApp.Functions
                                 }
                             }
                             
-                            // If we still don't have file details, query Graph API for recent changes
+                            // If we still don't have file details, query Graph API for recent changes,
+                            // preferring the delta API so we can filter by source folder and recency.
                             // BUT: Check metadata FIRST before querying (to avoid processing same file multiple times)
                             if (string.IsNullOrWhiteSpace(itemId) && !string.IsNullOrWhiteSpace(driveId))
                             {
-                                _logger.LogDebug("⚠️ No itemId in notification, querying Graph API for recent changes in drive {DriveId}...", driveId);
+                                _logger.LogDebug("⚠️ No itemId in notification, querying Graph API for recent changes in drive {DriveId} (delta + recent-items)...", driveId);
                                 try
                                 {
-                                    // Query for recent items in the drive root (only files, not folders)
-                                    var recentItems = await _graph.GetRecentDriveItemsAsync(driveId, maxItems: 10);
+                                    // Ensure SharePoint configuration is loaded so we know the configured SourceFolderPath
+                                    var sourceFolderPathForFilter = _cfg.SourceFolderPath;
+                                    if (string.IsNullOrWhiteSpace(sourceFolderPathForFilter))
+                                    {
+                                        try
+                                        {
+                                            var siteIdForDelta = await _graph.GetSiteIdFromDriveAsync(driveId);
+                                            if (!string.IsNullOrWhiteSpace(siteIdForDelta))
+                                            {
+                                                _logger.LogInformation("🔄 [Delta] Loading SharePoint configuration for site {SiteId} before delta lookup", siteIdForDelta);
+                                                await _cfg.LoadSharePointConfigAsync(_graph, siteIdForDelta, _logger);
+                                                sourceFolderPathForFilter = _cfg.SourceFolderPath;
+                                                _logger.LogInformation("✅ [Delta] Loaded configuration. SourceFolderPath for delta filter: '{SourcePath}'", sourceFolderPathForFilter ?? "null");
+                                            }
+                                        }
+                                        catch (Exception deltaConfigEx)
+                                        {
+                                            _logger.LogWarning(deltaConfigEx, "⚠️ [Delta] Failed to load configuration before delta lookup. Proceeding with minimal filtering. Error: {Error}", deltaConfigEx.Message);
+                                        }
+                                    }
+
+                                    // NOTE: We rely on SMEPilot_Enriched metadata for idempotency,
+                                    // so we don't need a strict time-based cutoff here. Pass zero to
+                                    // disable lastModified filtering in delta helper.
+                                    var lookback = TimeSpan.Zero;
+
+                                    // 1) Try delta-based recent items with strong filtering (path + time window)
+                                    var deltaCandidates = await _graph.GetRecentItemsFromDeltaAsync(
+                                        driveId,
+                                        sourceFolderPathForFilter,
+                                        lookback,
+                                        maxItems: 10);
+
+                                    List<DriveItem> recentItems;
+                                    if (deltaCandidates != null && deltaCandidates.Count > 0)
+                                    {
+                                        recentItems = deltaCandidates;
+                                        _logger.LogDebug("✅ [Delta] Using {Count} delta-based candidate items for recent file lookup", recentItems.Count);
+                                    }
+                                    else
+                                    {
+                                        // 2) Fallback: Query for recent items in the drive root (only files, not folders)
+                                        recentItems = await _graph.GetRecentDriveItemsAsync(driveId, maxItems: 10);
+                                        _logger.LogDebug("ℹ️ [Delta] No suitable delta candidates, falling back to GetRecentDriveItemsAsync (Count={Count})", recentItems?.Count ?? 0);
+                                    }
+
                                     if (recentItems != null && recentItems.Count > 0)
                                     {
                                         // Find the first file that hasn't been processed yet
@@ -290,7 +392,7 @@ namespace SMEPilot.FunctionApp.Functions
                                             // Skip folders
                                             if (item.Folder != null) continue;
                                             
-                                            // CRITICAL FIX: Skip enriched files (files we created) - they end with "_enriched"
+                                            // CRITICAL FIX 1: Skip enriched files (files we created) - they end with "_enriched"
                                             var itemName = item.Name ?? "";
                                             if (itemName.EndsWith("_enriched.docx", StringComparison.OrdinalIgnoreCase) ||
                                                 itemName.EndsWith("_enriched.pptx", StringComparison.OrdinalIgnoreCase) ||
@@ -300,20 +402,55 @@ namespace SMEPilot.FunctionApp.Functions
                                                 _logger.LogDebug("⏭️ Skipping enriched file (output file): {FileName}", itemName);
                                                 continue;
                                             }
+
+                                            // CRITICAL FIX 2: Skip obviously unsupported extensions here
+                                            // so we don't keep selecting template DOTX or other files that will always fail.
+                                            var lowerName = itemName.ToLowerInvariant();
+                                            if (lowerName.EndsWith(".dotx") || lowerName.EndsWith(".dot") ||
+                                                lowerName.EndsWith(".ppt") || lowerName.EndsWith(".xls"))
+                                            {
+                                                _logger.LogDebug("⏭️ Skipping unsupported input file type in recent-items scan: {FileName}", itemName);
+                                                continue;
+                                            }
                                             
-                                            // Check if this file was already processed
+                                            // Check metadata to avoid re-processing or repeatedly picking permanently failed items
                                             var itemIdToCheck = item.Id ?? "";
                                             if (!string.IsNullOrWhiteSpace(itemIdToCheck))
                                             {
                                                 var metadata = await _graph.GetListItemFieldsAsync(driveId, itemIdToCheck);
-                                                if (metadata != null && metadata.ContainsKey("SMEPilot_Enriched"))
+                                                if (metadata != null)
                                                 {
-                                                    var enrichedValue = metadata["SMEPilot_Enriched"]?.ToString();
-                                                    var isEnriched = enrichedValue == "True" || enrichedValue == "true" || enrichedValue == "1";
-                                                    if (isEnriched)
+                                                    // Already enriched?
+                                                    if (metadata.TryGetValue("SMEPilot_Enriched", out var enrichedObj) && enrichedObj != null)
                                                     {
-                                                        _logger.LogDebug("⏭️ Recent file {FileName} already processed, checking next...", item.Name);
-                                                        continue; // Skip already processed files
+                                                        var enrichedValue = enrichedObj.ToString();
+                                                        var isEnriched = enrichedValue == "True" || enrichedValue == "true" || enrichedValue == "1";
+                                                        if (isEnriched)
+                                                        {
+                                                            _logger.LogDebug("⏭️ Recent file {FileName} already processed (SMEPilot_Enriched), checking next...", item.Name);
+                                                            continue; // Skip already processed files
+                                                        }
+                                                    }
+
+                                                    // Currently being processed? (avoid choosing in-flight items as candidates)
+                                                    if (metadata.TryGetValue("SMEPilot_Status", out var statusObj) &&
+                                                        string.Equals(statusObj?.ToString(), "Processing", StringComparison.OrdinalIgnoreCase))
+                                                    {
+                                                        _logger.LogDebug("⏭️ Recent file {FileName} is currently being processed (SMEPilot_Status=Processing), checking next...", item.Name);
+                                                        continue;
+                                                    }
+
+                                                    // Previously failed with an unsupported file-type error?
+                                                    if (metadata.TryGetValue("SMEPilot_Status", out statusObj) &&
+                                                        string.Equals(statusObj?.ToString(), "Failed", StringComparison.OrdinalIgnoreCase) &&
+                                                        metadata.TryGetValue("SMEPilot_ErrorMessage", out var errorObj))
+                                                    {
+                                                        var errorMsg = errorObj?.ToString() ?? string.Empty;
+                                                        if (errorMsg.IndexOf("Unsupported file type", StringComparison.OrdinalIgnoreCase) >= 0)
+                                                        {
+                                                            _logger.LogDebug("⏭️ Recent file {FileName} previously failed as unsupported type, skipping in recent-items scan", item.Name);
+                                                            continue;
+                                                        }
                                                     }
                                                 }
                                             }
@@ -1645,6 +1782,95 @@ namespace SMEPilot.FunctionApp.Functions
                     }
                 }
                 
+                // OPTIONAL: Mirror subfolder structure from source folder under the destination root.
+                // Example:
+                // - SourceFolderPath: /sites/Site/Raw Documents
+                // - File path:       Raw Documents/Team1/Employee1
+                // - Relative:        Team1/Employee1
+                // - Destination:     Enriched documents/Team1/Employee1
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(_cfg.SourceFolderPath))
+                    {
+                        // Get current file's parent path within the drive
+                        var fileItem = await _graph.GetDriveItemAsync(driveId, itemId);
+                        var parentPath = fileItem?.ParentReference?.Path; // e.g., "/drives/{driveId}/root:/Raw Documents/Team1/Employee1"
+
+                        if (!string.IsNullOrWhiteSpace(parentPath))
+                        {
+                            var rootMarker = "root:";
+                            var idx = parentPath.IndexOf(rootMarker, StringComparison.OrdinalIgnoreCase);
+                            if (idx >= 0 && parentPath.Length > idx + rootMarker.Length)
+                            {
+                                // Path inside the drive, e.g. "Raw Documents/Team1/Employee1" or just "Team1/Employee1"
+                                var withinDrive = parentPath.Substring(idx + rootMarker.Length).TrimStart('/');
+                                var parentSegments = withinDrive.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+
+                                // Normalize source folder path similarly to how we normalized destination (drop /sites/SiteName)
+                                var srcNormalized = _cfg.SourceFolderPath.Trim('/');
+                                if (srcNormalized.StartsWith("sites/", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    var srcParts = srcNormalized.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                                    if (srcParts.Length >= 3)
+                                    {
+                                        srcNormalized = string.Join("/", srcParts.Skip(2));
+                                    }
+                                }
+                                var srcSegments = srcNormalized.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+
+                                // If SourceFolderPath points to the library root (e.g. "/sites/Site/Raw Documents"),
+                                // then the drive root is already that library. In that case, every parent path
+                                // under the drive is effectively "relative" to the source, so we can mirror
+                                // using the entire withinDrive path (e.g. "Team1/Employee1").
+                                if (srcSegments.Length <= 1)
+                                {
+                                    var relativePath = withinDrive;
+                                    if (!string.IsNullOrWhiteSpace(relativePath))
+                                    {
+                                        normalizedDestinationPath = $"{normalizedDestinationPath.TrimEnd('/')}/{relativePath}";
+                                        _logger.LogInformation("📁 [UPLOAD] Mirroring subfolder structure from library root. RelativePath: '{Relative}', New destination path: '{DestPath}'",
+                                            relativePath, normalizedDestinationPath);
+                                    }
+                                }
+                                else
+                                {
+                                    // SourceFolderPath is a subfolder under the library (e.g. "/sites/Site/Raw Documents/Team1").
+                                    // In this case, only mirror when the file path starts with those source segments.
+                                    bool isUnderSource = parentSegments.Length >= srcSegments.Length;
+                                    if (isUnderSource)
+                                    {
+                                        for (int i = 0; i < srcSegments.Length; i++)
+                                        {
+                                            if (!string.Equals(parentSegments[i], srcSegments[i], StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                isUnderSource = false;
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    if (isUnderSource && parentSegments.Length > srcSegments.Length)
+                                    {
+                                        var relativeSegments = parentSegments.Skip(srcSegments.Length);
+                                        var relativePath = string.Join("/", relativeSegments);
+
+                                        if (!string.IsNullOrWhiteSpace(relativePath))
+                                        {
+                                            normalizedDestinationPath = $"{normalizedDestinationPath.TrimEnd('/')}/{relativePath}";
+                                            _logger.LogInformation("📁 [UPLOAD] Mirroring subfolder structure. RelativePath: '{Relative}', New destination path: '{DestPath}'",
+                                                relativePath, normalizedDestinationPath);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception mirrorEx)
+                {
+                    _logger.LogWarning(mirrorEx, "⚠️ [UPLOAD] Failed to compute mirrored subfolder structure. Uploading to base destination folder. Error: {Error}", mirrorEx.Message);
+                }
+                
                 // Remove duplicate consecutive folder names (e.g., "Shared Documents/Shared Documents" -> "Shared Documents")
                 var folderParts = normalizedDestinationPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries).ToList();
                 for (int i = folderParts.Count - 1; i > 0; i--)
@@ -1723,20 +1949,20 @@ namespace SMEPilot.FunctionApp.Functions
                         // If itemId is not null, we need to extract just the subfolder name for the upload path
                         if (!string.IsNullOrWhiteSpace(resolvedItemId))
                         {
-                            // Extract just the subfolder name from the path (e.g., "ProcessedDocs" from "Shared Documents/ProcessedDocs")
+                            // Extract the path inside the library (drop the library name).
+                            // Example: "Enriched documents/Team1/Employee1" -> "Team1/Employee1"
                             var pathParts = normalizedDestinationPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
                             if (pathParts.Length > 1)
                             {
-                                // Use just the last part (subfolder name) as the upload path
-                                destinationUploadPath = pathParts[pathParts.Length - 1];
-                                _logger.LogInformation("✅ [UPLOAD] Resolved destination folder. DriveId: {DriveId}, ItemId: {ItemId}, UploadPath: '{UploadPath}' (extracted subfolder)", 
+                                destinationUploadPath = string.Join("/", pathParts.Skip(1));
+                                _logger.LogInformation("✅ [UPLOAD] Resolved destination folder. DriveId: {DriveId}, ItemId: {ItemId}, UploadPath: '{UploadPath}' (relative to library root)", 
                                     destinationDriveId, destinationItemId, destinationUploadPath);
                             }
                             else
                             {
-                                // This shouldn't happen, but if it does, use empty path (upload to drive root)
+                                // Path only contained the library name – upload to library root.
                                 destinationUploadPath = "";
-                                _logger.LogWarning("⚠️ [UPLOAD] Unexpected path format, using empty path for upload");
+                                _logger.LogInformation("✅ [UPLOAD] Resolved destination folder to library root. DriveId: {DriveId}, UploadPath: ''", destinationDriveId);
                             }
                         }
                         else

@@ -1,0 +1,1076 @@
+Functional Technical Specification Document (FTSD) 
+ 
+
+Project Name: 
+
+FitNex Fitness App 
+
+Version: 
+
+1.0 
+
+Date: 
+
+December 2024 
+
+Author(s): 
+
+[AUTHOR_NAMES] 
+
+Reviewer(s): 
+
+[REVIEWER_NAMES] 
+
+Approver(s): 
+
+[APPROVER_NAMES] 
+
+Status: 
+
+Draft for Review 
+
+ 
+
+ 
+
+​​Table of Contents 
+ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​ 
+
+​​ 
+
+ 
+
+ 
+
+ 
+
+1. Document Information 
+
+1.1 Document Control 
+
+Document ID: 
+
+[DOCUMENT_ID] 
+
+Document Type: 
+
+ [DOCUMENT_TYPE] 
+
+Classification: 
+
+[CLASSIFICATION] 
+
+ 
+
+Version History 
+ 
+
+{"VERSION_APPROVER":"Chronological list with filtering","VERSION_AUTHOR":"","VERSION_CHANGES":"","VERSION_DATE":"","VERSION_LABEL":""} {"VERSION_APPROVER":"Persistent chat history with pagination","VERSION_AUTHOR":"","VERSION_CHANGES":"","VERSION_DATE":"","VERSION_LABEL":""} {"VERSION_APPROVER":"","VERSION_AUTHOR":"VIBE Framework","VERSION_CHANGES":"Initial FSD creation from Stage 1 outputs","VERSION_DATE":"December 2024","VERSION_LABEL":""} 
+
+Version 
+
+Date 
+
+Author 
+
+Changes 
+
+Approved By 
+
+[VERSION_LABEL] 
+
+[VERSION_DATE] 
+
+[VERSION_AUTHOR] 
+
+[VERSION_CHANGES] 
+
+[VERSION_APPROVER] 
+
+[/VERSION_HISTORY] 
+
+Change Log 
+ 
+
+{"CHANGE_AUTHOR":"","CHANGE_DATE":"","CHANGE_DESCRIPTION":"","CHANGE_NUMBER":"","CHANGE_SECTION":""} 
+
+Change # 
+
+Date 
+
+Section 
+
+Description 
+
+Author 
+
+[CHANGE_NUMBER] 
+
+[CHANGE_DATE] 
+
+[CHANGE_SECTION] 
+
+[CHANGE_DESCRIPTION] 
+
+[CHANGE_AUTHOR] 
+
+[/CHANGE_LOG] 
+
+ 
+
+ 
+
+ 
+
+1.2 Purpose and Scope 
+
+Purpose: This document defines the [DOCUMENT_TYPE] specifications for . It serves as a comprehensive guide for stakeholders, developers, and quality assurance teams.FitNex Fitness App 
+
+ 
+
+ 
+
+Scope:   
+
+{"SCOPE_ITEM":"OTP authentication, client management, workout gallery, training plans, workout logging, measurements, diet plans, meal tracking, 1: 1 chat, progress reports"} 
+
+- [SCOPE_ITEM] 
+
+[/SCOPE_ITEMS] 
+
+ 
+
+Out of Scope:  
+
+{"OUT_SCOPE_ITEM":"Group chats, voice/video calls, calorie/macros auto-calculation, wearables integration, native mobile apps (PWA first)"} 
+
+- [OUT_SCOPE_ITEM] 
+
+[/OUT_SCOPE_ITEMS] 
+
+1.3 Document Conventions 
+
+Terminology: [DOCUMENT_TERMINOLOGY] 
+
+Abbreviations: [DOCUMENT_ABBREVIATIONS] 
+
+Notation: [DOCUMENT_NOTATION] 
+
+1.4 References 
+
+{"REFERENCE":"fitness_app_for_trainers_clients_requirements_mvp.md"} {"REFERENCE":"Stage1_Requirements_Mermaid/user_answers.json"} {"REFERENCE":"Stage1_Requirements_Mermaid/codebase_analysis.json"} {"REFERENCE":"Stage1_Requirements_Mermaid/diagrams/*.mmd"} {"REFERENCE":"Node.js, NestJS, React, MongoDB Atlas, Redis, AWS S3, CloudFront"}[REFERENCE][/REFERENCES] 
+
+Shape 
+
+2. Executive Summary 
+
+2.1 Overview 
+
+[EXCUTIVE_OVERVIEW] 
+
+2.2 Key Objectives 
+
+{"INDEX":0,"OBJECTIVE_DESCRIPTION":"Enable trainers to efficiently manage multiple clients\nProvide clients with easy-to-use workout and meal logging tools\nFacilitate real-time communication between trainers and clients\nTrack and visualize fitness progress over time\nSupport mobile-first experience with offline capabilities"} 
+
+Objective [INDEX]: [OBJECTIVE_DESCRIPTION] 
+
+[/OBJECTIVE] 
+
+2.3 Business Context 
+
+[BUSSINESS_CONTEXT] 
+
+ 
+
+2.4 Success Metrics 
+
+ 
+
+Metric 
+
+Target 
+
+Measurement Method 
+
+{"METRIC_MEASUREMENT":"% trainers who add ≥1 client within 7 days\nAverage weekly active clients per trainer\n30-day trainer retention rate\nAverage workout logs per client per week\nDiet adherence % (planned meals vs logged meals)\nNPS / Trainer satisfaction score","METRIC_NAME":"Key Performance Indicators","METRIC_TARGET":""} {"METRIC_MEASUREMENT":"User acquisition rate\nMonthly active users (MAU)\nUser engagement rate\nFeature adoption rate","METRIC_NAME":"Business Metrics","METRIC_TARGET":""... 
+
+[METRIC_NAME] 
+
+[METRIC_TARGET] 
+
+[METRIC_MEASUREMENT] 
+
+[/SUCCESS_METRICS] 
+
+ 
+
+ 
+
+ 
+
+3. Project Overview 
+
+3.1 Project Description 
+
+A mobile-first Progressive Web App (PWA) that enables gym trainers to manage clients (profiles, measurements, diet plans, training plans), share workout videos, receive client meal & workout logs (with photos), chat 1: 1 with clients, and track progress with charts and simple reports 
+
+3.2 Project Objectives 
+
+{"PROJECT_OBJECTIVE_DESCRIPTION":"Enable trainers to efficiently manage multiple clients"} {"PROJECT_OBJECTIVE_DESCRIPTION":"Provide clients with easy-to-use workout and meal logging tools"} {"PROJECT_OBJECTIVE_DESCRIPTION":"Facilitate real-time communication between trainers and clients"} {"PROJECT_OBJECTIVE_DESCRIPTION":"Track and visualize fitness progress over time"} {"PROJECT_OBJECTIVE_DESCRIPTION":"Support mobile-first experience with offline capabilities"} 
+
+[PROJECT_OBJECTIVE_DESCRIPTION] 
+
+[/PROJECT_OBJECTIVES] 
+
+3.3 Target Users and Personas 
+
+ 
+
+{"PERSONA_GOALS":"Age: 25-45\nTech-savvy, manages 10-50 clients\nNeeds efficient client management tools\nValues quick client progress tracking","PERSONA_INDEX":0,"PERSONA_NAME":"Trainer Persona","PERSONA_PAIN_POINTS":"","PERSONA_RESPONSIBILITIES":"","PERSONA_ROLE":""} {"PERSONA_GOALS":"Age: 18-60\nMobile-first user\nValues simplicity and ease of logging\nWants clear progress visualization","PERSONA_INDEX":1,"PERSONA_NAME":"Client Persona","PERSONA_PAIN_POINTS":"","PERSONA_RESPONSIBILITIES":"","... 
+
+Persona [PERSONA_INDEX]: [PERSONA_NAME] 
+
+Role: [PERSONA_ROLE] 
+
+Responsibilities: [PERSONA_RESPONSIBILITIES] 
+
+Goals: [PERSONA_GOALS] 
+
+Pain Points: [PERSONA_PAIN_POINTS] 
+
+[/PERSONAS] 
+
+3.4 Business Goals 
+
+{"BUSINESS_GOAL_DESCRIPTION":""} 
+
+[BUSINESS_GOAL_DESCRIPTION] 
+
+[/BUSINESS_GOALS] 
+
+3.5 Scope and Boundaries 
+
+In Scope: -  
+
+{"IN_SCOPE_FEATURE":""} 
+
+- [IN_SCOPE_FEATURE] 
+
+[/IN_SCOPE_FEATURES] 
+
+ 
+
+Out of Scope: -  
+
+{"OUT_SCOPE_FEATURE":""} 
+
+- [OUT_SCOPE_FEATURE] 
+
+[/OUT_SCOPE_FEATURES] 
+
+ 
+
+Boundaries: - 
+
+ {"BOUNDARY_DESCRIPTION":""} 
+
+- [BOUNDARY_DESCRIPTION] 
+
+[/BOUNDARIES] 
+
+ 
+
+Shape 
+
+4. Functional Requirements 
+
+4.1 Core Features 
+
+{"FEATURE_DESCRIPTION":"As a user\nI want to authenticate via mobile OTP\nSo that I don’t need to remember passwords\nPriority: High\nEffort: 8 story points\nAcceptance Criteria: - Given a valid mobile number, when user requests OTP, then SMS is sent within 5 seconds - Given OTP is sent, when user enters correct OTP within 10 minutes, then user is authenticated - Given incorrect OTP, when user attempts 3 times, then account is temporarily locked - Given authenticated user, when user refreshes pa... 
+
+Feature [INDEX]: [FEATURE_NAME] 
+
+Description: [FEATURE_DESCRIPTION] 
+
+Requirements: - [FEATURE_REQUIREMENTS] 
+
+Priority: [FEATURE_PRIORITY] 
+
+[/FEATURES] 
+
+4.2 User Workflows 
+
+{"WORKFLOW_ACTORS":"","WORKFLOW_DESCRIPTION":"Trainer logs in via OTP\nTrainer navigates to “Add Client”\nTrainer fills client form (name, phone, height, weight, goal)\nSystem creates client profile and generates invite code\nSystem sends invite SMS to client phone number\nClient receives SMS and can sign up using invite code\nClient profile linked to trainer automatically","WORKFLOW_NAME":"Trainer Workflow: Client Onboarding","WORKFLOW_STEPS":""} {"WORKFLOW_ACTORS":"","WORKFLOW_DESCRIPTION":"Tr... 
+
+Workflow [INDEX]: [WORKFLOW_NAME] 
+
+Description: [WORKFLOW_DESCRIPTION] 
+
+Steps: [WORKFLOW_STEPS] 
+
+Actors: [WORKFLOW_ACTORS] 
+
+[/WORKFLOWS] 
+
+4.3 Business Rules 
+
+{"RULE_ACTIONS":"","RULE_CONDITIONS":"","RULE_DESCRIPTION":"OTP valid for 10 minutes\nMaximum 3 OTP attempts per phone number per hour\nAccount temporarily blocked after 3 failed attempts (15-minute lockout)\nOTP must be 6 digits\nOTP stored in Redis with TTL","RULE_NAME":"OTP Rules"} {"RULE_ACTIONS":"","RULE_CONDITIONS":"","RULE_DESCRIPTION":"JWT access token valid for 24 hours\nRefresh token valid for 7 days\nMultiple sessions allowed per user (different devices)\nLogout invalidates all sessio... 
+
+Business Rule [INDEX]: [RULE_NAME] 
+
+Description: [RULE_DESCRIPTION] 
+
+Conditions: - [RULE_CONDITIONS] 
+
+Actions: - [RULE_ACTIONS] 
+
+[/BUSINESS_RULES] 
+
+4.4 Data Requirements 
+
+{"ENTITY_ATTRIBUTES":"","ENTITY_DESCRIPTION":"id, role, name, mobile_number, last_login, profile_photo, created_at, updated_at","ENTITY_NAME":"User"} {"ENTITY_ATTRIBUTES":"","ENTITY_DESCRIPTION":"user_id, bio, certifications, created_at","ENTITY_NAME":"TrainerProfile"} {"ENTITY_ATTRIBUTES":"","ENTITY_DESCRIPTION":"user_id, trainer_id, dob, gender, height_cm, initial_weight_kg, goals, notes, created_at, updated_at","ENTITY_NAME":"ClientProfile"} {"ENTITY_ATTRIBUTES":"","ENTITY_DESCRIPTION":"id, t... 
+
+Data Entity [INDEX]: [ENTITY_NAME] 
+
+Description: [ENTITY_DESCRIPTION] 
+
+Attributes: [ENTITY_ATTRIBUTES] 
+
+[/DATA_ENTITIES] 
+
+ 
+
+ 
+
+4.5 Integration Requirements 
+
+{"INTEGRATION_DESCRIPTION":"SMS provider integration (Twilio/MessageBird)\nS3 media storage integration\nCDN integration (CloudFront)\nWebSocket real-time communication","INTEGRATION_NAME":"Integration","INTEGRATION_REQUIREMENTS":"","INTEGRATION_TYPE":""} 
+
+Integration [INDEX]: [INTEGRATION_NAME] 
+
+Description: [INTEGRATION_DESCRIPTION] 
+
+Type: [INTEGRATION_TYPE] 
+
+Requirements: [INTEGRATION_REQUIREMENTS] 
+
+[/INTEGRATIONS] 
+
+ 
+
+5. User Stories 
+
+5.1 Epic-Level User Stories 
+
+{"EPIC_DESCRIPTION":"- User can enter mobile number and receive OTP via SMS - User can verify OTP and access the platform - System handles invalid OTP attempts with rate limiting - User can select role (Trainer/Client) after authentication - Session persists across app restarts","EPIC_NAME":"As a trainer or client\nI want to authenticate using my mobile number and OTP\nSo that I can securely access the platform without managing passwords\nAcceptance Criteria","EPIC_PRIORITY":"","EPIC_VALUE":"","... 
+
+Epic [INDEX]: [EPIC_NAME] 
+
+Description: [EPIC_DESCRIPTION] 
+
+Business Value: [EPIC_VALUE] 
+
+User Stories: - [USERSTORIES] 
+
+Priority: [EPIC_PRIORITY] 
+
+[/EPICS] 
+
+5.2 Feature-Level User Stories 
+
+{"STORY_ACCEPTANCE_CRITERIA":"Chronological list with filtering","STORY_ACTION":"","STORY_ACTOR":"","STORY_BENEFIT":"","STORY_EFFORT":"","STORY_PRIORITY":"","STORY_TITLE":""} {"STORY_ACCEPTANCE_CRITERIA":"Persistent chat history with pagination","STORY_ACTION":"","STORY_ACTOR":"","STORY_BENEFIT":"","STORY_EFFORT":"","STORY_PRIORITY":"","STORY_TITLE":""} {"STORY_ACCEPTANCE_CRITERIA":"Given-When-Then-And","STORY_ACTION":"","STORY_ACTOR":"","STORY_BENEFIT":"","STORY_EFFORT":"","STORY_PRIORITY":"","... 
+
+User Story [INDEX]: [STORY_TITLE] 
+
+As a [STORY_ACTOR] 
+I want to [STORY_ACTION] 
+So that [STORY_BENEFIT] 
+
+Acceptance Criteria: - [STORY_ACCEPTANCE_CRITERIA] 
+
+ 
+
+Priority: [STORY_PRIORITY] 
+Effort: [STORY_EFFORT] 
+
+[/USER_STORIES] 
+
+ 
+
+5.3 Acceptance Criteria 
+
+ 
+
+[GLOBAL_ACCEPTANCE_CRITERIA] 
+
+ 
+
+6. Technical Specifications 
+
+6.1 System Architecture 
+
+Architecture Overview 
+
+[ARCHITECTURE_OVERVIEW] 
+
+Component Architecture 
+
+[COMPONENT_ARCHITECTURE] 
+
+Deployment Architecture 
+
+[DEPLOYMENT_ARCHITECTURE] 
+
+6.2 Technology Stack 
+
+Backend Technologies 
+
+Framework: [BACKEND_FRAMEWORK] 
+
+Language: [BACKEND_LANGUAGE] 
+
+Runtime: [BACKEND_RUNTIME] 
+
+Frontend Technologies 
+
+Framework: [FRONTEND_FRAMEWORK] 
+
+Language: [FRONTEND_LANGUAGE] 
+
+Build Tools: [FRONTEND_BUILD_TOOLS] 
+
+Database Technologies 
+
+Database: [DATABASE_NAME] 
+
+ORM: [DATABASE_ORM] 
+
+Authentication & Authorization 
+
+Method: [AUTH_METHOD] 
+
+Protocol: [AUTH_PROTOCOL] 
+
+Deployment & Infrastructure 
+
+Platform: [DEPLOYMENT_PLATFORM] 
+
+Containerization: [DEPLOYMENT_CONTAINERIZATION] 
+
+6.3 API Specifications 
+
+API Overview 
+
+[API_OVERVIEW] 
+
+{"ENDPOINT_AUTH":"","ENDPOINT_DESCRIPTION":"< 500ms (p95)","ENDPOINT_METHOD":"","ENDPOINT_NAME":"API endpoints","ENDPOINT_RATE_LIMIT":"","ENDPOINT_REQUEST":"","ENDPOINT_URL":""} 
+
+Endpoint [INDEX]: [ENDPOINT_NAME] 
+
+Method: [ENDPOINT_METHOD] 
+
+URL: [ENDPOINT_URL] 
+
+Description: [ENDPOINT_DESCRIPTION] 
+
+Request: 
+
+[ENDPOINT_REQUEST] 
+
+Response: 
+
+ENDPOINT_RESPONSE] 
+
+Authentication: [ENDPOINT_AUTH] 
+
+Rate Limiting: [ENDPOINT_RATE_LIMIT] 
+
+[/API_ENDPOINTS] 
+
+ 
+
+6.4 Database Design 
+
+Database Schema Overview 
+
+[SCHEMA_OVERVIEW] 
+
+ 
+
+ 
+
+ 
+
+{"TABLE_COLUMNS":"","TABLE_DESCRIPTION":"Bulk logging interface for trainers","TABLE_NAME":"Table logger"} {"TABLE_COLUMNS":"","TABLE_DESCRIPTION":"id, role, name, mobile_number, last_login, profile_photo, created_at, updated_at","TABLE_NAME":"User"} {"TABLE_COLUMNS":"","TABLE_DESCRIPTION":"user_id, bio, certifications, created_at","TABLE_NAME":"TrainerProfile"} {"TABLE_COLUMNS":"","TABLE_DESCRIPTION":"user_id, trainer_id, dob, gender, height_cm, initial_weight_kg, goals, notes, created_at, upda... 
+
+Entity [INDEX]: [TABLE_NAME] 
+
+ Description:[TABLE_DESCRIPTION] 
+
+Columns: [TABLE_COLUMNS] 
+
+[/DB_TABLES] 
+
+ 
+
+Relationships 
+
+User → TrainerProfile (1: 1)  User → ClientProfile (1: 1)  Trainer → ClientProfile (1: many)  Trainer → Workout (1: many)  Trainer → TrainingPlan (1: many)  Client → TrainingPlan (1: many)  Client → ExerciseLog (1: many)  Client → Measurement (1: many)  Client → DietPlan (1: many)  Client → MealLog (1: many)  Trainer ↔ Client → Message (many: many via channel) 
+
+6.5 Security Requirements 
+
+Authentication 
+
+[SECURITY_AUTHENTICATION] 
+
+Authorization 
+
+[SECURITY_AUTHORIZATION] 
+
+Data Protection 
+
+Encryption: [DATA_PROTECTION_ENCRIPTION] 
+
+Data Privacy: [DATA_PROTECTION_DATA_PRIVACY] 
+
+Compliance: [DATA_PROTECTION_COMPLIANCE] 
+
+6.6 Performance Requirements 
+
+Response Time Requirements 
+
+      [PERFORMANCE_RESPONSE_TIME] 
+
+Throughput Requirements 
+
+Support 1000 concurrent users 
+
+Scalability Requirements 
+
+Horizontal scaling via load balancer 
+
+ 
+
+ 
+
+ 
+
+ 
+
+7. UI/UX Requirements 
+
+7.1 User Interface Specifications 
+
+Design Principles 
+
+{"DESIGN_PRINCIPLE":"Mobile-first responsive design"} {"DESIGN_PRINCIPLE":"Bottom navigation bar for primary navigation (Home, Workouts, Chat, Profile)"} {"DESIGN_PRINCIPLE":"Top navigation bar with logo, notifications, and user avatar"} {"DESIGN_PRINCIPLE":"Card-based layouts for content display"} {"DESIGN_PRINCIPLE":"Floating action buttons for primary actions (Add Client, Start Workout, Log Meal)"} {"DESIGN_PRINCIPLE":"Home, Workouts, Chat, Profile (role-specific)"} {"DESIGN_PRINCIPLE":"Clien... 
+
+[DESIGN_PRINCIPLE] 
+
+[/UI_DESIGN_PRINCIPLES] 
+
+Layout Requirements 
+
+ 
+
+{"LAYOUT_REQUIREMENT":""} 
+
+[LAYOUT_REQUIREMENT] 
+
+[/UI_LAYOUT_REQUIREMENTS] 
+
+ 
+
+Component Specifications 
+
+{"COMPONENT_SPECIFICATION":"ClientCard, WorkoutCard, MealCard, StatCard"} 
+
+[COMPONENT_SPECIFICATION] 
+
+[/UI_COMPONENT_SPECIFICATIONS] 
+
+ 
+
+7.2 User Experience Flows 
+
+{"FLOW_DESCRIPTION":"Trainer logs in via OTP\nTrainer navigates to “Add Client”\nTrainer fills client form (name, phone, height, weight, goal)\nSystem creates client profile and generates invite code\nSystem sends invite SMS to client phone number\nClient receives SMS and can sign up using invite code\nClient profile linked to trainer automatically","FLOW_NAME":"Trainer Workflow: Client Onboarding","FLOW_STEPS":""} {"FLOW_DESCRIPTION":"Trainer selects client from client list\nTrainer navigates t... 
+
+Flow [INDEX]: [FLOW_NAME] 
+
+Description: [FLOW_DESCRIPTION] 
+
+Steps: [FLOW_STEPS] 
+
+[/UX_FLOWS] 
+
+ 
+
+7.3 Design System Requirements 
+
+Color Palette 
+
+Primary Color: [DESIGN_COLOR_PALETTE_PRIMARY_COLOR] 
+
+Secondary Color: [DESIGN_COLOR_PALETTE_SECONDORY_COLOR] 
+
+Accent Color: [DESIGN_COLOR_PALETTE_ACCENT_COLOR] 
+
+Typography 
+
+Heading Font: [DESIGN_TYPOGRAPHY_HEADING_FONT] 
+
+Body Font: [DESIGN_TYPOGRAPHY_BODY_FONT] 
+
+Components 
+
+[DESIGN_COMPONENTS] 
+
+7.4 Accessibility Requirements 
+
+WCAG Compliance: WCAG AA compliance (target) 
+
+Keyboard Navigation: [ACCESSIBILITY_KEYBOARD] 
+
+Screen Reader Support: [ACCESSIBILITY_SCREEN_READER] 
+
+Color Contrast: [ACCESSIBILITY_CONTRAST] 
+
+ 
+
+8. Business Rules and Constraints 
+
+8.1 Business Logic 
+
+{"LOGIC_RULE_DESCRIPTION":"OTP valid for 10 minutes\nMaximum 3 OTP attempts per phone number per hour\nAccount temporarily blocked after 3 failed attempts (15-minute lockout)\nOTP must be 6 digits\nOTP stored in Redis with TTL","LOGIC_RULE_IMPLEMENTATION":"","LOGIC_RULE_NAME":"OTP Rules"} {"LOGIC_RULE_DESCRIPTION":"JWT access token valid for 24 hours\nRefresh token valid for 7 days\nMultiple sessions allowed per user (different devices)\nLogout invalidates all sessions","LOGIC_RULE_IMPLEMENTATIO... 
+
+Logic Rule [INDEX]: [LOGIC_RULE_NAME] 
+
+Description: [LOGIC_RULE_DESCRIPTION] 
+
+Implementation: - [LOGIC_RULE_IMPLEMENTATION] 
+
+[/LOGIC_RULES] 
+
+8.2 Validation Rules 
+
+{"VALIDATION_CONDITION":"OTP valid for 10 minutes\nMaximum 3 OTP attempts per phone number per hour\nAccount temporarily blocked after 3 failed attempts (15-minute lockout)\nOTP must be 6 digits\nOTP stored in Redis with TTL","VALIDATION_ERROR_MESSAGE":"","VALIDATION_FIELD":"","VALIDATION_RULE_NAME":"OTP Rules"} {"VALIDATION_CONDITION":"JWT access token valid for 24 hours\nRefresh token valid for 7 days\nMultiple sessions allowed per user (different devices)\nLogout invalidates all sessions","VA... 
+
+Validation Rule [INDEX]: [VALIDATION_RULE_NAME] 
+
+Field: [VALIDATION_FIELD] 
+
+Rule: [VALIDATION_CONDITION] 
+
+Error Message: [VALIDATION_ERROR_MESSAGE] 
+
+[/VALIDATION_RULES] 
+
+ 
+
+8.3 Workflow Rules 
+
+{"WORKFLOW_RULE_ACTIONS":"","WORKFLOW_RULE_CONDITIONS":"","WORKFLOW_RULE_DESCRIPTION":"OTP valid for 10 minutes\nMaximum 3 OTP attempts per phone number per hour\nAccount temporarily blocked after 3 failed attempts (15-minute lockout)\nOTP must be 6 digits\nOTP stored in Redis with TTL","WORKFLOW_RULE_NAME":"OTP Rules"} {"WORKFLOW_RULE_ACTIONS":"","WORKFLOW_RULE_CONDITIONS":"","WORKFLOW_RULE_DESCRIPTION":"JWT access token valid for 24 hours\nRefresh token valid for 7 days\nMultiple sessions allo... 
+
+ 
+
+Workflow Rule [INDEX]: [WORKFLOW_RULE_NAME] 
+
+Description: [WORKFLOW_RULE_DESCRIPTION] 
+
+Conditions: [WORKFLOW_RULE_CONDITIONS] 
+
+Actions: [WORKFLOW_RULE_ACTIONS] 
+
+[/WORKFLOW_RULES] 
+
+ 
+
+8.4 Compliance Requirements 
+
+Regulatory Compliance 
+
+GDPR compliance required for EU users 
+
+Industry Standards 
+
+[COMPLIANCE_INDUSTRY] 
+
+ 
+
+9. Non-Functional Requirements 
+
+9.1 Performance Requirements 
+
+Response Time 
+
+Target: [NFR_PERFORMANCE_TARGET] 
+
+Measurement: [NFR_PERFORMANCE_MEASUREMENT] 
+
+9.2 Security Requirements 
+
+Data Security 
+
+[NFR_SECURITY_DATA] 
+
+Access Control 
+
+[NFR_SECURITY_ACCESS] 
+
+9.3 Scalability Requirements 
+
+Horizontal Scaling 
+
+[NFR_SCALABILITY_HORIZONTAL] 
+
+Vertical Scaling 
+
+[NFR_SCALABILITY_VERTICAL] 
+
+9.4 Reliability Requirements 
+
+Uptime 
+
+99.5% availability target 
+
+Error Handling 
+
+Graceful error handling 
+
+9.5 Maintainability Requirements 
+
+Code Quality 
+
+Code coverage > 80% 
+
+Documentation 
+
+User guide for trainers 
+
+ 
+
+10. Acceptance Criteria 
+
+10.1 Feature Acceptance Criteria 
+
+{"ACCEPTANCE_CRITERIA":"- User can enter mobile number and receive OTP via SMS - User can verify OTP and access the platform - System handles invalid OTP attempts with rate limiting - User can select role (Trainer/Client) after authentication - Session persists across app restarts","TEST_SCENARIOS":""} {"ACCEPTANCE_CRITERIA":"- Trainer can create new client profiles with required information - Trainer can edit client information - Trainer can delete clients (with confirmation) - Trainer can invi... 
+
+Feature [INDEX]: [FEATURE_NAME] 
+
+Acceptance Criteria: [ACCEPTANCE_CRITERIA] 
+
+Test Scenarios: [TEST_SCENARIOS] 
+
+[/FEATURE_ACCEPTANCE] 
+
+ 
+
+10.2 User Story Acceptance Criteria 
+
+Given-When-Then-And  OTP Authentication - Given: A user with a valid mobile number - When: User requests OTP - Then: SMS is sent within 5 seconds - And: OTP is stored in Redis with 10-minute TTL - And: User can enter OTP to authenticate 
+
+10.3 System Acceptance Criteria 
+
+System-Level Criteria 
+
+API response time < 500ms (p95) Page load time < 3 seconds on 3G System handles 1000 concurrent users  All API endpoints require authentication PII encrypted at rest TLS 1.3 for all communications Regular security audits passed  SMS provider integration (Twilio/MessageBird) S3 media storage integration CDN integration (CloudFront) WebSocket real-time communication  Successful deployment to staging environment Successful deployment to production environment CI/CD pipeline functioning correctly Mo... 
+
+10.4 Quality Gates 
+
+ 
+
+ 
+
+Definition of Done 
+
+☐ All acceptance criteria met 
+
+☐ Code reviewed and approved 
+
+☐ Tests passing 
+
+☐ Documentation updated 
+
+☐ Deployed to staging 
+
+ 
+
+11. Diagrams and Visualizations 
+
+11.1 User Journey Flow 
+
+[DIAGRAM_USER_JOURNEY] 
+
+Figure 1: User Journey Flow 
+
+11.2 System Architecture Flow 
+
+[DIAGRAM_SYSTEM_ARCHITECTURE] 
+
+Figure 2: System Architecture Flow 
+
+11.3 Business Process Flow 
+
+[DIAGRAM_BUSINESS_PROCESS] 
+
+Figure 3: Business Process Flow 
+
+11.4 Data Flow Diagram 
+
+[DIAGRAM_DATA_FLOW] 
+
+Figure 4: Data Flow Diagram 
+
+11.5 Decision Tree Flow 
+
+[DIAGRAM_DECISION_TREE] 
+
+Figure 5: Decision Tree Flow 
+
+11.6 Gantt Chart (if applicable) 
+
+[DIAGRAM_GANTT] 
+
+Figure 6: Project Timeline 
+
+ 
+
+12. Appendices 
+
+12.1 Glossary 
+
+Term 
+
+Definition 
+
+{"GLOSSARY_DEFINITION":"One-Time Password, a temporary authentication code","GLOSSARY_TERM":"OTP"} {"GLOSSARY_DEFINITION":"Progressive Web App, a web app with native app features","GLOSSARY_TERM":"PWA"} {"GLOSSARY_DEFINITION":"Content Delivery Network, for fast media delivery","GLOSSARY_TERM":"CDN"} {"GLOSSARY_DEFINITION":"Video On Demand, video hosting and streaming service","GLOSSARY_TERM":"VOD"} {"GLOSSARY_DEFINITION":"JSON Web Token, for secure authentication","GLOSSARY_TERM":"JWT"} {"GLOSSA... 
+
+[GLOSSARY_TERM] 
+
+[GLOSSARY_DEFINITION] 
+
+[/GLOSSARY] 
+
+ 
+
+ 
+
+12.2 Abbreviations 
+
+Abbreviation 
+
+Full Form 
+
+{"ABBREVIATION":"","ABBREVIATION_EXPANSION":""} 
+
+[ABBREVIATION] 
+
+[ABBREVIATION_EXPANSION] 
+
+[/ABBREVIATIONS] 
+
+ 
+
+12.3 Related Documents 
+
+{"RELATED_DOCUMENT":""} 
+
+[RELATED_DOCUMENT] 
+
+[/RELATED_DOCUMENTS] 
+
+12.4 Additional Resources 
+
+{"ADDITIONAL_RESOURCE":""} 
+
+[ADDITIONAL_RESOURCE] 
+
+[/ADDITIONAL_RESOURCES] 
+
+ 
+
+ 
+
+Document Approval 
+ 
+
+Role 
+
+Name 
+
+Author 
+
+[APPROVAL_AUTHOR_NAME] 
+
+Reviewer 
+
+[APPROVAL_REVIEWER_NAME] 
+
+Technical Lead 
+
+[APPROVAL_TECH_LEAD_NAME] 
+
+Product Owner 
+
+[APPROVAL_PRODUCT_OWNER_NAME] 
+
+Approver 
+
+[APPROVAL_EXECUTIVE_NAME] 
+
+Signature 
+
+[APPROVAL_SIGNATURE] 
+
+Date 
+
+[APPROVAL_DATE] 
+
+ 
+Document End 
+
+This document is confidential and proprietary. Unauthorized distribution is prohibited. 

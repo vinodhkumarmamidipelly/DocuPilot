@@ -28,12 +28,10 @@ namespace SMEPilot.FunctionApp.Services
     public class TemplateProcessor
     {
         private readonly ILogger<TemplateProcessor>? _logger;
-        private readonly AzureOpenAIService? _openAIService;
 
-        public TemplateProcessor(ILogger<TemplateProcessor>? logger = null, AzureOpenAIService? openAIService = null)
+        public TemplateProcessor(ILogger<TemplateProcessor>? logger = null)
         {
             _logger = logger;
-            _openAIService = openAIService;
         }
 
         #region Region 1: TemplateBuilder Methods (Build from scratch)
@@ -1480,10 +1478,10 @@ namespace SMEPilot.FunctionApp.Services
         #region Region 3: SimplifiedContentMapper Methods (Content mapping)
 
         /// <summary>
-        /// TEMPLATE-DRIVEN APPROACH: Extracts ALL placeholders from template first,
-        /// then intelligently matches content from document to each placeholder.
-        /// This works with ANY template the user provides.
-        /// ENHANCED: Now includes section-level structural mapping for better content matching.
+        /// Builds the content map for a DOCX template using the legacy, rule-based mapper.
+        /// This is the "old engine" behavior: extract placeholders from the template,
+        /// then map document sections to a small set of semantic keys and let FillTemplate
+        /// handle placeholder variations (e.g. [PROJECT_NAME], {{Overview}}, etc.).
         /// </summary>
         public Dictionary<string, string> BuildContentMapFromTemplate(
             string templatePath,
@@ -1491,90 +1489,25 @@ namespace SMEPilot.FunctionApp.Services
             string? documentType,
             string? fullText = null)
         {
-            _logger?.LogInformation("🚀 [NEW-ARCH] Starting NEW architecture: Structured Extraction + Strict Mapping");
-            _logger?.LogInformation("📄 [NEW-ARCH] Template: {TemplatePath}", templatePath);
-            _logger?.LogInformation("📄 [NEW-ARCH] Raw document: {Title}, {SectionCount} sections", 
-                docModel.Title ?? "Unknown", docModel.Sections?.Count ?? 0);
+            _logger?.LogInformation("📝 [TEMPLATE] Building content map using legacy mapper (no structured NEW-ARCH engine)");
 
-            // Reconstruct full text if not provided
-            if (string.IsNullOrWhiteSpace(fullText) && docModel.Sections != null)
-            {
-                fullText = string.Join("\n\n", docModel.Sections.Select(s => 
-                    (!string.IsNullOrWhiteSpace(s.Heading) ? $"{s.Heading}\n" : "") + (s.Body ?? "")));
-            }
-
-            // PHASE 1: Structured Extraction
-            _logger?.LogInformation("🔍 [NEW-ARCH] PHASE 1: Structured Extraction");
-            
-            // Create extractors (loggers are optional - pass null for now)
-            var metadataExtractor = new Extractors.MetadataExtractor(null);
-            var sectionExtractor = new Extractors.SectionExtractor(null);
-            var listExtractor = new Extractors.ListExtractor(null);
-            
-            var extractedData = new ExtractedData
-            {
-                Metadata = metadataExtractor.Extract(fullText ?? ""),
-                Sections = sectionExtractor.Extract(fullText ?? ""), // Direct text extraction
-                Lists = listExtractor.Extract(fullText ?? "") // Direct text extraction
-            };
-            
-            _logger?.LogInformation("✅ [NEW-ARCH] Extraction complete:");
-            _logger?.LogInformation("   - Metadata: Project={Project}, Version={Version}, Date={Date}", 
-                extractedData.Metadata.ProjectName ?? "null",
-                extractedData.Metadata.Version ?? "null",
-                extractedData.Metadata.Date ?? "null");
-            _logger?.LogInformation("   - Sections: Overview={HasOverview}, BusinessContext={HasContext}", 
-                !string.IsNullOrWhiteSpace(extractedData.Sections.Overview),
-                !string.IsNullOrWhiteSpace(extractedData.Sections.BusinessContext));
-            _logger?.LogInformation("   - Lists: Features={FeatureCount}, Personas={PersonaCount}, Workflows={WorkflowCount}", 
-                extractedData.Lists.Features.Count,
-                extractedData.Lists.Personas.Count,
-                extractedData.Lists.Workflows.Count);
-
-            // PHASE 2: Extract placeholders from template
-            _logger?.LogInformation("🔍 [NEW-ARCH] PHASE 2: Extracting placeholders from template");
+            // Extract all placeholders from the template to know which tags actually exist
             var templatePlaceholders = ExtractAllPlaceholdersFromTemplate(templatePath);
-            _logger?.LogInformation("📋 [NEW-ARCH] Found {Count} placeholders in template", templatePlaceholders.Count);
+            var availableTemplateTags = templatePlaceholders
+                .Select(p => p.Name)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-            // PHASE 3: Mapping
-            // If Azure OpenAI is available, use AI-only mapping for non-person placeholders.
-            // Otherwise, fall back to strict rule-based mapping (PlaceholderMapper).
-            Dictionary<string, string> contentMap;
+            _logger?.LogInformation("📋 [TEMPLATE] Found {Count} unique placeholder tags in template for legacy mapping", availableTemplateTags.Count);
 
-            var aiAvailable = _openAIService != null && _openAIService.IsConfigured;
-            if (aiAvailable)
-            {
-                _logger?.LogInformation("🔍 [NEW-ARCH] PHASE 3: AI-driven mapping (AzureOpenAI_Enabled=true)");
-                contentMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            // Use legacy content mapping based on DocumentModel sections and documentType
+            var contentMap = BuildContentMap(docModel, documentType, availableTemplateTags);
 
-                var totalPlaceholders = templatePlaceholders.Count;
-                var index = 0;
-
-                foreach (var placeholder in templatePlaceholders)
-                {
-                    index++;
-                    _logger?.LogDebug("🔍 [NEW-ARCH][AI] Processing placeholder {Index}/{Total}: {Name}", index, totalPlaceholders, placeholder.Name);
-
-                    var value = FindContentForPlaceholder(placeholder, docModel, documentType, fullText);
-                    contentMap[placeholder.Name] = value ?? string.Empty;
-                }
-
-                _logger?.LogInformation("✅ [NEW-ARCH] AI mapping loop completed for {Total} placeholders", totalPlaceholders);
-            }
-            else
-            {
-                _logger?.LogInformation("🔍 [NEW-ARCH] PHASE 3: Strict rule-based mapping (PlaceholderMapper)");
-                var mapper = new PlaceholderMapper(null);
-                contentMap = mapper.Map(extractedData, templatePlaceholders, docModel); // Pass docModel for section fallback
-            }
-            
             var filledCount = contentMap.Count(kvp => !string.IsNullOrWhiteSpace(kvp.Value));
             var emptyCount = contentMap.Count(kvp => string.IsNullOrWhiteSpace(kvp.Value));
-            
-            _logger?.LogInformation("✅ [NEW-ARCH] Mapping complete: {Filled}/{Total} filled ({Empty} empty)", 
+            _logger?.LogInformation("✅ [TEMPLATE] Legacy content map built: {Filled}/{Total} filled ({Empty} empty)", 
                 filledCount, contentMap.Count, emptyCount);
-            _logger?.LogInformation("📊 [NEW-ARCH] Success rate: {SuccessRate:P1}", 
-                contentMap.Count > 0 ? (double)filledCount / contentMap.Count : 0.0);
 
             return contentMap;
         }
@@ -1888,59 +1821,6 @@ namespace SMEPilot.FunctionApp.Services
                 }
             }
 
-            // Detect person fields up front
-            var isPersonField = placeholderLower.Contains("author") ||
-                               placeholderLower.Contains("reviewer") ||
-                               placeholderLower.Contains("approver");
-
-            // If Azure OpenAI is enabled/configured, use **only AI** for non-person placeholders
-            // (no rule-based fallback when AI is enabled - per configuration requirement)
-            var aiAvailable = _openAIService != null && _openAIService.IsConfigured;
-            if (aiAvailable && !isPersonField)
-            {
-                try
-                {
-                    var documentSections = docModel.Sections
-                        .Where(s => !string.IsNullOrWhiteSpace(s.Body))
-                        .Select(s => $"{s.Heading ?? "Content"}: {s.Body}")
-                        .ToList();
-
-                    if (documentSections.Any())
-                    {
-                        // Use embeddings to narrow down to the most relevant sections for this placeholder
-                        var similarSectionsTask = _openAIService.FindSimilarSectionsAsync(placeholderName, documentSections, topK: 5);
-                        var similarSections = similarSectionsTask.GetAwaiter().GetResult();
-
-                        var contextSections = (similarSections != null && similarSections.Any())
-                            ? similarSections
-                            : documentSections;
-
-                        if (similarSections != null && similarSections.Any())
-                        {
-                            _logger?.LogDebug("✅ [MATCHING] Using {Count} embedding-selected sections for '{Placeholder}'", similarSections.Count, placeholderName);
-                        }
-
-                        var aiMatchTask = _openAIService.FindContentForPlaceholderAsync(placeholderName, contextSections, documentType);
-                        var aiMatch = aiMatchTask.GetAwaiter().GetResult(); // Synchronous wait
-                        if (!string.IsNullOrWhiteSpace(aiMatch) && !IsDocumentTitleContentStub(aiMatch, docModel.Title, placeholderName))
-                        {
-                            _logger?.LogDebug("✅ [MATCHING] AI-powered match for '{Placeholder}': {Source}", placeholderName, "AzureOpenAI");
-                            return aiMatch;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogWarning(ex, "⚠️ [MATCHING] AI matching failed for '{Placeholder}'. No template-based fallback because AzureOpenAI_Enabled=true: {Error}", placeholderName, ex.Message);
-                }
-
-                // AI mode is exclusive - if we get here, return null (no rule-based strategies)
-                return null;
-            }
-
-            // If we reach here, either AI is disabled/not configured OR this is a person field.
-            // Use existing template-based strategies only.
-
             // Strategy 1: Exact name matching (highest priority)
             if (TryExactMatch(placeholderName, docModel, documentType, fullText, out var exactMatch))
             {
@@ -1953,16 +1833,8 @@ namespace SMEPilot.FunctionApp.Services
             }
 
             // Strategy 2: Fuzzy/semantic name matching
-            // CRITICAL: For person fields, ONLY use dedicated extraction methods - don't fall back to other strategies
             if (TryFuzzyMatch(placeholderName, docModel, documentType, fullText, out var fuzzyMatch))
             {
-                // For person fields, if extraction returned null, don't use fuzzy match - return null instead
-                if (isPersonField && string.IsNullOrWhiteSpace(fuzzyMatch))
-                {
-                    _logger?.LogDebug("⏭️ [MATCHING] Person field '{Placeholder}' extraction returned null - not using fallback strategies", placeholderName);
-                    return null;
-                }
-
                 // CRITICAL: Reject if content is document title
                 if (IsDocumentTitleContentStub(fuzzyMatch, docModel.Title, placeholderName))
                     return null;
@@ -1971,16 +1843,8 @@ namespace SMEPilot.FunctionApp.Services
                 return fuzzyMatch;
             }
 
-            // CRITICAL: For person fields, if extraction failed, return null - don't try other strategies
-            if (isPersonField)
-            {
-                _logger?.LogDebug("⏭️ [MATCHING] Person field '{Placeholder}' extraction failed - returning null to avoid matching entire document", placeholderName);
-                return null;
-            }
-
             // Strategy 3: Content-based matching (analyze document sections)
-            // CRITICAL: SKIP for author/reviewer/approver and multi-option placeholders to avoid returning entire document
-            if (!placeholderName.Contains("|") && !isPersonField)
+            if (!placeholderName.Contains("|"))
             {
                 if (TryContentBasedMatch(placeholderName, docModel, out var contentMatch))
                 {
@@ -2003,14 +1867,9 @@ namespace SMEPilot.FunctionApp.Services
                     return keywordMatch;
                 }
             }
-            else if (isPersonField)
-            {
-                _logger?.LogDebug("⏭️ [MATCHING] Skipping content/keyword matching for person field '{Placeholder}' to avoid returning entire document", placeholderName);
-            }
 
             // Strategy 6: Position-based matching (first section, etc.)
-            // CRITICAL: SKIP for person fields to avoid returning entire document
-            if (!isPersonField && TryPositionBasedMatch(placeholderName, docModel, out var positionMatch))
+            if (TryPositionBasedMatch(placeholderName, docModel, out var positionMatch))
             {
                 // CRITICAL: Reject if content is document title
                 if (IsDocumentTitleContentStub(positionMatch, docModel.Title, placeholderName))
@@ -2022,8 +1881,7 @@ namespace SMEPilot.FunctionApp.Services
 
             // Strategy 6: Instructional placeholder matching (for placeholders like [Provide a high-level overview...])
             // Extract keywords from instructional text and match to document sections
-            // CRITICAL: SKIP for person fields to avoid returning entire document
-            if (!isPersonField && TryInstructionalPlaceholderMatch(placeholderName, docModel, fullText, out var instructionalMatch))
+            if (TryInstructionalPlaceholderMatch(placeholderName, docModel, fullText, out var instructionalMatch))
             {
                 // CRITICAL: Reject if content is document title
                 if (IsDocumentTitleContentStub(instructionalMatch, docModel.Title, placeholderName))

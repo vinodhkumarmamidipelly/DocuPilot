@@ -11,6 +11,10 @@ using Microsoft.Identity.Client;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 using Polly.Retry;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using Azure.Core;
+using Newtonsoft.Json.Linq;
 
 namespace SMEPilot.FunctionApp.Helpers
 {
@@ -21,6 +25,7 @@ namespace SMEPilot.FunctionApp.Helpers
         private readonly bool _hasCredentials;
         private readonly ILogger<GraphHelper>? _logger;
         private readonly AsyncRetryPolicy _retryPolicy;
+        private static readonly HttpClient _httpClient = new HttpClient();
 
         public GraphHelper(Config cfg, ILogger<GraphHelper>? logger = null)
         {
@@ -540,6 +545,180 @@ namespace SMEPilot.FunctionApp.Helpers
                 {
                     _logger?.LogError("OData Error Code: {Code}, Message: {Message}", oDataError.Error?.Code, oDataError.Error?.Message);
                 }
+                return new List<DriveItem>();
+            }
+        }
+
+        /// <summary>
+        /// Uses the Graph delta API to find recently changed files in a drive,
+        /// filtered by parent folder path (relative to drive root) and a lookback window.
+        /// This is more accurate for nested folders than GetRecentDriveItemsAsync, which only inspects root children.
+        /// </summary>
+        public async Task<List<DriveItem>> GetRecentItemsFromDeltaAsync(
+            string driveId,
+            string? sourceFolderPath,
+            TimeSpan lookbackWindow,
+            int maxItems = 20)
+        {
+            var results = new List<DriveItem>();
+
+            if (!_hasCredentials)
+            {
+                _logger?.LogDebug("Mock: Would query delta for drive {DriveId}", driveId);
+                return results;
+            }
+
+            try
+            {
+                // Normalize source folder path to drive-relative *subfolder* form.
+                // - If SourceFolderPath points to the library root (e.g. "/sites/Site/Raw Documents"),
+                //   we treat the entire drive as in-scope (no path filter).
+                // - If it points to a subfolder (e.g. "/sites/Site/Raw Documents/Team1"),
+                //   we use only the subfolder part ("Team1") to filter delta items.
+                string? normalizedSource = null;
+                if (!string.IsNullOrWhiteSpace(sourceFolderPath))
+                {
+                    var normalizedPath = sourceFolderPath.Trim('/');
+                    if (normalizedPath.StartsWith("sites/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var parts = normalizedPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                        // parts: ["sites", "SiteName", "Library", "Sub1", "Sub2", ...]
+                        if (parts.Length >= 4)
+                        {
+                            // Library root + at least one subfolder → filter by subfolder path only
+                            normalizedSource = string.Join("/", parts.Skip(3)); // "Sub1/Sub2"
+                        }
+                        else
+                        {
+                            // Library root only -> no path filter (entire drive is source)
+                            normalizedSource = null;
+                        }
+                    }
+                }
+
+                var useTimeFilter = lookbackWindow > TimeSpan.Zero;
+                var cutoff = useTimeFilter ? DateTimeOffset.UtcNow - lookbackWindow : (DateTimeOffset?)null;
+
+                // Acquire an access token for calling Graph directly
+                var tokenCredential = new ClientSecretCredential(
+                    _cfg.GraphTenantId,
+                    _cfg.GraphClientId,
+                    _cfg.GraphClientSecret);
+
+                var tokenContext = new TokenRequestContext(new[] { "https://graph.microsoft.com/.default" });
+                var token = await tokenCredential.GetTokenAsync(tokenContext, default);
+
+                var requestUrl = $"https://graph.microsoft.com/v1.0/drives/{driveId}/root/delta?$top=50";
+                int pageCount = 0;
+
+                while (!string.IsNullOrWhiteSpace(requestUrl) &&
+                       results.Count < maxItems &&
+                       pageCount < 5) // safety limit
+                {
+                    pageCount++;
+                    var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
+
+                    var response = await _httpClient.SendAsync(request);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var errorText = await response.Content.ReadAsStringAsync();
+                        _logger?.LogWarning("⚠️ [Delta] Request to {Url} failed with {Status}: {Error}", requestUrl, response.StatusCode, errorText);
+                        break;
+                    }
+
+                    var json = await response.Content.ReadAsStringAsync();
+                    var jo = JObject.Parse(json);
+                    var values = jo["value"] as JArray;
+                    if (values == null || values.Count == 0)
+                    {
+                        break;
+                    }
+
+                    foreach (var v in values)
+                    {
+                        if (results.Count >= maxItems)
+                        {
+                            break;
+                        }
+
+                        // Skip folders
+                        if (v["folder"] != null)
+                        {
+                            continue;
+                        }
+
+                        var id = (string?)v["id"];
+                        var name = (string?)v["name"];
+                        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(name))
+                        {
+                            continue;
+                        }
+
+                        // Last modified filter
+                        DateTimeOffset? lastModified = null;
+                        var lmStr = (string?)v["lastModifiedDateTime"];
+                        if (!string.IsNullOrWhiteSpace(lmStr) && DateTimeOffset.TryParse(lmStr, out var lm))
+                        {
+                            lastModified = lm;
+                        }
+
+                        if (useTimeFilter && cutoff.HasValue && lastModified.HasValue && lastModified.Value < cutoff.Value)
+                        {
+                            // Older than lookback window – skip
+                            continue;
+                        }
+
+                        // Path filter based on parentReference.path
+                        if (!string.IsNullOrWhiteSpace(normalizedSource))
+                        {
+                            var parentPath = (string?)v["parentReference"]?["path"];
+                            if (string.IsNullOrWhiteSpace(parentPath))
+                            {
+                                continue;
+                            }
+
+                            // Example parentPath: "/drives/{id}/root:/Raw Documents/Team1/Employee1"
+                            var marker = "root:";
+                            var idx = parentPath.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                            var relative = idx >= 0
+                                ? parentPath.Substring(idx + marker.Length).TrimStart('/')
+                                : parentPath.Trim('/');
+
+                            if (!relative.StartsWith(normalizedSource, StringComparison.OrdinalIgnoreCase))
+                            {
+                                // Not under the configured source folder
+                                continue;
+                            }
+                        }
+
+                        // Build a minimal DriveItem so callers can reuse existing code paths
+                        var driveItem = new DriveItem
+                        {
+                            Id = id,
+                            Name = name,
+                            LastModifiedDateTime = lastModified
+                        };
+
+                        results.Add(driveItem);
+                    }
+
+                    // Follow nextLink if present
+                    var nextLink = (string?)jo["@odata.nextLink"];
+                    if (string.IsNullOrWhiteSpace(nextLink))
+                    {
+                        break;
+                    }
+
+                    requestUrl = nextLink;
+                }
+
+                _logger?.LogInformation("✅ [Delta] Retrieved {Count} recent candidate files from delta for drive {DriveId}", results.Count, driveId);
+                return results;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "❌ [Delta] Error getting recent items from delta for drive {DriveId}: {Error}", driveId, ex.Message);
                 return new List<DriveItem>();
             }
         }
@@ -1191,6 +1370,15 @@ namespace SMEPilot.FunctionApp.Helpers
             return siteId;
         }
 
+        /// <summary>
+        /// Public wrapper around NormalizeSiteIdForGraph so other components (e.g. functions)
+        /// can build correct /sites/{siteId}/... resource paths for Graph.
+        /// </summary>
+        public string NormalizeSiteIdForResource(string siteId, string? sourceFolderPath = null)
+        {
+            return NormalizeSiteIdForGraph(siteId, sourceFolderPath);
+        }
+
         public async Task<(string? driveId, string? itemId)> ResolveFolderPathAsync(string siteId, string folderPath)
         {
             if (!_hasCredentials)
@@ -1575,7 +1763,7 @@ namespace SMEPilot.FunctionApp.Helpers
                     siteIdFormats.Add($"{parts[0]}:/sites/{parts[2]}");
                 }
             }
-            
+
             // Format 3: Original siteId as-is
             if (!siteIdFormats.Contains(siteId))
             {
@@ -1656,6 +1844,102 @@ namespace SMEPilot.FunctionApp.Helpers
             _logger?.LogError("❌ [GetDriveIdFromSiteAndLibraryAsync] Failed to get drive ID for library '{LibraryName}' in site {SiteId} after trying {Count} formats", 
                 libraryName, siteId, siteIdFormats.Count);
             return null;
+        }
+
+        /// <summary>
+        /// Get the underlying list ID for a document library drive.
+        /// This is used to build list-based webhook subscriptions from a known driveId.
+        /// </summary>
+        public async Task<string?> GetListIdFromDriveAsync(string driveId)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogDebug("Mock: Would get list ID for drive {DriveId}", driveId);
+                return null;
+            }
+
+            try
+            {
+                _logger?.LogInformation("🔍 [GetListIdFromDriveAsync] Getting list ID for drive {DriveId}", driveId);
+
+                var list = await _retryPolicy.ExecuteAsync(async () =>
+                    await _client!.Drives[driveId].List.GetAsync());
+
+                var listId = list?.Id;
+                if (string.IsNullOrWhiteSpace(listId))
+                {
+                    _logger?.LogWarning("⚠️ [GetListIdFromDriveAsync] List is null or has no ID for drive {DriveId}", driveId);
+                    return null;
+                }
+
+                _logger?.LogInformation("✅ [GetListIdFromDriveAsync] Found list ID {ListId} for drive {DriveId}", listId, driveId);
+                return listId;
+            }
+            catch (ODataError odataError)
+            {
+                _logger?.LogError(odataError, "❌ [GetListIdFromDriveAsync] ODataError getting list ID for drive {DriveId}: {Code} - {Message}", 
+                    driveId, odataError.Error?.Code, odataError.Error?.Message);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "❌ [GetListIdFromDriveAsync] Error getting list ID for drive {DriveId}: {Error}", driveId, ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Resolves a SharePoint list item (by siteId + listId + listItemId) to its underlying DriveItem.
+        /// This is used for list-based webhooks where notifications are raised on the list, not the drive.
+        /// </summary>
+        public async Task<DriveItem?> GetDriveItemForListItemAsync(string siteId, string listId, string listItemId, string? sourceFolderPath = null)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogDebug("Mock: Would resolve list item {ListItemId} in list {ListId} at site {SiteId} to a driveItem", listItemId, listId, siteId);
+                return null;
+            }
+
+            try
+            {
+                var normalizedSiteId = NormalizeSiteIdForGraph(siteId, sourceFolderPath);
+
+                _logger?.LogInformation("🔍 [GetDriveItemForListItemAsync] Resolving driveItem for SiteId={SiteId}, ListId={ListId}, ListItemId={ListItemId}", normalizedSiteId, listId, listItemId);
+
+                var listItem = await _retryPolicy.ExecuteAsync(async () =>
+                    await _client!.Sites[normalizedSiteId].Lists[listId].Items[listItemId].GetAsync(config =>
+                    {
+                        // Expand driveItem so we can get the underlying file
+                        config.QueryParameters.Expand = new[] { "driveItem" };
+                    }));
+
+                if (listItem == null)
+                {
+                    _logger?.LogWarning("⚠️ [GetDriveItemForListItemAsync] ListItem is null for SiteId={SiteId}, ListId={ListId}, ListItemId={ListItemId}", normalizedSiteId, listId, listItemId);
+                    return null;
+                }
+
+                if (listItem.DriveItem == null)
+                {
+                    _logger?.LogWarning("⚠️ [GetDriveItemForListItemAsync] DriveItem is null on list item for SiteId={SiteId}, ListId={ListId}, ListItemId={ListItemId}", normalizedSiteId, listId, listItemId);
+                    return null;
+                }
+
+                _logger?.LogInformation("✅ [GetDriveItemForListItemAsync] Resolved DriveItem {ItemId} (Name={Name}) for list item {ListItemId}", listItem.DriveItem.Id ?? "null", listItem.DriveItem.Name ?? "null", listItemId);
+                return listItem.DriveItem;
+            }
+            catch (ODataError odataError)
+            {
+                _logger?.LogError(odataError, "❌ [GetDriveItemForListItemAsync] ODataError resolving driveItem for SiteId={SiteId}, ListId={ListId}, ListItemId={ListItemId}: {Code} - {Message}", 
+                    siteId, listId, listItemId, odataError.Error?.Code, odataError.Error?.Message);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "❌ [GetDriveItemForListItemAsync] Error resolving driveItem for SiteId={SiteId}, ListId={ListId}, ListItemId={ListItemId}: {Error}", 
+                    siteId, listId, listItemId, ex.Message);
+                return null;
+            }
         }
 
         /// <summary>

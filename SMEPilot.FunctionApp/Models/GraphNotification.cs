@@ -53,6 +53,19 @@ namespace SMEPilot.FunctionApp.Models
         
         [JsonProperty("@odata.type")]
         public string ODataType { get; set; } // "#Microsoft.Graph.driveItem"
+
+        // Additional fields present on SharePoint list item notifications
+        [JsonProperty("siteId")]
+        public string SiteId { get; set; }
+
+        [JsonProperty("listId")]
+        public string ListId { get; set; }
+
+        [JsonProperty("webId")]
+        public string WebId { get; set; }
+
+        [JsonProperty("tenantId")]
+        public string TenantId { get; set; }
         
         [JsonProperty("size")]
         public long? Size { get; set; }

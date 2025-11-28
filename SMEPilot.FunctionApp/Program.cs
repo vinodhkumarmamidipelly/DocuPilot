@@ -116,20 +116,11 @@ try
                    // Add DocumentEnricher (consolidates DocumentEnricherService + RuleBasedFormatter + HybridEnricher)
                    // Note: DocumentEnricher is created per-use with mapping.json path, not singleton
                    
-                   // Add AzureOpenAIService (optional - for enhanced enrichment)
-                   services.AddSingleton<AzureOpenAIService>(sp =>
-                   {
-                       var cfg = sp.GetRequiredService<Config>();
-                       var logger = sp.GetService<ILogger<AzureOpenAIService>>();
-                       return new AzureOpenAIService(cfg, logger);
-                   });
-                   
                    // Add TemplateProcessor (consolidates TemplateBuilder + TemplateFiller + SimplifiedContentMapper)
                    services.AddSingleton<TemplateProcessor>(sp =>
                    {
                        var logger = sp.GetService<ILogger<TemplateProcessor>>();
-                       var openAIService = sp.GetService<AzureOpenAIService>();
-                       return new TemplateProcessor(logger, openAIService);
+                       return new TemplateProcessor(logger);
                    });
                    
                    // SetupSubscription requires ILogger

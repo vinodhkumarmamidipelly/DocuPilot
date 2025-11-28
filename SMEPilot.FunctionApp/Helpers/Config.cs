@@ -38,54 +38,6 @@ namespace SMEPilot.FunctionApp.Helpers
         public string AzureVisionEndpoint => Environment.GetEnvironmentVariable("AzureVision_Endpoint");
         public string AzureVisionKey => Environment.GetEnvironmentVariable("AzureVision_Key");
         
-        // Azure OpenAI configuration (optional - for enhanced enrichment)
-        // Prefer SMEPilot-specific variables, but gracefully fall back to common ones
-        public string AzureOpenAIEndpoint =>
-            Environment.GetEnvironmentVariable("AzureOpenAI_Endpoint")
-            ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
-            ?? Environment.GetEnvironmentVariable("OpenAI__Endpoint");
-
-        public string AzureOpenAIKey =>
-            Environment.GetEnvironmentVariable("AzureOpenAI_Key")
-            ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_KEY")
-            ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")
-            ?? Environment.GetEnvironmentVariable("OpenAI__ApiKey");
-
-        public string AzureOpenAIDeploymentGPT =>
-            Environment.GetEnvironmentVariable("AzureOpenAI_Deployment_GPT")
-            ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_GPT_DEPLOYMENT")
-            ?? "gpt-4";
-
-        public string AzureOpenAIEmbeddingDeployment =>
-            Environment.GetEnvironmentVariable("AzureOpenAI_Embedding_Deployment")
-            ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
-            ?? "text-embedding-ada-002";
-
-        /// <summary>
-        /// Global feature flag to enable/disable Azure OpenAI usage in enrichment.
-        /// Defaults to true if not specified.
-        /// </summary>
-        public bool AzureOpenAIEnabled
-        {
-            get
-            {
-                var value = Environment.GetEnvironmentVariable("AzureOpenAI_Enabled");
-                if (string.IsNullOrWhiteSpace(value))
-                {
-                    return true; // default ON
-                }
-
-                return value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
-                       value.Equals("1", StringComparison.OrdinalIgnoreCase) ||
-                       value.Equals("yes", StringComparison.OrdinalIgnoreCase);
-            }
-        }
-
-        public bool IsAzureOpenAIConfigured =>
-            AzureOpenAIEnabled &&
-            !string.IsNullOrWhiteSpace(AzureOpenAIEndpoint) &&
-            !string.IsNullOrWhiteSpace(AzureOpenAIKey);
-        
         // Spire license keys
         public string SpirePdfLicense => Environment.GetEnvironmentVariable("SpirePDFLicense");
         public string SpireDocLicense => Environment.GetEnvironmentVariable("SpireDOCLicense");
