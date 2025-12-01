@@ -16,6 +16,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
+using System.Text.RegularExpressions;
 
 namespace SMEPilot.FunctionApp.Functions
 {
@@ -285,7 +286,16 @@ namespace SMEPilot.FunctionApp.Functions
 
                                         if (driveItem.CreatedBy?.User != null)
                                         {
-                                            uploaderEmail = driveItem.CreatedBy.User.DisplayName ?? "";
+                                            var email = driveItem.CreatedBy.User.AdditionalData != null &&
+                                                        driveItem.CreatedBy.User.AdditionalData.TryGetValue("email", out var emailObj)
+                                                ? emailObj?.ToString()
+                                                : null;
+
+                                            uploaderEmail = !string.IsNullOrWhiteSpace(email)
+                                                ? email
+                                                : driveItem.CreatedBy.User.DisplayName ?? "";
+
+                                            _logger.LogInformation("👤 [AUTHOR] From DriveItem.CreatedBy.User - Email: {Email}, DisplayName: {DisplayName}", email, driveItem.CreatedBy.User.DisplayName);
                                         }
                                     }
                                     else
@@ -303,7 +313,10 @@ namespace SMEPilot.FunctionApp.Functions
 
                                     if (notification.ResourceData.CreatedBy?.User != null)
                                     {
-                                        uploaderEmail = notification.ResourceData.CreatedBy.User.Email ?? notification.ResourceData.CreatedBy.User.DisplayName ?? uploaderEmail;
+                                        var email = notification.ResourceData.CreatedBy.User.Email;
+                                        var displayName = notification.ResourceData.CreatedBy.User.DisplayName;
+                                        uploaderEmail = email ?? displayName ?? uploaderEmail;
+                                        _logger.LogInformation("👤 [AUTHOR] From ResourceData.CreatedBy.User - Email: {Email}, DisplayName: {DisplayName}", email, displayName);
                                     }
                                 }
                             }
@@ -468,7 +481,17 @@ namespace SMEPilot.FunctionApp.Functions
                                         
                                         itemId = candidateFile.Id ?? "";
                                         fileName = candidateFile.Name ?? "unknown";
-                                        uploaderEmail = candidateFile.CreatedBy?.User?.DisplayName ?? candidateFile.CreatedBy?.Application?.DisplayName ?? "";
+                                        var email = candidateFile.CreatedBy?.User?.AdditionalData != null &&
+                                                    candidateFile.CreatedBy.User.AdditionalData.TryGetValue("email", out var emailObj)
+                                            ? emailObj?.ToString()
+                                            : null;
+                                        var displayName = candidateFile.CreatedBy?.User?.DisplayName ?? candidateFile.CreatedBy?.Application?.DisplayName ?? "";
+
+                                        uploaderEmail = !string.IsNullOrWhiteSpace(email)
+                                            ? email
+                                            : displayName;
+
+                                        _logger.LogInformation("👤 [AUTHOR] From recent candidate file - Email: {Email}, DisplayName: {DisplayName}", email, displayName);
                                         _logger.LogDebug("✅ Found unprocessed file: {FileName} (ID: {ItemId})", fileName, itemId);
                                     }
                                     else
@@ -1563,8 +1586,7 @@ namespace SMEPilot.FunctionApp.Functions
                     }
                 }
                 
-                // Now use template-driven approach for ALL files (including processed .docx)
-                // CRITICAL FIX: Only run sectioning for non-.docx files OR if docModel wasn't created above
+                // Now use template-driven approach for non-.docx files OR if docModel wasn't created above
                 if (fileExtension != ".docx" || docModel == null)
                 {
                     // For non-.docx files, use DocumentEnricher + TemplateProcessor flow
@@ -1599,8 +1621,8 @@ namespace SMEPilot.FunctionApp.Functions
                             _logger.LogDebug("✅ [TEMPLATE] Created {SectionCount} sections using rule-based parsing", docModel.Sections?.Count ?? 0);
                             
                             // Step 2: Classify document (keyword-based, no AI)
-                            var classification = _documentEnricher.ClassifyDocument(docModel.Title, text);
-                            _logger.LogDebug("📂 [TEMPLATE] Document classified as: {Classification}", classification);
+                            var initialClassification = _documentEnricher.ClassifyDocument(docModel.Title, text);
+                            _logger.LogDebug("📂 [TEMPLATE] Document classified as: {Classification}", initialClassification);
                         }
                         else
                         {
@@ -1636,9 +1658,9 @@ namespace SMEPilot.FunctionApp.Functions
                     }
                 }
 
-                // 5. Fill template using UniversalOrgTemplate.dotx (for ALL files, including .docx)
+                // 5. Template-based formatting
                 _logger.LogDebug("📝 [TEMPLATE] Filling template with extracted content...");
-                
+
                 // Try to get template from SharePoint config first
                 string? templatePath = null;
                 if (!string.IsNullOrWhiteSpace(sourceSiteId))
@@ -1649,7 +1671,7 @@ namespace SMEPilot.FunctionApp.Functions
                         _cfg.TemplateLibraryPath,
                         _cfg.TemplateFileName,
                         _cfg.TemplateFileUrl);
-                    
+
                     if (!string.IsNullOrWhiteSpace(templatePath) && File.Exists(templatePath))
                     {
                         _logger.LogInformation("✅ [TEMPLATE] Using template from SharePoint: {TemplatePath}", templatePath);
@@ -1660,7 +1682,7 @@ namespace SMEPilot.FunctionApp.Functions
                         templatePath = null;
                     }
                 }
-                
+
                 // Fallback to local template files if SharePoint download failed
                 if (string.IsNullOrWhiteSpace(templatePath) || !File.Exists(templatePath))
                 {
@@ -1670,73 +1692,131 @@ namespace SMEPilot.FunctionApp.Functions
                     templatePath = Directory.GetFiles(templatesDir, "UniversalOrgTemplate*.dotx")
                         .FirstOrDefault() ?? Path.Combine(templatesDir, "UniversalOrgTemplate.dotx");
                 }
-                
+
                 if (string.IsNullOrWhiteSpace(templatePath) || !File.Exists(templatePath))
                 {
-                    _logger.LogWarning("⚠️ [TEMPLATE] Template file not found at {TemplatePath}, falling back to TemplateProcessor.BuildDocxBytes", templatePath ?? "null");
-                    // Fallback to building from scratch if template not found
-                    if (_templateProcessor != null)
-                    {
-                        enrichedBytes = _templateProcessor.BuildDocxBytes(docModel, imagesBytes);
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException("TemplateProcessor is not available and template file not found");
-                    }
-                    enrichedName = Path.GetFileNameWithoutExtension(fileName) + "_enriched.docx";
+                    throw new InvalidOperationException($"Template file not found (searched in SharePoint and local Templates folder). Last attempted path: {templatePath ?? "null"}");
                 }
-                else
+
+                // Use existing OpenXML-based TemplateProcessor flow for all supported docs (including DOCX)
+                if (_templateProcessor == null)
                 {
-                    if (_templateProcessor == null)
-                    {
-                        throw new InvalidOperationException("TemplateProcessor is required for template filling");
-                    }
-                    
-                    // Get document type classification (use docModel sections if text not available)
-                    string fullText = text ?? string.Join("\n\n", docModel.Sections?.Select(s => $"{s.Heading}\n{s.Body}") ?? Enumerable.Empty<string>());
-                    var classification = _documentEnricher?.ClassifyDocument(docModel.Title ?? "", fullText) ?? "Generic";
-                    
-                    // Create temp output path
-                    // Feedback2: Use TempFileLease for output path
-                    var tempOutputPath = tempLease.GetPath($"enriched_{Path.GetFileNameWithoutExtension(fileName)}_enriched.docx");
-                    
-                    // Inspect template first to see what tags are available
-                    // TEMPLATE-DRIVEN APPROACH: Extract placeholders from template first,
-                    // then intelligently match content from document to each placeholder
-                    var contentMap = _templateProcessor.BuildContentMapFromTemplate(
-                        templatePath,
-                        docModel,
-                        classification,
-                        fullText);
-                    
-                    _logger.LogInformation("✅ [TEMPLATE] Content map built: {Count} placeholders filled", contentMap.Count);
-                    
-                    // Build revisions list
-                    var revisions = new List<(string version, string date, string author, string changes)>
-                    {
-                        ("1.0", DateTime.UtcNow.ToString("yyyy-MM-dd"), "SMEPilot", "Initial document enrichment")
-                    };
-                    
-                    // Fill template using TemplateProcessor
-                    _logger.LogInformation("🔧 [TEMPLATE] Starting FillTemplate for {FileName} with {PlaceholderCount} placeholders", 
-                        fileName, contentMap.Count);
-
-                    _templateProcessor.FillTemplate(
-                        templatePath,
-                        tempOutputPath,
-                        contentMap,
-                        imagesBytes,
-                        revisions);
-
-                    _logger.LogInformation("✅ [TEMPLATE] FillTemplate completed for {FileName}. Output: {OutputPath}", 
-                        fileName, tempOutputPath);
-                    
-                    // Read filled document back to bytes
-                    enrichedBytes = await File.ReadAllBytesAsync(tempOutputPath);
-                    enrichedName = Path.GetFileNameWithoutExtension(fileName) + "_enriched.docx";
-                    
-                    // Feedback2: Note - temp files cleaned up automatically by TempFileLease.Dispose()
+                    throw new InvalidOperationException("TemplateProcessor is required for template filling");
                 }
+
+                // Get document type classification (use docModel sections if text not available)
+                string fullText = text ?? string.Join("\n\n", docModel.Sections?.Select(s => $"{s.Heading}\n{s.Body}") ?? Enumerable.Empty<string>());
+                var classification = _documentEnricher?.ClassifyDocument(docModel.Title ?? "", fullText) ?? "Generic";
+
+                // Create temp output path
+                var tempOutputPath = tempLease.GetPath($"enriched_{Path.GetFileNameWithoutExtension(fileName)}_enriched.docx");
+
+                // Build metadata overrides for template fields (author, document ID, etc.)
+                var metadataOverrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                // Resolve human author for template fields
+                try
+                {
+                    var resolvedAuthor = await _graph.ResolveListItemAuthorDisplayNameAsync(driveId, itemId);
+                    if (string.IsNullOrWhiteSpace(resolvedAuthor))
+                    {
+                        // Fallback to uploader email/display name if list item author cannot be resolved
+                        if (!string.IsNullOrWhiteSpace(uploaderEmail))
+                        {
+                            resolvedAuthor = uploaderEmail;
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(resolvedAuthor))
+                    {
+                        metadataOverrides["Author"] = resolvedAuthor;
+                        _logger.LogInformation("✅ [AUTHOR] Using resolved author for template fields: {Author}", resolvedAuthor);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "⚠️ [AUTHOR] Failed to resolve list item author for template fields. Will fall back to uploader email if available.");
+                    if (!string.IsNullOrWhiteSpace(uploaderEmail))
+                    {
+                        metadataOverrides["Author"] = uploaderEmail;
+                        _logger.LogInformation("✅ [AUTHOR] Falling back to uploader email/display name for template fields: {Author}", uploaderEmail);
+                    }
+                }
+
+                // DocumentId: try to reuse existing SMEPilot_DocumentId if present, otherwise generate a new one.
+                try
+                {
+                    var listFields = await _graph.GetListItemFieldsAsync(driveId, itemId);
+                    if (listFields != null && listFields.TryGetValue("SMEPilot_DocumentId", out var existingDocIdObj))
+                    {
+                        var existingDocId = existingDocIdObj?.ToString();
+                        if (!string.IsNullOrWhiteSpace(existingDocId))
+                        {
+                            metadataOverrides["DocumentId"] = existingDocId;
+                            _logger.LogInformation("📄 [METADATA] Reusing existing SMEPilot_DocumentId for template: {DocumentId}", existingDocId);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "⚠️ [METADATA] Failed to read SMEPilot_DocumentId for {FileName} (ItemId: {ItemId})", fileName, itemId);
+                }
+
+                if (!metadataOverrides.ContainsKey("DocumentId"))
+                {
+                    var generatedId = Guid.NewGuid().ToString("N").ToUpperInvariant().Substring(0, 16);
+                    metadataOverrides["DocumentId"] = generatedId;
+                    _logger.LogInformation("📄 [METADATA] Generated new DocumentId for template: {DocumentId}", generatedId);
+                }
+
+                var contentMap = _templateProcessor.BuildContentMapFromTemplate(
+                    templatePath,
+                    docModel,
+                    classification,
+                    fullText,
+                    metadataOverrides);
+
+                _logger.LogInformation("✅ [TEMPLATE] Content map built: {Count} placeholders filled", contentMap.Count);
+
+                // Build revisions list from filled sections
+                var filledSectionNames = contentMap
+                    .Where(kvp => !string.IsNullOrWhiteSpace(kvp.Value)
+                                  && !string.Equals(kvp.Key, "DocumentTitle", StringComparison.OrdinalIgnoreCase)
+                                  && !string.Equals(kvp.Key, "DocumentType", StringComparison.OrdinalIgnoreCase))
+                    .Select(kvp => kvp.Key)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var sectionSummary = filledSectionNames.Count > 0
+                    ? $"Generated new enriched document, filled sections: {string.Join(", ", filledSectionNames)}"
+                    : "Generated new enriched document";
+
+                // Use resolved author for revision history if available
+                var revisionAuthor = metadataOverrides.TryGetValue("Author", out var authorOverride) && !string.IsNullOrWhiteSpace(authorOverride)
+                    ? authorOverride
+                    : "SMEPilot";
+
+                var revisions = new List<(string version, string date, string author, string changes)>
+                {
+                    ("", DateTime.UtcNow.ToString("yyyy-MM-dd"), revisionAuthor, sectionSummary)
+                };
+
+                _logger.LogInformation("🔧 [TEMPLATE] Starting FillTemplate for {FileName} with {PlaceholderCount} placeholders",
+                    fileName, contentMap.Count);
+
+                _templateProcessor.FillTemplate(
+                    templatePath,
+                    tempOutputPath,
+                    contentMap,
+                    imagesBytes,
+                    revisions,
+                    fileExtension == ".docx" ? tempInputPath : null);
+
+                _logger.LogInformation("✅ [TEMPLATE] FillTemplate completed for {FileName}. Output: {OutputPath}",
+                    fileName, tempOutputPath);
+
+                enrichedBytes = await File.ReadAllBytesAsync(tempOutputPath);
+                enrichedName = Path.GetFileName(tempOutputPath);
                 
                 _logger.LogDebug("✅ [TEMPLATE] Formatted document created. Size: {Size} bytes", enrichedBytes?.Length ?? 0);
                 
@@ -2064,9 +2144,9 @@ namespace SMEPilot.FunctionApp.Functions
                 // Add classification if available (only for non-.docx files where docModel was created)
                 if (_documentEnricher != null && docModel != null)
                 {
-                    var classification = _documentEnricher.ClassifyDocument(docModel.Title, text);
-                    metadata["SMEPilot_Classification"] = classification;
-                    _logger.LogInformation("📂 [METADATA] Document classified as: {Classification}", classification);
+                    var classificationForMetadata = _documentEnricher.ClassifyDocument(docModel.Title, text);
+                    metadata["SMEPilot_Classification"] = classificationForMetadata;
+                    _logger.LogInformation("📂 [METADATA] Document classified as: {Classification}", classificationForMetadata);
                 }
                 
                 _logger.LogInformation("📋 [METADATA] Setting metadata values: SMEPilot_Enriched={Enriched}, SMEPilot_Status={Status}, SMEPilot_EnrichedFileUrl={Url}", 
@@ -2352,6 +2432,91 @@ namespace SMEPilot.FunctionApp.Functions
             }
 
             return contentMap;
+        }
+
+        /// <summary>
+        /// Best-effort extraction of project name from the document itself.
+        /// Order of preference:
+        /// 1) A line like "Project Name: XYZ" or "Project: XYZ" in the text
+        /// 2) Document title (if present and non-empty)
+        /// 3) null (caller will fall back to file name or metadata)
+        /// </summary>
+        private static string? TryExtractProjectNameFromContent(DocumentModel docModel, string? fullText)
+        {
+            var searchText = fullText;
+            if (string.IsNullOrWhiteSpace(searchText) && docModel?.Sections != null)
+            {
+                searchText = string.Join("\n\n", docModel.Sections.Select(s => $"{s.Heading}\n{s.Body}"));
+            }
+
+            if (string.IsNullOrWhiteSpace(searchText))
+                return null;
+
+            // (1) Look for patterns like "Project Name: Alerts" or "Project: Alerts"
+            var match = Regex.Match(searchText,
+                @"(?im)^\s*(project\s+name|project)\s*[:\-]\s*(.+)$");
+            if (match.Success && match.Groups.Count >= 3)
+            {
+                var value = match.Groups[2].Value.Trim();
+                // Stop at obvious field separators
+                value = Regex.Split(value, @"\s{2,}|##|\r|\n")[0].Trim(' ', '\t', ':', '-', '|');
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+
+            // (2) Fall back to document title if present
+            if (!string.IsNullOrWhiteSpace(docModel?.Title))
+            {
+                var title = docModel.Title.Trim();
+                if (!string.IsNullOrWhiteSpace(title))
+                {
+                    return title;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Best-effort extraction of an author name from the document content
+        /// using simple patterns like "Author: John Doe" or "Author(s): John Doe".
+        /// This is only used as a fallback when metadata-based author resolution fails.
+        /// </summary>
+        private static string? TryExtractAuthorFromContent(DocumentModel docModel, string? fullText)
+        {
+            var searchText = fullText;
+            if (string.IsNullOrWhiteSpace(searchText) && docModel?.Sections != null)
+            {
+                searchText = string.Join("\n\n", docModel.Sections.Select(s => $"{s.Heading}\n{s.Body}"));
+            }
+
+            if (string.IsNullOrWhiteSpace(searchText))
+                return null;
+
+            var patterns = new[]
+            {
+                // "Author: John Doe", "Author(s): John Doe", "Created by: John Doe"
+                @"\b(?:author|created by|written by|prepared by|documented by)\s*(?:name)?\s*\(?s\)?\s*:?\s*\*?\*?\s*\b([A-Z][A-Za-z\s\.\-]{2,80}?)(?=\s*(?:$|\r|\n|reviewer|approver|status|version|date|project|\d+\.))"
+            };
+
+            foreach (var pattern in patterns)
+            {
+                var match = Regex.Match(searchText, pattern, RegexOptions.IgnoreCase | RegexOptions.Multiline);
+                if (match.Success && match.Groups.Count >= 2)
+                {
+                    var author = match.Groups[1].Value.Trim(' ', '\t', '*', '[', ']', '(', ')');
+                    if (!string.IsNullOrWhiteSpace(author) &&
+                        author.Length >= 3 && author.Length <= 80 &&
+                        char.IsLetter(author[0]))
+                    {
+                        return author;
+                    }
+                }
+            }
+
+            return null;
         }
 
         /// <summary>

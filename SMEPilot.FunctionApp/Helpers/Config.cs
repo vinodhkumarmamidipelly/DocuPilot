@@ -38,9 +38,8 @@ namespace SMEPilot.FunctionApp.Helpers
         public string AzureVisionEndpoint => Environment.GetEnvironmentVariable("AzureVision_Endpoint");
         public string AzureVisionKey => Environment.GetEnvironmentVariable("AzureVision_Key");
         
-        // Spire license keys
+        // Spire PDF license key (DOCX no longer uses Spire.Doc)
         public string SpirePdfLicense => Environment.GetEnvironmentVariable("SpirePDFLicense");
-        public string SpireDocLicense => Environment.GetEnvironmentVariable("SpireDOCLicense");
         
         // Retry configuration - from SharePoint config or environment variable
         public int MaxRetryAttempts => GetSharePointConfigIntValue("MaxRetryAttempts") 

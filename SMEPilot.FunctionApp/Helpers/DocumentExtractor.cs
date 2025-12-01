@@ -119,6 +119,23 @@ namespace SMEPilot.FunctionApp.Helpers
                                 }
                             }
 
+                            // If this paragraph is part of a list, prefix with a simple Markdown-style bullet.
+                            // This makes bullets visible in downstream text/Markdown exports even though
+                            // Word stores numbering separately from the paragraph text.
+                            if (listLevel.HasValue && !string.IsNullOrWhiteSpace(text))
+                            {
+                                // Avoid double-prefixing if the text already looks like a bullet/numbered item.
+                                var trimmed = text.TrimStart();
+                                var looksLikeBullet = trimmed.StartsWith("- ") ||
+                                                      trimmed.StartsWith("• ") ||
+                                                      System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^\d+\.\s+");
+                                if (!looksLikeBullet)
+                                {
+                                    var indent = new string(' ', Math.Min(listLevel.Value, 4) * 2);
+                                    text = $"{indent}- {text}";
+                                }
+                            }
+
                             if (!string.IsNullOrWhiteSpace(text))
                             {
                                 paragraphs.Add(new ParagraphDto

@@ -220,20 +220,7 @@ try
         Log.Warning("⚠️ [CONFIG] Spire.PDF license not configured - PDF processing may be limited");
     }
     
-    // Initialize Spire.Doc license (if configured, for future use)
-    if (!string.IsNullOrWhiteSpace(cfg.SpireDocLicense))
-    {
-        try
-        {
-            // Note: Spire.Doc is not currently used, but license is set for future use
-            // Spire.Doc.License.LicenseProvider.SetLicenseKey(cfg.SpireDocLicense);
-            Log.Information("ℹ️ [CONFIG] Spire.Doc license configured (not currently used)");
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "⚠️ [CONFIG] Failed to initialize Spire.Doc license: {Error}", ex.Message);
-        }
-    }
+    // Spire.Doc is no longer used for branding in this app; DOCX processing now uses the OpenXML TemplateProcessor path.
     
     // Check if OCR is configured
     if (!string.IsNullOrWhiteSpace(cfg.AzureVisionEndpoint) && !string.IsNullOrWhiteSpace(cfg.AzureVisionKey))

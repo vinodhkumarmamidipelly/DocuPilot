@@ -825,6 +825,130 @@ namespace SMEPilot.FunctionApp.Helpers
             return null;
         }
 
+        /// <summary>
+        /// Resolve a list item's Author / Editor display name using person fields.
+        /// This is a higher-level helper used by the Function to populate document Author(s).
+        /// </summary>
+        public async Task<string?> ResolveListItemAuthorDisplayNameAsync(string driveId, string itemId)
+        {
+            if (!_hasCredentials)
+            {
+                return null;
+            }
+
+            try
+            {
+                _logger?.LogInformation("🔍 [AUTHOR] Resolving list item author for DriveId={DriveId}, ItemId={ItemId}", driveId, itemId);
+
+                // Discover driveItem + list context (re-using the GetListItemFieldsAsync pattern)
+                var driveItem = await _client!.Drives[driveId].Items[itemId].GetAsync(requestConfig =>
+                {
+                    requestConfig.QueryParameters.Expand = new[] { "listItem" };
+                });
+
+                if (driveItem == null || driveItem.ListItem == null)
+                {
+                    _logger?.LogWarning("⚠️ [AUTHOR] DriveItem or ListItem is null while resolving author for ItemId: {ItemId}", itemId);
+                    return null;
+                }
+
+                var siteId = driveItem.ParentReference?.SiteId;
+                if (siteId == null)
+                {
+                    _logger?.LogWarning("⚠️ [AUTHOR] SiteId is null while resolving author for ItemId: {ItemId}", itemId);
+                    return null;
+                }
+
+                var drive = await _client.Drives[driveId].GetAsync(requestConfig =>
+                {
+                    requestConfig.QueryParameters.Expand = new[] { "list" };
+                });
+
+                if (drive == null || drive.List == null)
+                {
+                    _logger?.LogWarning("⚠️ [AUTHOR] Drive or List is null while resolving author for DriveId: {DriveId}", driveId);
+                    return null;
+                }
+
+                var listId = drive.List.Id;
+                var listItemId = driveItem.ListItem.Id;
+
+                // Expand fields so we can inspect Author/Editor person fields
+                var listItem = await RetryPolicyHelper.ExecuteWithRetryAsync(
+                    _retryPolicy,
+                    async () => await _client.Sites[siteId].Lists[listId].Items[listItemId].GetAsync(requestConfig =>
+                    {
+                        requestConfig.QueryParameters.Expand = new[] { "fields" };
+                    }),
+                    $"ResolveListItemAuthorDisplayNameAsync for ItemId: {itemId}",
+                    _logger);
+
+                if (listItem?.Fields?.AdditionalData == null || listItem.Fields.AdditionalData.Count == 0)
+                {
+                    _logger?.LogWarning("⚠️ [AUTHOR] No fields.AdditionalData returned while resolving author for ItemId: {ItemId}", itemId);
+                    return null;
+                }
+
+                // Try to get a friendly Author/Editor string; different tenants may expose different shapes,
+                // so we probe a few common keys in order.
+                string? TryExtractPerson(IDictionary<string, object> data, string prefix)
+                {
+                    if (data.TryGetValue(prefix, out var raw) && raw != null)
+                    {
+                        var value = raw.ToString();
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            return value;
+                        }
+                    }
+
+                    if (data.TryGetValue(prefix + "LookupValue", out raw) && raw != null)
+                    {
+                        var value = raw.ToString();
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            return value;
+                        }
+                    }
+
+                    if (data.TryGetValue(prefix + "StringId", out raw) && raw != null)
+                    {
+                        var value = raw.ToString();
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            return value;
+                        }
+                    }
+
+                    return null;
+                }
+
+                var data = listItem.Fields.AdditionalData;
+
+                var authorName = TryExtractPerson(data, "Author");
+                if (!string.IsNullOrWhiteSpace(authorName))
+                {
+                    _logger?.LogInformation("👤 [AUTHOR] Resolved from list item fields (Author*): {Author}", authorName);
+                    return authorName;
+                }
+
+                var editorName = TryExtractPerson(data, "Editor");
+                if (!string.IsNullOrWhiteSpace(editorName))
+                {
+                    _logger?.LogInformation("👤 [AUTHOR] Resolved from list item fields (Editor*): {Author}", editorName);
+                    return editorName;
+                }
+
+                _logger?.LogWarning("⚠️ [AUTHOR] Could not resolve Author/Editor text fields for ItemId: {ItemId}", itemId);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "⚠️ [AUTHOR] Failed to resolve list item author for ItemId: {ItemId}. Error: {Error}", itemId, ex.Message);
+                return null;
+            }
+        }
+
         public async Task UpdateListItemFieldsAsync(string driveId, string itemId, Dictionary<string, object> fields)
         {
             if (!_hasCredentials)

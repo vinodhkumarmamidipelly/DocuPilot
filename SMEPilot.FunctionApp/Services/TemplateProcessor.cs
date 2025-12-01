@@ -648,7 +648,8 @@ namespace SMEPilot.FunctionApp.Services
             string outputPath,
             Dictionary<string, string> contentMap,
             List<byte[]>? screenshots = null,
-            List<(string version, string date, string author, string changes)>? revisions = null)
+            List<(string version, string date, string author, string changes)>? revisions = null,
+            string? sourceDocPath = null)
         {
             if (string.IsNullOrWhiteSpace(templatePath))
                 throw new ArgumentException("Template path cannot be null or empty", nameof(templatePath));
@@ -681,6 +682,18 @@ namespace SMEPilot.FunctionApp.Services
                     // Feedback1: Preserve numbering definitions from template
                     PreserveNumberingDefinitions(wordDoc, templatePath);
                     
+                    // Ensure a real Word TOC field exists at the TABLE_OF_CONTENTS placeholder,
+                    // and also inject a static heading list so something is visible in Markdown/online viewers.
+                    try
+                    {
+                        contentMap.TryGetValue("TableOfContents", out var staticToc);
+                        InsertTocFieldAtPlaceholder(wordDoc, "[TABLE_OF_CONTENTS]", staticToc);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "⚠️ [TEMPLATE] Failed to insert TOC at [TABLE_OF_CONTENTS]: {Error}", ex.Message);
+                    }
+
                     var mainPart = wordDoc.MainDocumentPart;
                     if (mainPart?.Document?.Body == null)
                         throw new InvalidOperationException("Template document is missing main document part or body");
@@ -729,6 +742,27 @@ namespace SMEPilot.FunctionApp.Services
                         }
                     }
                     
+                    // Special handling: insert RemainingContent as multi-paragraph block instead of a single huge run.
+                    // This preserves logical headings/paragraphs for the unmatched part of the raw document.
+                    if (contentMap.TryGetValue("RemainingContent", out var remainingContent) &&
+                        !string.IsNullOrWhiteSpace(remainingContent))
+                    {
+                        var remainingMarkers = new[]
+                        {
+                            "[Document Content Starts Here]",
+                            "[RemainingContent]",
+                            "[Remaining Content]",
+                            "[Remaining Document Content]"
+                        };
+
+                        foreach (var marker in remainingMarkers)
+                        {
+                            InsertComplexContent(wordDoc, marker, remainingContent);
+                        }
+
+                        filledTags.Add("RemainingContent");
+                    }
+
                     // Feedback1: Also handle plain text placeholders (e.g., {{Tag}}) that may be split across runs
                     // This is a fallback for templates that use plain text placeholders instead of SDT
                     // CRITICAL FIX: Process both paragraphs AND table cells (which contain paragraphs)
@@ -773,13 +807,16 @@ namespace SMEPilot.FunctionApp.Services
                                     {
                                         // CRITICAL: Limit replacement length to prevent excessive content
                                         // Use 500 chars for simple fields (author, reviewer, etc.), 2000 for content sections
+                                        // BUT: Never truncate RemainingContent – it must contain the full unmatched document body.
                                         var isContentField = keyLower.Contains("overview") || keyLower.Contains("summary") || 
                                                            keyLower.Contains("description") || keyLower.Contains("content") ||
                                                            keyLower.Contains("functional") || keyLower.Contains("technical") ||
                                                            keyLower.Contains("requirements") || keyLower.Contains("specifications");
                                         var maxLength = isContentField ? 2000 : 500;
                                         
-                                        if (replacement.Length > maxLength)
+                                        var isRemainingContent = key.Equals("RemainingContent", StringComparison.OrdinalIgnoreCase);
+                                        
+                                        if (!isRemainingContent && replacement.Length > maxLength)
                                         {
                                             // Try to cut at sentence boundary
                                             var cutPoint = replacement.LastIndexOf('.', maxLength);
@@ -822,7 +859,9 @@ namespace SMEPilot.FunctionApp.Services
                                                systemKeyLower.Contains("requirements") || systemKeyLower.Contains("specifications");
                             var maxLength = isContentField ? 2000 : 500;
                             
-                            if (replacement.Length > maxLength)
+                            var isRemainingContent = systemKey.Equals("RemainingContent", StringComparison.OrdinalIgnoreCase);
+                            
+                            if (!isRemainingContent && replacement.Length > maxLength)
                             {
                                 // Try to cut at sentence boundary
                                 var cutPoint = replacement.LastIndexOf('.', maxLength);
@@ -911,6 +950,10 @@ namespace SMEPilot.FunctionApp.Services
 
                     ExpandRevisionHistoryTable(body, mainPart, revisions);
                     AddPageBreaksBeforeH1(body);
+
+                    // Populate structured tables if present
+                    ExpandRevisionHistoryTable(body, mainPart, revisions);
+                    ExpandChangeLogTable(body, mainPart, contentMap);
                     mainPart.Document.Save();
                     _logger?.LogDebug("💾 [TEMPLATE] Document saved successfully");
                 }
@@ -1395,6 +1438,141 @@ namespace SMEPilot.FunctionApp.Services
             }
         }
 
+        /// <summary>
+        /// Populate a Change Log table inside a content control tagged 'ChangeLog'.
+        /// Expected columns (left to right) when available:
+        ///  - Change Number
+        ///  - Date
+        ///  - Sections
+        ///  - Description
+        ///  - Author
+        /// </summary>
+        private void ExpandChangeLogTable(
+            Body body,
+            MainDocumentPart mainPart,
+            Dictionary<string, string> contentMap)
+        {
+            try
+            {
+                // Find a content control specifically tagged as ChangeLog
+                var changeLogControl = body.Descendants<SdtElement>()
+                    .FirstOrDefault(s => s.SdtProperties?.GetFirstChild<Tag>()?.Val?.Value?.Equals("ChangeLog", StringComparison.OrdinalIgnoreCase) == true);
+
+                if (changeLogControl == null)
+                {
+                    _logger?.LogDebug("⏭️ [TEMPLATE] ChangeLog content control not found");
+                    return;
+                }
+
+                var table = changeLogControl.Descendants<Table>().FirstOrDefault();
+                if (table == null)
+                {
+                    _logger?.LogDebug("⏭️ [TEMPLATE] No table found in ChangeLog control");
+                    return;
+                }
+
+                var rows = table.Elements<TableRow>().ToList();
+                var headerRow = rows.FirstOrDefault();
+                if (headerRow != null)
+                {
+                    foreach (var row in rows.Skip(1))
+                    {
+                        row.Remove();
+                    }
+                }
+
+                // Derive a simple summary from the content map:
+                // which sections/placeholders were actually filled.
+                var filledSectionNames = contentMap
+                    .Where(kvp => !string.IsNullOrWhiteSpace(kvp.Value)
+                                  && !string.Equals(kvp.Key, "DocumentTitle", StringComparison.OrdinalIgnoreCase)
+                                  && !string.Equals(kvp.Key, "DocumentType", StringComparison.OrdinalIgnoreCase))
+                    .Select(kvp => kvp.Key)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (filledSectionNames.Count == 0)
+                {
+                    _logger?.LogDebug("⏭️ [TEMPLATE] No filled sections detected, skipping ChangeLog row");
+                    return;
+                }
+
+                var sectionsText = string.Join(", ", filledSectionNames);
+                var changeNumber = "1";
+                var date = DateTime.UtcNow.ToString("yyyy-MM-dd");
+                var description = $"Sections extracted and updated: {sectionsText}";
+
+                // Try to use resolved author from contentMap if available
+                var author = "SMEPilot";
+                if (contentMap.TryGetValue("Author", out var mappedAuthor) && !string.IsNullOrWhiteSpace(mappedAuthor))
+                {
+                    author = mappedAuthor;
+                }
+
+                // Determine how many columns we have to map into
+                var headerCellCount = headerRow?.Elements<TableCell>().Count() ?? 0;
+                if (headerCellCount == 0)
+                {
+                    // Fallback: assume at least 5 columns
+                    headerCellCount = 5;
+                }
+
+                // Build cells according to available columns
+                var cells = new List<TableCell>();
+
+                // 1) Change Number
+                cells.Add(new TableCell(new Paragraph(new Run(new Text(changeNumber)))
+                {
+                    ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                }));
+
+                // 2) Date
+                if (headerCellCount >= 2)
+                {
+                    cells.Add(new TableCell(new Paragraph(new Run(new Text(date)))
+                    {
+                        ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                    }));
+                }
+
+                // 3) Sections
+                if (headerCellCount >= 3)
+                {
+                    cells.Add(new TableCell(new Paragraph(new Run(new Text(sectionsText)))
+                    {
+                        ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                    }));
+                }
+
+                // 4) Description
+                if (headerCellCount >= 4)
+                {
+                    cells.Add(new TableCell(new Paragraph(new Run(new Text(description)))
+                    {
+                        ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                    }));
+                }
+
+                // 5) Author
+                if (headerCellCount >= 5)
+                {
+                    cells.Add(new TableCell(new Paragraph(new Run(new Text(author)))
+                    {
+                        ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                    }));
+                }
+
+                var changeRow = new TableRow(cells);
+                table.AppendChild(changeRow);
+
+                _logger?.LogDebug("✅ [TEMPLATE] Added ChangeLog row for sections: {Sections}", sectionsText);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "⚠️ [TEMPLATE] Error expanding change log table: {Error}", ex.Message);
+            }
+        }
+
         private void AddPageBreaksBeforeH1(Body body)
         {
             try
@@ -1487,7 +1665,8 @@ namespace SMEPilot.FunctionApp.Services
             string templatePath,
             DocumentModel docModel,
             string? documentType,
-            string? fullText = null)
+            string? fullText = null,
+            Dictionary<string, string>? metadataOverrides = null)
         {
             _logger?.LogInformation("📝 [TEMPLATE] Building content map using legacy mapper (no structured NEW-ARCH engine)");
 
@@ -1502,7 +1681,68 @@ namespace SMEPilot.FunctionApp.Services
             _logger?.LogInformation("📋 [TEMPLATE] Found {Count} unique placeholder tags in template for legacy mapping", availableTemplateTags.Count);
 
             // Use legacy content mapping based on DocumentModel sections and documentType
-            var contentMap = BuildContentMap(docModel, documentType, availableTemplateTags);
+            var contentMap = BuildContentMap(docModel, documentType, availableTemplateTags, fullText);
+
+            // TEMPLATE-DRIVEN MATCHING: For each explicit placeholder in the template, try to
+            // compute a dedicated content value using FindContentForPlaceholder and add it
+            // to the content map keyed by placeholder name. This improves fill rate when
+            // placeholder names don't exactly match our semantic keys.
+            foreach (var placeholder in templatePlaceholders)
+            {
+                if (string.IsNullOrWhiteSpace(placeholder.Name))
+                    continue;
+
+                var nameLower = placeholder.Name.ToLowerInvariant();
+
+                // Skip metadata-style placeholders here; they are handled via semantic
+                // mapping + metadataOverrides (to avoid accidentally filling them with
+                // long body text like project descriptions).
+                if (nameLower.Contains("author") ||
+                    nameLower.Contains("reviewer") ||
+                    nameLower.Contains("approver") ||
+                    nameLower.Contains("version") ||
+                    nameLower.Contains("date") ||
+                    nameLower.Contains("status") ||
+                    nameLower.Contains("classification") ||
+                    nameLower.Contains("document_id") ||
+                    nameLower.Contains("document id") ||
+                    nameLower.Contains("docid"))
+                {
+                    continue;
+                }
+
+                // Skip if we already have a value for this key (from semantic mapping)
+                if (contentMap.ContainsKey(placeholder.Name))
+                    continue;
+
+                try
+                {
+                    var value = FindContentForPlaceholder(placeholder, docModel, documentType, fullText);
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        contentMap[placeholder.Name] = value;
+                        _logger?.LogDebug("✅ [TEMPLATE-DRIVEN] Mapped placeholder '{Name}' directly from document content ({Length} chars)",
+                            placeholder.Name, value.Length);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "⚠️ [TEMPLATE-DRIVEN] Failed to map placeholder '{Name}': {Error}", placeholder.Name, ex.Message);
+                }
+            }
+
+            // Apply any metadata overrides coming from caller (e.g., SharePoint list item fields)
+            if (metadataOverrides != null && metadataOverrides.Count > 0)
+            {
+                foreach (var kvp in metadataOverrides)
+                {
+                    if (!string.IsNullOrWhiteSpace(kvp.Value))
+                    {
+                        contentMap[kvp.Key] = kvp.Value;
+                        _logger?.LogInformation("🔧 [MAPPER] Applied metadata override: {Key} = '{Value}'", kvp.Key, kvp.Value);
+                    }
+                }
+            }
 
             var filledCount = contentMap.Count(kvp => !string.IsNullOrWhiteSpace(kvp.Value));
             var emptyCount = contentMap.Count(kvp => string.IsNullOrWhiteSpace(kvp.Value));
@@ -1519,9 +1759,11 @@ namespace SMEPilot.FunctionApp.Services
         public Dictionary<string, string> BuildContentMap(
             DocumentModel docModel, 
             string? documentType,
-            List<string>? availableTemplateTags = null)
+            List<string>? availableTemplateTags = null,
+            string? fullText = null)
         {
             var contentMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            // Tracks which sections have been explicitly mapped to a semantic tag
             var usedSections = new HashSet<int>();
 
             if (!string.IsNullOrWhiteSpace(docModel.Title))
@@ -1529,6 +1771,96 @@ namespace SMEPilot.FunctionApp.Services
 
             if (!string.IsNullOrWhiteSpace(documentType))
                 contentMap["DocumentType"] = documentType;
+
+            // Basic metadata keys – only compute if the template actually exposes matching tags.
+            // Project/title-like placeholders are handled via DocumentTitle + tag mapping.
+
+            // Author
+            if (availableTemplateTags == null || availableTemplateTags.Any(t =>
+                    t.Contains("Author", StringComparison.OrdinalIgnoreCase)))
+            {
+                var author = ExtractAuthor(docModel, fullText);
+                if (!string.IsNullOrWhiteSpace(author))
+                {
+                    contentMap["Author"] = author;
+                }
+            }
+
+            // Version
+            if (availableTemplateTags == null || availableTemplateTags.Any(t =>
+                    t.Contains("Version", StringComparison.OrdinalIgnoreCase)))
+            {
+                var version = ExtractVersion(docModel, fullText) ?? "1.0";
+                contentMap["Version"] = version;
+            }
+
+            // Date
+            if (availableTemplateTags == null || availableTemplateTags.Any(t =>
+                    t.Contains("Date", StringComparison.OrdinalIgnoreCase)))
+            {
+                var date = ExtractDate(docModel, fullText) ?? DateTime.UtcNow.ToString("yyyy-MM-dd");
+                contentMap["Date"] = date;
+            }
+
+            // Status
+            if (availableTemplateTags == null || availableTemplateTags.Any(t =>
+                    t.Contains("Status", StringComparison.OrdinalIgnoreCase)))
+            {
+                var status = ExtractStatus(docModel, fullText);
+                if (!string.IsNullOrWhiteSpace(status))
+                {
+                    contentMap["Status"] = status;
+                }
+            }
+
+            // Classification
+            if (availableTemplateTags == null || availableTemplateTags.Any(t =>
+                    t.Contains("Classification", StringComparison.OrdinalIgnoreCase)))
+            {
+                var classificationValue = documentType ?? "Documentation";
+                contentMap["Classification"] = classificationValue;
+            }
+
+            // DocumentId (short stable-looking ID for header tables)
+            if (availableTemplateTags == null || availableTemplateTags.Any(t =>
+                    t.Contains("DOCUMENT_ID", StringComparison.OrdinalIgnoreCase) ||
+                    t.Contains("DocumentId", StringComparison.OrdinalIgnoreCase) ||
+                    t.Contains("DocId", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (!contentMap.ContainsKey("DocumentId"))
+                {
+                    var docId = GenerateDocumentId();
+                    contentMap["DocumentId"] = docId;
+                }
+            }
+
+            // Static Table of Contents text (list of headings) for templates exposing TOC placeholder.
+            if (availableTemplateTags == null || availableTemplateTags.Any(t =>
+                    t.Contains("TABLE_OF_CONTENTS", StringComparison.OrdinalIgnoreCase) ||
+                    t.Contains("Table of Contents", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(t, "TOC", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (docModel.Sections != null && docModel.Sections.Count > 0)
+                {
+                    var tocBuilder = new StringBuilder();
+                    int index = 1;
+                    foreach (var section in docModel.Sections)
+                    {
+                        var heading = section.Heading ?? "";
+                        if (string.IsNullOrWhiteSpace(heading))
+                            continue;
+
+                        tocBuilder.AppendLine($"{index}. {heading.Trim()}");
+                        index++;
+                    }
+
+                    var tocText = tocBuilder.ToString().Trim();
+                    if (!string.IsNullOrWhiteSpace(tocText))
+                    {
+                        contentMap["TableOfContents"] = tocText;
+                    }
+                }
+            }
 
             if (docModel.Sections == null || docModel.Sections.Count == 0)
             {
@@ -1627,7 +1959,7 @@ namespace SMEPilot.FunctionApp.Services
                 var section = docModel.Sections[i];
                 var body = section.Body ?? "";
                 if (string.IsNullOrWhiteSpace(body)) continue;
-
+                
                 var bodyLower = body.ToLowerInvariant();
                 string? targetTag = null;
 
@@ -1650,6 +1982,98 @@ namespace SMEPilot.FunctionApp.Services
                         usedSections.Add(i);
                         _logger?.LogDebug("✅ [MAPPER] Mapped section {Index} → {Tag} (keyword-based)", i, targetTag);
                     }
+                }
+            }
+
+            // Map section-level semantics for common high-level areas when the template
+            // exposes corresponding placeholders. This does NOT force any ordering –
+            // the actual order is still controlled entirely by the template. We only
+            // compute stable semantic keys like ProjectOverview / UserStories so that
+            // [PROJECT_OVERVIEW], [USER_STORIES], etc. can be filled wherever they
+            // appear in the template.
+            if (availableTemplateTags == null ||
+                availableTemplateTags.Any(t => t.Contains("PROJECT_OVERVIEW", StringComparison.OrdinalIgnoreCase) ||
+                                               t.Contains("Project Overview", StringComparison.OrdinalIgnoreCase)))
+            {
+                for (int i = 0; i < docModel.Sections.Count; i++)
+                {
+                    if (usedSections.Contains(i)) continue;
+                    var headingLower = (docModel.Sections[i].Heading ?? "").ToLowerInvariant();
+                    if (headingLower.Contains("project overview"))
+                    {
+                        contentMap["ProjectOverview"] = docModel.Sections[i].Body ?? string.Empty;
+                        usedSections.Add(i);
+                        _logger?.LogDebug("✅ [MAPPER] Mapped section {Index} ({Heading}) → ProjectOverview", i, docModel.Sections[i].Heading);
+                        break;
+                    }
+                }
+            }
+
+            if (availableTemplateTags == null ||
+                availableTemplateTags.Any(t => t.Contains("USER_STORIES", StringComparison.OrdinalIgnoreCase) ||
+                                               t.Contains("User Stories", StringComparison.OrdinalIgnoreCase)))
+            {
+                for (int i = 0; i < docModel.Sections.Count; i++)
+                {
+                    if (usedSections.Contains(i)) continue;
+                    var headingLower = (docModel.Sections[i].Heading ?? "").ToLowerInvariant();
+                    if (headingLower.Contains("user stories"))
+                    {
+                        contentMap["UserStories"] = docModel.Sections[i].Body ?? string.Empty;
+                        usedSections.Add(i);
+                        _logger?.LogDebug("✅ [MAPPER] Mapped section {Index} ({Heading}) → UserStories", i, docModel.Sections[i].Heading);
+                        break;
+                    }
+                }
+            }
+
+            // NEW: Map all remaining, unmapped sections into a single catch-all bucket.
+            // This allows templates to expose a [RemainingContent] (or a marker like
+            // [Document Content Starts Here]) which will receive everything from the raw
+            // document that was not explicitly mapped to a semantic tag like
+            // Overview/Functional/Technical/References.
+            //
+            // NOTE: This still works at the text level (not OpenXML block moves), but it ensures
+            // that no textual content is silently dropped by the mapper.
+            bool templateWantsRemaining =
+                availableTemplateTags == null ||
+                availableTemplateTags.Any(t =>
+                    t.Contains("RemainingContent", StringComparison.OrdinalIgnoreCase) ||
+                    t.Contains("Remaining Document Content", StringComparison.OrdinalIgnoreCase) ||
+                    t.Contains("Document Content Starts Here", StringComparison.OrdinalIgnoreCase));
+
+            if (templateWantsRemaining)
+            {
+                var remainingBuilder = new StringBuilder();
+
+                for (int i = 0; i < docModel.Sections.Count; i++)
+                {
+                    if (usedSections.Contains(i)) continue;
+
+                    var section = docModel.Sections[i];
+                    var heading = section.Heading ?? "";
+                    var body = section.Body ?? "";
+
+                    if (string.IsNullOrWhiteSpace(body)) continue;
+
+                    if (!string.IsNullOrWhiteSpace(heading))
+                    {
+                        // Preserve a simple heading marker so the remaining content
+                        // stays readable inside the catch-all region
+                        remainingBuilder.AppendLine(heading);
+                        remainingBuilder.AppendLine();
+                    }
+
+                    remainingBuilder.AppendLine(body);
+                    remainingBuilder.AppendLine();
+                }
+
+                var remainingText = remainingBuilder.ToString().Trim();
+                if (!string.IsNullOrWhiteSpace(remainingText))
+                {
+                    contentMap["RemainingContent"] = remainingText;
+                    _logger?.LogInformation("📦 [MAPPER] Mapped remaining {Count} unmapped sections to RemainingContent", 
+                        docModel.Sections.Count - usedSections.Count);
                 }
             }
 
@@ -3482,7 +3906,7 @@ namespace SMEPilot.FunctionApp.Services
                     case "documenttitle":
                     case "projectname":
                     case "project name":
-                        variations.AddRange(new[] { "PROJECT_NAME", "ProjectName", "Title", "DocumentTitle", "Project Title", "Project_Name" });
+                        variations.AddRange(new[] { "PROJECT_NAME", "ProjectName", "Title", "DocumentTitle", "Project Title", "Project_Name", "Document_Name" });
                         break;
                     case "documenttype":
                     case "document type":
@@ -3532,6 +3956,36 @@ namespace SMEPilot.FunctionApp.Services
                     case "references":
                         variations.AddRange(new[] { "References", "RelatedDocuments", "Links", "RELATED_DOCUMENTS", "1.4 References" });
                         break;
+                    case "classification":
+                        variations.AddRange(new[] { "CLASSIFICATION", "Classification", "DocumentClassification", "Document_Classification" });
+                        break;
+                    case "projectoverview":
+                    case "project_overview":
+                        variations.AddRange(new[] { "PROJECT_OVERVIEW", "ProjectOverview", "Project Overview", "Project_Overview" });
+                        break;
+                    case "userstories":
+                    case "user_stories":
+                        variations.AddRange(new[] { "USER_STORIES", "UserStories", "User Stories", "User_Stories" });
+                        break;
+                    case "documentid":
+                        variations.AddRange(new[] { "DOCUMENT_ID", "DocumentId", "DocumentID", "DocId" });
+                        break;
+                    case "tableofcontents":
+                    case "table_of_contents":
+                    case "toc":
+                        variations.AddRange(new[] { "TABLE_OF_CONTENTS", "TableOfContents", "Table of Contents", "TOC" });
+                        break;
+                    case "remainingcontent":
+                        variations.AddRange(new[]
+                        {
+                            "RemainingContent",
+                            "Remaining Content",
+                            "Remaining_Document_Content",
+                            "Remaining Document Content",
+                            "Document Content Starts Here",
+                            "Document_Content_Starts_Here"
+                        });
+                        break;
                 }
                 
                 mapping[key] = variations.Distinct().ToList();
@@ -3539,6 +3993,15 @@ namespace SMEPilot.FunctionApp.Services
             
             _logger?.LogDebug("📋 [TEMPLATE] Built tag mapping for {Count} keys", mapping.Count);
             return mapping;
+        }
+
+        /// <summary>
+        /// Generate a short document identifier suitable for header tables
+        /// </summary>
+        private string GenerateDocumentId()
+        {
+            // 16-character uppercase hex, stable-looking but generated per run
+            return Guid.NewGuid().ToString("N").ToUpperInvariant().Substring(0, 16);
         }
 
         private string ExtractAfterMarker(string text, string[] markers)
@@ -3588,7 +4051,26 @@ namespace SMEPilot.FunctionApp.Services
                     var parts = s.Split(new[] { "\r\n\r\n", "\n\n" }, StringSplitOptions.None);
                     foreach (var ptext in parts)
                     {
-                        var newPara = new Paragraph(new Run(new Text(ptext) { Space = SpaceProcessingModeValues.Preserve }));
+                        var trimmed = ptext ?? string.Empty;
+                        var run = new Run(new Text(trimmed) { Space = SpaceProcessingModeValues.Preserve });
+                        var newPara = new Paragraph(run);
+
+                        // Try to apply heading styles for heading-like lines so TOC picks them up
+                        // and the structure of the remaining content is preserved.
+                        if (!string.IsNullOrWhiteSpace(trimmed))
+                        {
+                            var level = GetHeadingLevel(string.Empty, trimmed);
+                            if (level > 0)
+                            {
+                                // Clamp level to 1-3 to match common TOC ranges
+                                var styleName = level <= 1 ? "Heading1" :
+                                                level == 2 ? "Heading2" : "Heading3";
+
+                                newPara.ParagraphProperties ??= new ParagraphProperties();
+                                newPara.ParagraphProperties.ParagraphStyleId = new ParagraphStyleId { Val = styleName };
+                            }
+                        }
+
                         body.InsertAt(newPara, insertionIndex++);
                     }
                 }
@@ -3622,6 +4104,124 @@ namespace SMEPilot.FunctionApp.Services
                     var newPara = new Paragraph(new Run(new Text(content?.ToString() ?? "") { Space = SpaceProcessingModeValues.Preserve }));
                     body.InsertAt(newPara, insertionIndex++);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Insert the raw body of a source DOCX (with original styles, lists, images)
+        /// at the paragraph containing the given marker token.
+        /// </summary>
+        private void InsertRawBodyAtMarker(WordprocessingDocument outputDoc, string sourceDocPath, string markerToken)
+        {
+            if (string.IsNullOrWhiteSpace(sourceDocPath) || string.IsNullOrWhiteSpace(markerToken))
+                return;
+
+            if (outputDoc.MainDocumentPart?.Document?.Body == null)
+                return;
+
+            var body = outputDoc.MainDocumentPart.Document.Body;
+            var paragraphs = body.Elements<Paragraph>().ToList();
+
+            for (int i = 0; i < paragraphs.Count; i++)
+            {
+                var para = paragraphs[i];
+                var full = string.Concat(para.Descendants<Text>().Select(t => t.Text ?? string.Empty));
+                if (string.IsNullOrEmpty(full) || !full.Contains(markerToken, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var insertionIndex = body.ChildElements.ToList().IndexOf(para);
+                para.Remove();
+
+                try
+                {
+                    using var srcDoc = WordprocessingDocument.Open(sourceDocPath, false);
+                    var srcBody = srcDoc.MainDocumentPart?.Document?.Body;
+                    if (srcBody == null)
+                        return;
+
+                    // Clone each top-level element from the source body into the output body
+                    foreach (var elem in srcBody.ChildElements)
+                    {
+                        var cloned = elem.CloneNode(true);
+                        body.InsertAt(cloned, insertionIndex++);
+                    }
+
+                    _logger?.LogInformation("✅ [RAW-CONTENT] Inserted raw DOCX body from source at marker '{Marker}'", markerToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "⚠️ [RAW-CONTENT] Failed to insert raw body from source DOCX: {Error}", ex.Message);
+                }
+
+                break;
+            }
+        }
+
+        /// <summary>
+        /// Insert a real Word TOC field at the given placeholder token.
+        /// This ensures the document has a dynamic TOC that Word / Word Online can render with page numbers.
+        /// </summary>
+        private void InsertTocFieldAtPlaceholder(WordprocessingDocument doc, string placeholderToken, string? staticToc = null)
+        {
+            if (doc?.MainDocumentPart?.Document?.Body == null || string.IsNullOrWhiteSpace(placeholderToken))
+                return;
+
+            var body = doc.MainDocumentPart.Document.Body;
+            var paragraphs = body.Elements<Paragraph>().ToList();
+
+            for (int i = 0; i < paragraphs.Count; i++)
+            {
+                var para = paragraphs[i];
+                var full = string.Concat(para.Descendants<Text>().Select(t => t.Text));
+                if (string.IsNullOrEmpty(full) || !full.Contains(placeholderToken, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // Remove the placeholder paragraph and insert TOC content at its position
+                var insertionIndex = body.ChildElements.ToList().IndexOf(para);
+                para.Remove();
+
+                // Optional heading above TOC if template does not already provide one
+                var headingPara = new Paragraph(new Run(new Text("Table of Contents")))
+                {
+                    ParagraphProperties = new ParagraphProperties(
+                        new ParagraphStyleId() { Val = "TOCHeading" },
+                        new SpacingBetweenLines() { After = "240" })
+                };
+                body.InsertAt(headingPara, insertionIndex++);
+
+                // Optional: insert a static TOC list (headings only) so that Markdown and
+                // simple viewers show something even if the Word TOC field isn't updated.
+                if (!string.IsNullOrWhiteSpace(staticToc))
+                {
+                    var lines = staticToc.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var line in lines)
+                    {
+                        var run = new Run(new Text(line) { Space = SpaceProcessingModeValues.Preserve });
+                        var tocListPara = new Paragraph(run)
+                        {
+                            ParagraphProperties = new ParagraphProperties(
+                                new SpacingBetweenLines() { After = "40" })
+                        };
+                        body.InsertAt(tocListPara, insertionIndex++);
+                    }
+                }
+
+                // TOC field paragraph (same switches as BuildDocx: \o "1-3" \h \z \u)
+                var tocParagraph = new Paragraph();
+                var tocRun = new Run();
+
+                tocRun.Append(new FieldChar() { FieldCharType = FieldCharValues.Begin });
+                tocRun.Append(new FieldCode(" TOC \\o \"1-3\" \\h \\z \\u ") { Space = SpaceProcessingModeValues.Preserve });
+                tocRun.Append(new FieldChar() { FieldCharType = FieldCharValues.Separate });
+                tocRun.Append(new FieldChar() { FieldCharType = FieldCharValues.End });
+
+                tocParagraph.Append(tocRun);
+                tocParagraph.ParagraphProperties = new ParagraphProperties(
+                    new SpacingBetweenLines() { After = "240" });
+
+                body.InsertAt(tocParagraph, insertionIndex);
+
+                break;
             }
         }
 
