@@ -28,10 +28,15 @@ namespace SMEPilot.FunctionApp.Services
     public class TemplateProcessor
     {
         private readonly ILogger<TemplateProcessor>? _logger;
+        private DocumentExtractor? _extractor;
 
         public TemplateProcessor(ILogger<TemplateProcessor>? logger = null)
         {
             _logger = logger;
+            // Create DocumentExtractor instance for element extraction
+            // Note: DocumentExtractor accepts ILogger<DocumentExtractor>?, but we only have ILogger<TemplateProcessor>?
+            // Pass null for now - DocumentExtractor will work without logger
+            _extractor = new DocumentExtractor(null);
         }
 
         #region Region 1: TemplateBuilder Methods (Build from scratch)
@@ -676,6 +681,7 @@ namespace SMEPilot.FunctionApp.Services
 
                 var filledTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var unfilledTags = new List<string>();
+                var templatePlaceholders = new List<string>(); // Track template placeholder order
 
                 using (var wordDoc = WordprocessingDocument.Open(outputPath, true))
                 {
@@ -701,34 +707,161 @@ namespace SMEPilot.FunctionApp.Services
                     var body = mainPart.Document.Body;
 
                     var sdtList = body.Descendants<SdtElement>().ToList();
-                    _logger?.LogDebug("🔍 [TEMPLATE] Found {Count} SDT elements in template", sdtList.Count);
+                    _logger?.LogInformation("🔍 [TEMPLATE] Found {Count} SDT elements in template", sdtList.Count);
+                    
+                    // Log all template placeholders in order
+                    templatePlaceholders = sdtList
+                        .Select(sdt => sdt.SdtProperties?.GetFirstChild<Tag>()?.Val?.Value)
+                        .Where(tag => !string.IsNullOrEmpty(tag))
+                        .ToList();
+                    _logger?.LogInformation("📋 [TEMPLATE] Template placeholder order: {Placeholders}", 
+                        string.Join(" → ", templatePlaceholders));
 
+                    // Track which sections were extracted to avoid duplication
+                    // This tracks both the tag names and the actual section headings that were extracted
+                    var extractedSectionHeadingsFromSource = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    int placeholderIndex = 0;
                     foreach (var sdt in sdtList)
                     {
                         var tag = sdt.SdtProperties?.GetFirstChild<Tag>()?.Val?.Value;
                         if (string.IsNullOrEmpty(tag))
                         {
-                            _logger?.LogDebug("⏭️ [TEMPLATE] SDT element has no tag, skipping");
+                            _logger?.LogDebug("⏭️ [TEMPLATE] SDT element #{Index} has no tag, skipping", placeholderIndex);
                             continue;
                         }
 
+                        placeholderIndex++;
+                        _logger?.LogInformation("🔄 [TEMPLATE] Processing placeholder #{Index}: '{Tag}' (Template order)", placeholderIndex, tag);
+                        _logger?.LogDebug("📝 [TEMPLATE] Available content map keys: {Keys}", 
+                            string.Join(", ", contentMap.Keys.OrderBy(k => k)));
+
+                        // Try exact match first
                         var matchingKey = contentMap.Keys.FirstOrDefault(k => 
                             string.Equals(k, tag, StringComparison.OrdinalIgnoreCase));
+                        
+                        if (matchingKey != null)
+                        {
+                            _logger?.LogInformation("✅ [TEMPLATE] Exact match found: '{Tag}' → '{Key}'", tag, matchingKey);
+                        }
+                        
+                        // If no exact match, try normalized matching (handle underscores, spaces, brackets)
+                        if (matchingKey == null)
+                        {
+                            var normalizedTag = tag
+                                .Replace("[", "")
+                                .Replace("]", "")
+                                .Replace("_", "")
+                                .Replace(" ", "")
+                                .Trim();
+                            
+                            _logger?.LogDebug("🔍 [TEMPLATE] Trying normalized matching for '{Tag}' (normalized: '{Normalized}')", tag, normalizedTag);
+                            
+                            matchingKey = contentMap.Keys.FirstOrDefault(k =>
+                            {
+                                var normalizedKey = k
+                                    .Replace("_", "")
+                                    .Replace(" ", "")
+                                    .Trim();
+                                return string.Equals(normalizedKey, normalizedTag, StringComparison.OrdinalIgnoreCase);
+                            });
+                            
+                            if (matchingKey != null)
+                            {
+                                _logger?.LogInformation("✅ [TEMPLATE] Normalized match found: '{Tag}' → '{Key}'", tag, matchingKey);
+                            }
+                            else
+                            {
+                                _logger?.LogWarning("⚠️ [TEMPLATE] No match found for placeholder '{Tag}' (normalized: '{Normalized}')", tag, normalizedTag);
+                            }
+                        }
 
                         if (matchingKey != null)
                         {
                             string newText = contentMap[matchingKey] ?? string.Empty;
                             if (!string.IsNullOrWhiteSpace(newText))
                             {
-                                if (ReplaceSdtContent(sdt, newText))
+                                // NEW: Try element-based insertion if source document is available
+                                // This preserves formatting (bold, colors, tables, images, lists)
+                                bool filled = false;
+                                
+                                if (!string.IsNullOrWhiteSpace(sourceDocPath) && File.Exists(sourceDocPath))
                                 {
-                                    filledTags.Add(tag);
-                                    _logger?.LogInformation("✅ [TEMPLATE] Filled content control: {Tag} ({Length} chars)", tag, newText.Length);
+                                    try
+                                    {
+                                        // Try to extract section as OpenXML elements
+                                        // Normalize the section heading for matching (remove brackets, underscores, etc.)
+                                        var sectionHeading = matchingKey
+                                            .Replace("[", "")
+                                            .Replace("]", "")
+                                            .Replace("_", " ")
+                                            .Trim();
+                                        
+                                        // Check if this looks like a section name (not metadata)
+                                        var isSectionName = !sectionHeading.Contains("Author", StringComparison.OrdinalIgnoreCase) &&
+                                                          !sectionHeading.Contains("Date", StringComparison.OrdinalIgnoreCase) &&
+                                                          !sectionHeading.Contains("Version", StringComparison.OrdinalIgnoreCase) &&
+                                                          !sectionHeading.Contains("Status", StringComparison.OrdinalIgnoreCase) &&
+                                                          !sectionHeading.Contains("DocumentId", StringComparison.OrdinalIgnoreCase) &&
+                                                          !sectionHeading.Contains("Document Id", StringComparison.OrdinalIgnoreCase) &&
+                                                          !sectionHeading.Contains("TableOfContents", StringComparison.OrdinalIgnoreCase) &&
+                                                          !sectionHeading.Contains("RemainingContent", StringComparison.OrdinalIgnoreCase);
+                                        
+                                        if (isSectionName && _extractor != null && sectionHeading.Length > 2)
+                                        {
+                                            try
+                                            {
+                                                // Try to extract as elements - the extractor will handle numbered headings
+                                                var elements = _extractor.ExtractSectionAsElements(sourceDocPath, sectionHeading);
+                                                
+                                                if (elements != null && elements.Count > 0)
+                                                {
+                                                    filled = ReplaceSdtContentWithElements(sdt, elements, wordDoc, sourceDocPath);
+                                                    if (filled)
+                                                    {
+                                                        filledTags.Add(tag);
+                                                        // Track the actual section heading that was extracted from source document
+                                                        extractedSectionHeadingsFromSource.Add(sectionHeading);
+                                                        _logger?.LogInformation("✅ [TEMPLATE] Filled content control with elements (formatting preserved): {Tag} -> {Heading} ({Count} elements)", 
+                                                            tag, sectionHeading, elements.Count);
+                                                    }
+                                                    else
+                                                    {
+                                                        _logger?.LogWarning("⚠️ [TEMPLATE] Element extraction succeeded but insertion failed for {Tag}", tag);
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    _logger?.LogDebug("⏭️ [TEMPLATE] No elements extracted for section '{Heading}' (tag: {Tag}) - will use text fallback", 
+                                                        sectionHeading, tag);
+                                                }
+                                            }
+                                            catch (Exception extractEx)
+                                            {
+                                                _logger?.LogWarning(extractEx, "⚠️ [TEMPLATE] Element extraction failed for {Tag} ({Heading}): {Error}", 
+                                                    tag, sectionHeading, extractEx.Message);
+                                            }
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        _logger?.LogWarning(ex, "⚠️ [TEMPLATE] Failed element-based insertion for {Tag}, falling back to text: {Error}", tag, ex.Message);
+                                    }
                                 }
-                                else
+                                
+                                // Fallback to text-based insertion if element-based failed
+                                if (!filled)
                                 {
-                                    _logger?.LogWarning("⚠️ [TEMPLATE] Failed to fill content control: {Tag}", tag);
-                                    unfilledTags.Add(tag);
+                                    if (ReplaceSdtContent(sdt, newText))
+                                    {
+                                        filledTags.Add(tag);
+                                        _logger?.LogInformation("✅ [TEMPLATE] Filled content control: {Tag} ({Length} chars)", tag, newText.Length);
+                                    }
+                                    else
+                                    {
+                                        _logger?.LogWarning("⚠️ [TEMPLATE] Failed to fill content control: {Tag}", tag);
+                                        unfilledTags.Add(tag);
+                                    }
                                 }
                             }
                             else
@@ -742,11 +875,41 @@ namespace SMEPilot.FunctionApp.Services
                         }
                     }
                     
-                    // Special handling: insert RemainingContent as multi-paragraph block instead of a single huge run.
-                    // This preserves logical headings/paragraphs for the unmatched part of the raw document.
+                    // Track which sections were extracted to avoid duplication
+                    // This tracks both the tag names and the actual section headings that were extracted
+                    var extractedSectionHeadings = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    
+                    // First, collect from filled tags (normalized tag names)
+                    foreach (var tag in filledTags)
+                    {
+                        // Normalize tag to section heading format
+                        var normalized = tag
+                            .Replace("[", "")
+                            .Replace("]", "")
+                            .Replace("_", " ")
+                            .Trim();
+                        if (!string.IsNullOrWhiteSpace(normalized) && normalized.Length > 2)
+                        {
+                            extractedSectionHeadings.Add(normalized);
+                        }
+                    }
+                    
+                    // Merge extracted section headings from source document into the main tracking set
+                    foreach (var heading in extractedSectionHeadingsFromSource)
+                    {
+                        extractedSectionHeadings.Add(heading);
+                    }
+                    
+                    _logger?.LogInformation("📊 [TEMPLATE] Filled {Count} placeholders: {Tags}", 
+                        filledTags.Count, string.Join(", ", filledTags));
+                    _logger?.LogInformation("📊 [TEMPLATE] Extracted section headings tracked: {Headings}", 
+                        string.Join(", ", extractedSectionHeadings.OrderBy(h => h)));
+                    
                     if (contentMap.TryGetValue("RemainingContent", out var remainingContent) &&
                         !string.IsNullOrWhiteSpace(remainingContent))
                     {
+                        _logger?.LogInformation("📦 [TEMPLATE] RemainingContent found in content map ({Length} chars), checking for placeholder in template", remainingContent.Length);
+                        
                         var remainingMarkers = new[]
                         {
                             "[Document Content Starts Here]",
@@ -755,14 +918,61 @@ namespace SMEPilot.FunctionApp.Services
                             "[Remaining Document Content]"
                         };
 
-                        foreach (var marker in remainingMarkers)
+                        // Check if template has any remaining content placeholder
+                        bool templateHasRemainingPlaceholder = templatePlaceholders.Any(tp => 
+                            remainingMarkers.Any(m => tp.Contains(m, StringComparison.OrdinalIgnoreCase)));
+                        
+                        if (!templateHasRemainingPlaceholder)
                         {
-                            InsertComplexContent(wordDoc, marker, remainingContent);
+                            _logger?.LogInformation("⏭️ [TEMPLATE] Template does not have RemainingContent placeholder - skipping remaining content insertion");
+                        }
+                        else
+                        {
+                            _logger?.LogInformation("✅ [TEMPLATE] Template has RemainingContent placeholder - will insert remaining sections");
+                        }
+
+                        bool inserted = false;
+                        
+                        // Try to insert remaining sections only (not entire body) with styles preserved
+                        if (!string.IsNullOrWhiteSpace(sourceDocPath) && File.Exists(sourceDocPath))
+                        {
+                            foreach (var marker in remainingMarkers)
+                            {
+                                try
+                                {
+                                    // Insert only remaining sections, excluding already-extracted ones
+                                    InsertRemainingSectionsAtMarker(wordDoc, sourceDocPath, marker, extractedSectionHeadings);
+                                    inserted = true;
+                                    _logger?.LogInformation("✅ [RAW-CONTENT] Inserted remaining sections (excluding {ExcludedCount} extracted sections) with styles preserved at marker '{Marker}'", 
+                                        extractedSectionHeadings.Count, marker);
+                                    break; // Only insert once
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger?.LogWarning(ex, "⚠️ [RAW-CONTENT] Failed to insert remaining sections at marker '{Marker}', will try text fallback: {Error}", marker, ex.Message);
+                                }
+                            }
+                        }
+                        
+                        // Fallback to text-based insertion if element-based insertion failed or source doc not available
+                        if (!inserted)
+                        {
+                            foreach (var marker in remainingMarkers)
+                            {
+                                InsertComplexContent(wordDoc, marker, remainingContent);
+                            }
+                            _logger?.LogInformation("✅ [RAW-CONTENT] Inserted remaining content as text (source doc not available or insertion failed)");
                         }
 
                         filledTags.Add("RemainingContent");
                     }
+                    else
+                    {
+                        _logger?.LogDebug("⏭️ [TEMPLATE] No RemainingContent in content map or content is empty");
+                    }
 
+                    // CRITICAL: Process plain text placeholders BEFORE automatic append
+                    // This ensures template order is respected and sections are tracked correctly
                     // Feedback1: Also handle plain text placeholders (e.g., {{Tag}}) that may be split across runs
                     // This is a fallback for templates that use plain text placeholders instead of SDT
                     // CRITICAL FIX: Process both paragraphs AND table cells (which contain paragraphs)
@@ -827,8 +1037,74 @@ namespace SMEPilot.FunctionApp.Services
                                             _logger?.LogDebug("⚠️ [TEMPLATE] Truncated replacement for {Pattern} to {Length} chars", pattern, maxLength);
                                         }
                                         
-                                        _logger?.LogInformation("🔄 [TEMPLATE] Found and replacing plain text placeholder: {Pattern} -> {Length} chars", pattern, replacement.Length);
-                                        ReplaceTokenPreservingRuns(para, pattern, replacement);
+                                        // For section placeholders, try element-based insertion first (preserves formatting)
+                                        bool filledWithElements = false;
+                                        if (!string.IsNullOrWhiteSpace(sourceDocPath) && File.Exists(sourceDocPath) && _extractor != null)
+                                        {
+                                            // Check if this is a section placeholder (not metadata)
+                                            var isSectionPlaceholder = keyLower.Contains("overview") || 
+                                                                      keyLower.Contains("stories") ||
+                                                                      keyLower.Contains("requirements") ||
+                                                                      keyLower.Contains("specifications") ||
+                                                                      keyLower.Contains("description") ||
+                                                                      (keyLower.Contains("content") && !keyLower.Contains("remaining"));
+                                            
+                                            if (isSectionPlaceholder && replacement.Length > 100) // Only for substantial content
+                                            {
+                                                try
+                                                {
+                                                    // Normalize the section heading for matching
+                                                    var sectionHeading = key
+                                                        .Replace("[", "")
+                                                        .Replace("]", "")
+                                                        .Replace("_", " ")
+                                                        .Trim();
+                                                    
+                                                    // Try to extract as elements
+                                                    var elements = _extractor.ExtractSectionAsElements(sourceDocPath, sectionHeading);
+                                                    
+                                                    if (elements != null && elements.Count > 0)
+                                                    {
+                                                        // Replace the placeholder with elements
+                                                        // Find the paragraph containing the placeholder and replace it
+                                                        var paraTextCheck = string.Concat(para.Descendants<Text>().Select(t => t.Text ?? ""));
+                                                        if (paraTextCheck.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                                                        {
+                                                            // Remove the placeholder text from the paragraph
+                                                            ReplaceTokenPreservingRuns(para, pattern, "");
+                                                            
+                                                            // Insert elements after this paragraph
+                                                            var paraBody = para.Parent as DocumentFormat.OpenXml.Wordprocessing.Body;
+                                                            if (paraBody != null)
+                                                            {
+                                                                var paraIndex = paraBody.ChildElements.ToList().IndexOf(para);
+                                                                foreach (var elem in elements)
+                                                                {
+                                                                    paraBody.InsertAt(elem.CloneNode(true), paraIndex + 1);
+                                                                    paraIndex++;
+                                                                }
+                                                                filledWithElements = true;
+                                                                extractedSectionHeadingsFromSource.Add(sectionHeading);
+                                                                _logger?.LogInformation("✅ [TEMPLATE] Filled plain text placeholder with elements (formatting preserved): {Pattern} -> {Heading} ({Count} elements)", 
+                                                                    pattern, sectionHeading, elements.Count);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                catch (Exception ex)
+                                                {
+                                                    _logger?.LogWarning(ex, "⚠️ [TEMPLATE] Element-based insertion failed for plain text placeholder {Pattern}, falling back to text: {Error}", pattern, ex.Message);
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Fallback to text-based replacement
+                                        if (!filledWithElements)
+                                        {
+                                            _logger?.LogInformation("🔄 [TEMPLATE] Found and replacing plain text placeholder: {Pattern} -> {Length} chars", pattern, replacement.Length);
+                                            ReplaceTokenPreservingRuns(para, pattern, replacement);
+                                        }
+                                        
                                         filledTags.Add(key);
                                         placeholderMatches++;
                                         break; // Only replace once per paragraph
@@ -889,11 +1165,73 @@ namespace SMEPilot.FunctionApp.Services
                                 {
                                     if (paraText.Contains(pattern, StringComparison.OrdinalIgnoreCase))
                                     {
-                                        _logger?.LogInformation("🔄 [TEMPLATE] Found mapped placeholder: {Pattern} (maps to {SystemKey}) -> {Length} chars", 
-                                            pattern, systemKey, replacement.Length);
-                                        ReplaceTokenPreservingRuns(para, pattern, replacement);
-                                    filledTags.Add(systemKey);
-                                    placeholderMatches++;
+                                        // For section placeholders, try element-based insertion first (preserves formatting)
+                                        bool filledWithElements = false;
+                                        if (!string.IsNullOrWhiteSpace(sourceDocPath) && File.Exists(sourceDocPath) && _extractor != null)
+                                        {
+                                            // Check if this is a section placeholder (not metadata)
+                                            var mappedSystemKeyLower = systemKey.ToLowerInvariant();
+                                            var isSectionPlaceholder = mappedSystemKeyLower.Contains("overview") || 
+                                                                      mappedSystemKeyLower.Contains("stories") ||
+                                                                      mappedSystemKeyLower.Contains("requirements") ||
+                                                                      mappedSystemKeyLower.Contains("specifications") ||
+                                                                      mappedSystemKeyLower.Contains("description") ||
+                                                                      (mappedSystemKeyLower.Contains("content") && !mappedSystemKeyLower.Contains("remaining"));
+                                            
+                                            if (isSectionPlaceholder && replacement.Length > 100) // Only for substantial content
+                                            {
+                                                try
+                                                {
+                                                    // Normalize the section heading for matching
+                                                    var sectionHeading = systemKey
+                                                        .Replace("[", "")
+                                                        .Replace("]", "")
+                                                        .Replace("_", " ")
+                                                        .Trim();
+                                                    
+                                                    // Try to extract as elements
+                                                    var elements = _extractor.ExtractSectionAsElements(sourceDocPath, sectionHeading);
+                                                    
+                                                    if (elements != null && elements.Count > 0)
+                                                    {
+                                                        // Replace the placeholder with elements
+                                                        var mappedParaBody = para.Parent as DocumentFormat.OpenXml.Wordprocessing.Body;
+                                                        if (mappedParaBody != null)
+                                                        {
+                                                            // Remove the placeholder text from the paragraph
+                                                            ReplaceTokenPreservingRuns(para, pattern, "");
+                                                            
+                                                            // Insert elements after this paragraph
+                                                            var paraIndex = mappedParaBody.ChildElements.ToList().IndexOf(para);
+                                                            foreach (var elem in elements)
+                                                            {
+                                                                mappedParaBody.InsertAt(elem.CloneNode(true), paraIndex + 1);
+                                                                paraIndex++;
+                                                            }
+                                                            filledWithElements = true;
+                                                            extractedSectionHeadingsFromSource.Add(sectionHeading);
+                                                            _logger?.LogInformation("✅ [TEMPLATE] Filled mapped placeholder with elements (formatting preserved): {Pattern} (maps to {SystemKey}) -> {Heading} ({Count} elements)", 
+                                                                pattern, systemKey, sectionHeading, elements.Count);
+                                                        }
+                                                    }
+                                                }
+                                                catch (Exception ex)
+                                                {
+                                                    _logger?.LogWarning(ex, "⚠️ [TEMPLATE] Element-based insertion failed for mapped placeholder {Pattern}, falling back to text: {Error}", pattern, ex.Message);
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Fallback to text-based replacement
+                                        if (!filledWithElements)
+                                        {
+                                            _logger?.LogInformation("🔄 [TEMPLATE] Found mapped placeholder: {Pattern} (maps to {SystemKey}) -> {Length} chars", 
+                                                pattern, systemKey, replacement.Length);
+                                            ReplaceTokenPreservingRuns(para, pattern, replacement);
+                                        }
+                                        
+                                        filledTags.Add(systemKey);
+                                        placeholderMatches++;
                                         break; // Only replace once per paragraph
                                     }
                                 }
@@ -923,6 +1261,68 @@ namespace SMEPilot.FunctionApp.Services
                         }
                     }
                     
+                    // Update extracted section headings after plain text placeholder processing
+                    // Track sections that were filled via plain text placeholders
+                    foreach (var tag in filledTags)
+                    {
+                        // Normalize tag to section heading format
+                        var normalized = tag
+                            .Replace("[", "")
+                            .Replace("]", "")
+                            .Replace("_", " ")
+                            .Trim();
+                        if (!string.IsNullOrWhiteSpace(normalized) && normalized.Length > 2)
+                        {
+                            // Check if this looks like a section name
+                            var isSectionName = !normalized.Contains("Author", StringComparison.OrdinalIgnoreCase) &&
+                                              !normalized.Contains("Date", StringComparison.OrdinalIgnoreCase) &&
+                                              !normalized.Contains("Version", StringComparison.OrdinalIgnoreCase) &&
+                                              !normalized.Contains("Status", StringComparison.OrdinalIgnoreCase) &&
+                                              !normalized.Contains("DocumentId", StringComparison.OrdinalIgnoreCase) &&
+                                              !normalized.Contains("Document Id", StringComparison.OrdinalIgnoreCase) &&
+                                              !normalized.Contains("TableOfContents", StringComparison.OrdinalIgnoreCase) &&
+                                              !normalized.Contains("RemainingContent", StringComparison.OrdinalIgnoreCase);
+                            
+                            if (isSectionName)
+                            {
+                                extractedSectionHeadings.Add(normalized);
+                            }
+                        }
+                    }
+                    
+                    // Merge extracted section headings from source document into the main tracking set
+                    foreach (var heading in extractedSectionHeadingsFromSource)
+                    {
+                        extractedSectionHeadings.Add(heading);
+                    }
+                    
+                    _logger?.LogInformation("📊 [TEMPLATE] After plain text processing - Extracted section headings tracked: {Headings}", 
+                        string.Join(", ", extractedSectionHeadings.OrderBy(h => h)));
+                    
+                    // AUTOMATIC APPEND: Append remaining sections at the end of document
+                    // This ensures remaining sections appear after all template sections, even without [RemainingContent] placeholder
+                    // Only append if we didn't already insert at a RemainingContent placeholder
+                    bool remainingContentInserted = filledTags.Any(t => 
+                        t.Contains("RemainingContent", StringComparison.OrdinalIgnoreCase) ||
+                        t.Contains("Remaining Content", StringComparison.OrdinalIgnoreCase));
+                    
+                    if (!remainingContentInserted && !string.IsNullOrWhiteSpace(sourceDocPath) && File.Exists(sourceDocPath))
+                    {
+                        _logger?.LogInformation("📦 [APPEND-END] No RemainingContent placeholder found - automatically appending remaining sections at end");
+                        try
+                        {
+                            AppendRemainingSectionsAtEnd(wordDoc, sourceDocPath, extractedSectionHeadings);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogWarning(ex, "⚠️ [APPEND-END] Failed to append remaining sections at end: {Error}", ex.Message);
+                        }
+                    }
+                    else if (remainingContentInserted)
+                    {
+                        _logger?.LogInformation("⏭️ [APPEND-END] RemainingContent already inserted at placeholder - skipping automatic append");
+                    }
+
                     if (placeholderMatches == 0 && sdtList.Count == 0)
                     {
                         _logger?.LogWarning("⚠️ [TEMPLATE] No placeholders found in template! Template needs either:");
@@ -961,8 +1361,26 @@ namespace SMEPilot.FunctionApp.Services
                 // Convert template to regular document to avoid Word template warning
                 ConvertTemplateToDocument(outputPath);
                 
+                // Final summary with order information
                 _logger?.LogInformation("✅ [TEMPLATE] Template fill completed. Filled {FilledCount}/{TotalCount} tags. Unfilled: {Unfilled}", 
                     filledTags.Count, availableTags.Count, unfilledTags.Count > 0 ? string.Join(", ", unfilledTags) : "none");
+                
+                // Log the order in which placeholders were filled (based on template order)
+                var filledInOrder = templatePlaceholders
+                    .Where(tp => filledTags.Contains(tp, StringComparer.OrdinalIgnoreCase))
+                    .ToList();
+                _logger?.LogInformation("📋 [TEMPLATE] Placeholders filled in template order: {Order}", 
+                    string.Join(" → ", filledInOrder));
+                
+                // Log which placeholders were not filled
+                var notFilled = templatePlaceholders
+                    .Where(tp => !filledTags.Contains(tp, StringComparer.OrdinalIgnoreCase))
+                    .ToList();
+                if (notFilled.Any())
+                {
+                    _logger?.LogWarning("⚠️ [TEMPLATE] Placeholders NOT filled (in template order): {NotFilled}", 
+                        string.Join(" → ", notFilled));
+                }
 
                 return outputPath;
             }
@@ -971,6 +1389,324 @@ namespace SMEPilot.FunctionApp.Services
                 _logger?.LogError(ex, "❌ [TEMPLATE] Error filling template: {Error}", ex.Message);
                 throw;
             }
+        }
+
+        /// <summary>
+        /// NEW: Replace SDT content with OpenXML elements (preserves ALL formatting)
+        /// This is the correct way to insert content - preserves bold, colors, tables, images, lists, etc.
+        /// </summary>
+        private bool ReplaceSdtContentWithElements(
+            SdtElement sdt, 
+            List<OpenXmlElement> elements,
+            WordprocessingDocument targetDoc,
+            string? sourceDocPath = null)
+        {
+            if (sdt == null || elements == null || elements.Count == 0) 
+                return false;
+
+            try
+            {
+                if (sdt is SdtBlock sdtBlock && sdtBlock.SdtContentBlock != null)
+                {
+                    sdtBlock.SdtContentBlock.RemoveAllChildren();
+                    
+                    // Open source document if provided (for image part copying)
+                    WordprocessingDocument? sourceDoc = null;
+                    if (!string.IsNullOrWhiteSpace(sourceDocPath) && File.Exists(sourceDocPath))
+                    {
+                        sourceDoc = WordprocessingDocument.Open(sourceDocPath, false);
+                    }
+                    
+                    try
+                    {
+                        foreach (var elem in elements)
+                        {
+                            // Clone element
+                            var cloned = elem.CloneNode(true) as OpenXmlElement;
+                            
+                            if (cloned == null) continue;
+                            
+                            // Handle images: Copy image parts and update relationships
+                            if (cloned is Paragraph para)
+                            {
+                                cloned = CopyImagePartsFromParagraph(para, sourceDoc, targetDoc) ?? cloned;
+                            }
+                            // Handle tables: Copy table structure and nested images
+                            else if (cloned is Table table)
+                            {
+                                cloned = CopyTableWithFormatting(table, sourceDoc, targetDoc) ?? cloned;
+                            }
+                            
+                            sdtBlock.SdtContentBlock.AppendChild(cloned);
+                        }
+                    }
+                    finally
+                    {
+                        sourceDoc?.Dispose();
+                    }
+                    
+                    return true;
+                }
+                else if (sdt is SdtRun sdtRun && sdtRun.SdtContentRun != null)
+                {
+                    // For SdtRun, we can only insert a single Run element
+                    // Take first element if it's a Run, or convert first paragraph to Run
+                    sdtRun.SdtContentRun.RemoveAllChildren();
+                    
+                    var firstElem = elements.FirstOrDefault();
+                    if (firstElem is Run run)
+                    {
+                        var cloned = run.CloneNode(true) as Run;
+                        if (cloned != null)
+                            sdtRun.SdtContentRun.AppendChild(cloned);
+                    }
+                    else if (firstElem is Paragraph para)
+                    {
+                        // Take first run from paragraph
+                        var firstRun = para.Elements<Run>().FirstOrDefault();
+                        if (firstRun != null)
+                        {
+                            var cloned = firstRun.CloneNode(true) as Run;
+                            if (cloned != null)
+                                sdtRun.SdtContentRun.AppendChild(cloned);
+                        }
+                    }
+                    
+                    return true;
+                }
+                else if (sdt is SdtCell sdtCell && sdtCell.SdtContentCell != null)
+                {
+                    sdtCell.SdtContentCell.RemoveAllChildren();
+                    
+                    WordprocessingDocument? sourceDoc = null;
+                    if (!string.IsNullOrWhiteSpace(sourceDocPath) && File.Exists(sourceDocPath))
+                    {
+                        sourceDoc = WordprocessingDocument.Open(sourceDocPath, false);
+                    }
+                    
+                    try
+                    {
+                        foreach (var elem in elements)
+                        {
+                            var cloned = elem.CloneNode(true) as OpenXmlElement;
+                            if (cloned == null) continue;
+                            
+                            // Handle images in cells
+                            if (cloned is Paragraph para)
+                            {
+                                cloned = CopyImagePartsFromParagraph(para, sourceDoc, targetDoc) ?? cloned;
+                            }
+                            else if (cloned is Table table)
+                            {
+                                cloned = CopyTableWithFormatting(table, sourceDoc, targetDoc) ?? cloned;
+                            }
+                            
+                            sdtCell.SdtContentCell.AppendChild(cloned);
+                        }
+                    }
+                    finally
+                    {
+                        sourceDoc?.Dispose();
+                    }
+                    
+                    return true;
+                }
+                else
+                {
+                    var contentElement = sdt.Elements().FirstOrDefault(e => 
+                        e.LocalName == "sdtContent" || 
+                        e.LocalName == "sdtContentBlock" || 
+                        e.LocalName == "sdtContentRun" ||
+                        e.LocalName == "sdtContentCell");
+                    
+                    if (contentElement != null)
+                    {
+                        contentElement.RemoveAllChildren();
+                        
+                        WordprocessingDocument? sourceDoc = null;
+                        if (!string.IsNullOrWhiteSpace(sourceDocPath) && File.Exists(sourceDocPath))
+                        {
+                            sourceDoc = WordprocessingDocument.Open(sourceDocPath, false);
+                        }
+                        
+                        try
+                        {
+                            foreach (var elem in elements)
+                            {
+                                var cloned = elem.CloneNode(true) as OpenXmlElement;
+                                if (cloned == null) continue;
+                                
+                                if (cloned is Paragraph para)
+                                {
+                                    cloned = CopyImagePartsFromParagraph(para, sourceDoc, targetDoc) ?? cloned;
+                                }
+                                else if (cloned is Table table)
+                                {
+                                    cloned = CopyTableWithFormatting(table, sourceDoc, targetDoc) ?? cloned;
+                                }
+                                
+                                contentElement.AppendChild(cloned);
+                            }
+                        }
+                        finally
+                        {
+                            sourceDoc?.Dispose();
+                        }
+                        
+                        return true;
+                    }
+                    
+                    _logger?.LogWarning("⚠️ [TEMPLATE] Could not find content element in SDT for element insertion");
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "❌ [TEMPLATE] Error replacing SDT content with elements: {Error}", ex.Message);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Copy image parts from source paragraph to target document and update relationships
+        /// </summary>
+        private Paragraph? CopyImagePartsFromParagraph(
+            Paragraph para, 
+            WordprocessingDocument? sourceDoc,
+            WordprocessingDocument targetDoc)
+        {
+            if (para == null || targetDoc?.MainDocumentPart == null)
+                return para;
+
+            var cloned = para.CloneNode(true) as Paragraph;
+            if (cloned == null) return para;
+
+            if (sourceDoc == null || sourceDoc.MainDocumentPart == null)
+                return cloned; // No source doc, return cloned paragraph as-is
+
+            var mainPart = targetDoc.MainDocumentPart;
+            var sourceMainPart = sourceDoc.MainDocumentPart;
+
+            // Find all drawings (images) in paragraph - use fully qualified name
+            var drawings = cloned.Descendants<DocumentFormat.OpenXml.Wordprocessing.Drawing>().ToList();
+            foreach (var drawing in drawings)
+            {
+                var blip = drawing.Descendants<A.Blip>().FirstOrDefault();
+                if (blip?.Embed == null) continue;
+
+                var imageRelId = blip.Embed.Value;
+                
+                try
+                {
+                    // Get image part from source
+                    var sourceImagePart = sourceMainPart.GetPartById(imageRelId) as ImagePart;
+                    
+                    if (sourceImagePart != null)
+                    {
+                        // Copy image part to target
+                        var targetImagePart = mainPart.AddImagePart(sourceImagePart.ContentType);
+                        using (var stream = sourceImagePart.GetStream())
+                        {
+                            targetImagePart.FeedData(stream);
+                        }
+                        
+                        // Update relationship ID
+                        var newRelId = mainPart.GetIdOfPart(targetImagePart);
+                        blip.Embed = newRelId;
+                        
+                        _logger?.LogDebug("✅ [IMAGE] Copied image part: {OldId} -> {NewId}", imageRelId, newRelId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "⚠️ [IMAGE] Failed to copy image part {RelId}: {Error}", imageRelId, ex.Message);
+                    // Continue with other images
+                }
+            }
+
+            return cloned;
+        }
+
+        /// <summary>
+        /// Copy table with formatting and handle nested images/tables
+        /// Preserves table borders and properties from source table
+        /// </summary>
+        private Table? CopyTableWithFormatting(
+            Table sourceTable,
+            WordprocessingDocument? sourceDoc,
+            WordprocessingDocument targetDoc)
+        {
+            if (sourceTable == null || targetDoc?.MainDocumentPart == null)
+                return sourceTable;
+
+            // Clone table structure (this preserves TableProperties including borders)
+            var cloned = sourceTable.CloneNode(true) as Table;
+            if (cloned == null) return sourceTable;
+
+            // Ensure table has borders if it doesn't already have them
+            // This preserves table formatting even if source table doesn't have explicit borders
+            var tableProps = cloned.GetFirstChild<TableProperties>();
+            if (tableProps == null)
+            {
+                tableProps = new TableProperties();
+                cloned.PrependChild(tableProps);
+            }
+
+            // Check if table has borders - if not, add default borders to preserve template style
+            var borders = tableProps.GetFirstChild<TableBorders>();
+            if (borders == null)
+            {
+                // Add default borders to ensure table lines are visible
+                borders = new TableBorders(
+                    new TopBorder { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 4 },
+                    new BottomBorder { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 4 },
+                    new LeftBorder { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 4 },
+                    new RightBorder { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 4 },
+                    new InsideHorizontalBorder { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 4 },
+                    new InsideVerticalBorder { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 4 }
+                );
+                tableProps.AppendChild(borders);
+                _logger?.LogDebug("✅ [TABLE] Added default borders to preserve table formatting");
+            }
+
+            if (sourceDoc == null || sourceDoc.MainDocumentPart == null)
+                return cloned; // No source doc, return cloned table as-is
+
+            // Process each cell to handle nested images/tables
+            foreach (var row in cloned.Elements<TableRow>())
+            {
+                foreach (var cell in row.Elements<TableCell>())
+                {
+                    // Copy images in cell paragraphs
+                    var cellParas = cell.Elements<Paragraph>().ToList();
+                    foreach (var para in cellParas)
+                    {
+                        var updatedPara = CopyImagePartsFromParagraph(para, sourceDoc, targetDoc);
+                        if (updatedPara != null && updatedPara != para)
+                        {
+                            // Replace paragraph if it was updated
+                            var index = cell.ChildElements.ToList().IndexOf(para);
+                            para.Remove();
+                            cell.InsertAt(updatedPara, index);
+                        }
+                    }
+                    
+                    // Handle nested tables
+                    var nestedTables = cell.Elements<Table>().ToList();
+                    foreach (var nestedTable in nestedTables)
+                    {
+                        var updatedTable = CopyTableWithFormatting(nestedTable, sourceDoc, targetDoc);
+                        if (updatedTable != null && updatedTable != nestedTable)
+                        {
+                            var index = cell.ChildElements.ToList().IndexOf(nestedTable);
+                            nestedTable.Remove();
+                            cell.InsertAt(updatedTable, index);
+                        }
+                    }
+                }
+            }
+
+            return cloned;
         }
 
         /// <summary>
@@ -1993,38 +2729,58 @@ namespace SMEPilot.FunctionApp.Services
             // appear in the template.
             if (availableTemplateTags == null ||
                 availableTemplateTags.Any(t => t.Contains("PROJECT_OVERVIEW", StringComparison.OrdinalIgnoreCase) ||
-                                               t.Contains("Project Overview", StringComparison.OrdinalIgnoreCase)))
+                                               t.Contains("Project Overview", StringComparison.OrdinalIgnoreCase) ||
+                                               t.Contains("ProjectOverview", StringComparison.OrdinalIgnoreCase)))
             {
+                _logger?.LogInformation("🔍 [MAPPER] Template requests PROJECT_OVERVIEW - searching for matching section");
                 for (int i = 0; i < docModel.Sections.Count; i++)
                 {
                     if (usedSections.Contains(i)) continue;
                     var headingLower = (docModel.Sections[i].Heading ?? "").ToLowerInvariant();
                     if (headingLower.Contains("project overview"))
                     {
-                        contentMap["ProjectOverview"] = docModel.Sections[i].Body ?? string.Empty;
+                        var sectionBody = docModel.Sections[i].Body ?? string.Empty;
+                        // Add both variations to content map to match template placeholders
+                        contentMap["ProjectOverview"] = sectionBody;
+                        contentMap["PROJECT_OVERVIEW"] = sectionBody; // Match template placeholder exactly
                         usedSections.Add(i);
-                        _logger?.LogDebug("✅ [MAPPER] Mapped section {Index} ({Heading}) → ProjectOverview", i, docModel.Sections[i].Heading);
+                        _logger?.LogInformation("✅ [MAPPER] Mapped section {Index} '{Heading}' ({BodyLength} chars) → ProjectOverview/PROJECT_OVERVIEW", 
+                            i, docModel.Sections[i].Heading, sectionBody.Length);
                         break;
                     }
                 }
             }
+            else
+            {
+                _logger?.LogDebug("⏭️ [MAPPER] Template does not request PROJECT_OVERVIEW");
+            }
 
             if (availableTemplateTags == null ||
                 availableTemplateTags.Any(t => t.Contains("USER_STORIES", StringComparison.OrdinalIgnoreCase) ||
-                                               t.Contains("User Stories", StringComparison.OrdinalIgnoreCase)))
+                                               t.Contains("User Stories", StringComparison.OrdinalIgnoreCase) ||
+                                               t.Contains("UserStories", StringComparison.OrdinalIgnoreCase)))
             {
+                _logger?.LogInformation("🔍 [MAPPER] Template requests USER_STORIES - searching for matching section");
                 for (int i = 0; i < docModel.Sections.Count; i++)
                 {
                     if (usedSections.Contains(i)) continue;
                     var headingLower = (docModel.Sections[i].Heading ?? "").ToLowerInvariant();
                     if (headingLower.Contains("user stories"))
                     {
-                        contentMap["UserStories"] = docModel.Sections[i].Body ?? string.Empty;
+                        var sectionBody = docModel.Sections[i].Body ?? string.Empty;
+                        // Add both variations to content map to match template placeholders
+                        contentMap["UserStories"] = sectionBody;
+                        contentMap["USER_STORIES"] = sectionBody; // Match template placeholder exactly
                         usedSections.Add(i);
-                        _logger?.LogDebug("✅ [MAPPER] Mapped section {Index} ({Heading}) → UserStories", i, docModel.Sections[i].Heading);
+                        _logger?.LogInformation("✅ [MAPPER] Mapped section {Index} '{Heading}' ({BodyLength} chars) → UserStories/USER_STORIES", 
+                            i, docModel.Sections[i].Heading, sectionBody.Length);
                         break;
                     }
                 }
+            }
+            else
+            {
+                _logger?.LogDebug("⏭️ [MAPPER] Template does not request USER_STORIES");
             }
 
             // NEW: Map all remaining, unmapped sections into a single catch-all bucket.
@@ -4108,8 +4864,335 @@ namespace SMEPilot.FunctionApp.Services
         }
 
         /// <summary>
+        /// Append remaining sections (excluding already-extracted ones) from source DOCX
+        /// at the end of the document body.
+        /// </summary>
+        private void AppendRemainingSectionsAtEnd(
+            WordprocessingDocument outputDoc,
+            string sourceDocPath,
+            HashSet<string> extractedSectionHeadings)
+        {
+            if (string.IsNullOrWhiteSpace(sourceDocPath))
+                return;
+
+            if (outputDoc.MainDocumentPart?.Document?.Body == null)
+                return;
+
+            var body = outputDoc.MainDocumentPart.Document.Body;
+
+            try
+            {
+                using var srcDoc = WordprocessingDocument.Open(sourceDocPath, false);
+                var srcBody = srcDoc.MainDocumentPart?.Document?.Body;
+                if (srcBody == null)
+                    return;
+
+                // Copy numbering definitions from source to target to preserve lists
+                CopyNumberingDefinitions(srcDoc, outputDoc);
+
+                // Track current section to determine if it should be skipped
+                bool inExtractedSection = false;
+                var elementsToAppend = new List<OpenXmlElement>();
+                var skippedSections = new List<string>();
+                var appendedSections = new List<string>();
+                string? currentSectionName = null;
+
+                _logger?.LogInformation("🔍 [APPEND-END] Processing source document to append remaining sections. Extracted sections to exclude: {Sections}",
+                    string.Join(", ", extractedSectionHeadings.OrderBy(h => h)));
+
+                foreach (var elem in srcBody.ChildElements)
+                {
+                    // Check if this is a heading paragraph
+                    if (elem is Paragraph headingPara)
+                    {
+                        // Check if paragraph has a heading style
+                        var styleId = headingPara.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+                        var isHeadingStyle = !string.IsNullOrEmpty(styleId) &&
+                            (styleId.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) ||
+                             styleId.StartsWith("Title", StringComparison.OrdinalIgnoreCase));
+
+                        var paraText = string.Concat(headingPara.Descendants<Text>().Select(t => t.Text ?? "")).Trim();
+
+                        // If it looks like a heading (has heading style or starts with number)
+                        if (isHeadingStyle || System.Text.RegularExpressions.Regex.IsMatch(paraText, @"^\d+[\.\s]"))
+                        {
+                            var normalizedHeading = NormalizeHeadingForMatching(paraText);
+
+                            // Check if this heading matches any extracted section
+                            bool isExtracted = false;
+                            if (!string.IsNullOrWhiteSpace(normalizedHeading) && normalizedHeading.Length > 2)
+                            {
+                                isExtracted = extractedSectionHeadings.Any(extracted =>
+                                {
+                                    var normalizedExtracted = NormalizeHeadingForMatching(extracted);
+                                    return normalizedHeading.Equals(normalizedExtracted, StringComparison.OrdinalIgnoreCase) ||
+                                           normalizedHeading.Contains(normalizedExtracted, StringComparison.OrdinalIgnoreCase) ||
+                                           normalizedExtracted.Contains(normalizedHeading, StringComparison.OrdinalIgnoreCase);
+                                });
+                            }
+
+                            if (isExtracted)
+                            {
+                                // This is an extracted section - skip it and all content until next heading
+                                inExtractedSection = true;
+                                currentSectionName = paraText;
+                                skippedSections.Add(paraText);
+                                _logger?.LogInformation("⏭️ [APPEND-END] Skipping extracted section: '{Heading}'", paraText);
+                                continue;
+                            }
+                            else
+                            {
+                                // New section that wasn't extracted - start collecting elements
+                                if (inExtractedSection)
+                                {
+                                    _logger?.LogInformation("✅ [APPEND-END] End of extracted section '{Section}', starting to collect remaining content", currentSectionName);
+                                }
+                                inExtractedSection = false;
+                                currentSectionName = paraText;
+                                if (!string.IsNullOrWhiteSpace(paraText))
+                                {
+                                    appendedSections.Add(paraText);
+                                }
+                            }
+                        }
+                    }
+
+                    // Only add elements that are not part of extracted sections
+                    if (!inExtractedSection)
+                    {
+                        OpenXmlElement? cloned = null;
+
+                        if (elem is Paragraph paraToClone)
+                        {
+                            cloned = CopyImagePartsFromParagraph(paraToClone, srcDoc, outputDoc);
+                        }
+                        else if (elem is Table tableElem)
+                        {
+                            cloned = CopyTableWithFormatting(tableElem, srcDoc, outputDoc);
+                        }
+                        else
+                        {
+                            cloned = elem.CloneNode(true) as OpenXmlElement;
+                        }
+
+                        if (cloned != null)
+                        {
+                            elementsToAppend.Add(cloned);
+                        }
+                    }
+                }
+
+                // Append all remaining elements at the end of the document body
+                if (elementsToAppend.Count > 0)
+                {
+                    foreach (var elem in elementsToAppend)
+                    {
+                        body.AppendChild(elem);
+                    }
+
+                    _logger?.LogInformation("✅ [APPEND-END] Appended {Count} remaining elements at end of document",
+                        elementsToAppend.Count);
+                    _logger?.LogInformation("📊 [APPEND-END] Skipped {SkippedCount} extracted sections: {SkippedSections}",
+                        skippedSections.Count, string.Join(", ", skippedSections.Distinct()));
+                    _logger?.LogInformation("📊 [APPEND-END] Appended {AppendedCount} remaining sections: {AppendedSections}",
+                        appendedSections.Count, string.Join(", ", appendedSections.Distinct().Take(10))); // Limit to first 10 for readability
+                }
+                else
+                {
+                    _logger?.LogInformation("⏭️ [APPEND-END] No remaining sections to append (all sections were extracted)");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "⚠️ [APPEND-END] Failed to append remaining sections from source DOCX: {Error}", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Insert only remaining sections (excluding already-extracted ones) from source DOCX
+        /// at the paragraph containing the given marker token.
+        /// </summary>
+        private void InsertRemainingSectionsAtMarker(
+            WordprocessingDocument outputDoc, 
+            string sourceDocPath, 
+            string markerToken,
+            HashSet<string> extractedSectionHeadings)
+        {
+            if (string.IsNullOrWhiteSpace(sourceDocPath) || string.IsNullOrWhiteSpace(markerToken))
+                return;
+
+            if (outputDoc.MainDocumentPart?.Document?.Body == null)
+                return;
+
+            var body = outputDoc.MainDocumentPart.Document.Body;
+            var paragraphs = body.Elements<Paragraph>().ToList();
+
+            for (int i = 0; i < paragraphs.Count; i++)
+            {
+                var para = paragraphs[i];
+                var full = string.Concat(para.Descendants<Text>().Select(t => t.Text ?? string.Empty));
+                if (string.IsNullOrEmpty(full) || !full.Contains(markerToken, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var insertionIndex = body.ChildElements.ToList().IndexOf(para);
+                para.Remove();
+
+                try
+                {
+                    using var srcDoc = WordprocessingDocument.Open(sourceDocPath, false);
+                    var srcBody = srcDoc.MainDocumentPart?.Document?.Body;
+                    if (srcBody == null)
+                        return;
+
+                    // Copy numbering definitions from source to target to preserve lists
+                    CopyNumberingDefinitions(srcDoc, outputDoc);
+
+                    // Track current section to determine if it should be skipped
+                    bool inExtractedSection = false;
+                    var elementsToInsert = new List<OpenXmlElement>();
+                    var skippedSections = new List<string>();
+                    var insertedSections = new List<string>();
+                    string? currentSectionName = null;
+
+                    _logger?.LogInformation("🔍 [RAW-CONTENT] Processing source document body. Extracted sections to exclude: {Sections}", 
+                        string.Join(", ", extractedSectionHeadings.OrderBy(h => h)));
+
+                    foreach (var elem in srcBody.ChildElements)
+                    {
+                        // Check if this is a heading paragraph
+                        if (elem is Paragraph headingPara)
+                        {
+                            // Check if paragraph has a heading style
+                            var styleId = headingPara.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+                            var isHeadingStyle = !string.IsNullOrEmpty(styleId) && 
+                                (styleId.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) ||
+                                 styleId.StartsWith("Title", StringComparison.OrdinalIgnoreCase));
+                            
+                            var paraText = string.Concat(headingPara.Descendants<Text>().Select(t => t.Text ?? "")).Trim();
+                            
+                            // If it looks like a heading (has heading style or starts with number)
+                            if (isHeadingStyle || System.Text.RegularExpressions.Regex.IsMatch(paraText, @"^\d+[\.\s]"))
+                            {
+                                var normalizedHeading = NormalizeHeadingForMatching(paraText);
+                                
+                                // Check if this heading matches any extracted section
+                                bool isExtracted = false;
+                                if (!string.IsNullOrWhiteSpace(normalizedHeading) && normalizedHeading.Length > 2)
+                                {
+                                    isExtracted = extractedSectionHeadings.Any(extracted => 
+                                    {
+                                        var normalizedExtracted = NormalizeHeadingForMatching(extracted);
+                                        return normalizedHeading.Equals(normalizedExtracted, StringComparison.OrdinalIgnoreCase) ||
+                                               normalizedHeading.Contains(normalizedExtracted, StringComparison.OrdinalIgnoreCase) ||
+                                               normalizedExtracted.Contains(normalizedHeading, StringComparison.OrdinalIgnoreCase);
+                                    });
+                                }
+                                
+                                if (isExtracted)
+                                {
+                                    // This is an extracted section - skip it and all content until next heading
+                                    inExtractedSection = true;
+                                    currentSectionName = paraText;
+                                    skippedSections.Add(paraText);
+                                    _logger?.LogInformation("⏭️ [RAW-CONTENT] Skipping extracted section: '{Heading}'", paraText);
+                                    continue;
+                                }
+                                else
+                                {
+                                    // New section that wasn't extracted - start collecting elements
+                                    if (inExtractedSection)
+                                    {
+                                        _logger?.LogInformation("✅ [RAW-CONTENT] End of extracted section '{Section}', starting to collect remaining content", currentSectionName);
+                                    }
+                                    inExtractedSection = false;
+                                    currentSectionName = paraText;
+                                    if (!string.IsNullOrWhiteSpace(paraText))
+                                    {
+                                        insertedSections.Add(paraText);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Only add elements that are not part of extracted sections
+                        if (!inExtractedSection)
+                        {
+                            OpenXmlElement? cloned = null;
+                            
+                            if (elem is Paragraph paraToClone)
+                            {
+                                cloned = CopyImagePartsFromParagraph(paraToClone, srcDoc, outputDoc);
+                            }
+                            else if (elem is Table tableElem)
+                            {
+                                cloned = CopyTableWithFormatting(tableElem, srcDoc, outputDoc);
+                            }
+                            else
+                            {
+                                cloned = elem.CloneNode(true) as OpenXmlElement;
+                            }
+                            
+                            if (cloned != null)
+                            {
+                                elementsToInsert.Add(cloned);
+                            }
+                        }
+                    }
+
+                    // Insert all remaining elements
+                    foreach (var elem in elementsToInsert)
+                    {
+                        body.InsertAt(elem, insertionIndex++);
+                    }
+
+                    _logger?.LogInformation("✅ [RAW-CONTENT] Inserted {Count} remaining elements at marker '{Marker}'", 
+                        elementsToInsert.Count, markerToken);
+                    _logger?.LogInformation("📊 [RAW-CONTENT] Skipped {SkippedCount} extracted sections: {SkippedSections}", 
+                        skippedSections.Count, string.Join(", ", skippedSections.Distinct()));
+                    _logger?.LogInformation("📊 [RAW-CONTENT] Inserted {InsertedCount} remaining sections: {InsertedSections}", 
+                        insertedSections.Count, string.Join(", ", insertedSections.Distinct().Take(10))); // Limit to first 10 for readability
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "⚠️ [RAW-CONTENT] Failed to insert remaining sections from source DOCX: {Error}", ex.Message);
+                }
+
+                break;
+            }
+        }
+
+        /// <summary>
+        /// Normalize heading text for matching (remove numbers, brackets, etc.)
+        /// </summary>
+        private string NormalizeHeadingForMatching(string heading)
+        {
+            if (string.IsNullOrWhiteSpace(heading))
+                return "";
+            
+            // Remove leading numbers and dots (e.g., "1.", "1.1", "2.3.1")
+            var normalized = System.Text.RegularExpressions.Regex.Replace(
+                heading, 
+                @"^\d+([\.\s]+)?", 
+                "", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            
+            // Remove brackets and special chars
+            normalized = normalized.Replace("[", "").Replace("]", "").Replace("_", " ");
+            
+            // Normalize whitespace
+            normalized = System.Text.RegularExpressions.Regex.Replace(
+                normalized, 
+                @"\s+", 
+                " ", 
+                System.Text.RegularExpressions.RegexOptions.Compiled);
+            
+            return normalized.Trim().ToLowerInvariant();
+        }
+
+        /// <summary>
         /// Insert the raw body of a source DOCX (with original styles, lists, images)
         /// at the paragraph containing the given marker token.
+        /// NOTE: This inserts the ENTIRE body - use InsertRemainingSectionsAtMarker to exclude extracted sections
         /// </summary>
         private void InsertRawBodyAtMarker(WordprocessingDocument outputDoc, string sourceDocPath, string markerToken)
         {
@@ -4139,14 +5222,43 @@ namespace SMEPilot.FunctionApp.Services
                     if (srcBody == null)
                         return;
 
+                    // NOTE: Do NOT copy style definitions from source - this would overwrite template's table styles
+                    // The template already has its own styles (including table styles with borders)
+                    // Cloned elements will preserve their formatting, and template styles will apply
+                    // CopyStyleDefinitions(srcDoc, outputDoc);
+                    
+                    // Copy numbering definitions from source to target to preserve lists
+                    CopyNumberingDefinitions(srcDoc, outputDoc);
+
                     // Clone each top-level element from the source body into the output body
+                    // Process each element to preserve images and formatting
                     foreach (var elem in srcBody.ChildElements)
                     {
-                        var cloned = elem.CloneNode(true);
-                        body.InsertAt(cloned, insertionIndex++);
+                        OpenXmlElement? cloned = null;
+                        
+                        if (elem is Paragraph paraElem)
+                        {
+                            // Copy paragraph with images
+                            cloned = CopyImagePartsFromParagraph(paraElem, srcDoc, outputDoc);
+                        }
+                        else if (elem is Table tableElem)
+                        {
+                            // Copy table with formatting and nested images
+                            cloned = CopyTableWithFormatting(tableElem, srcDoc, outputDoc);
+                        }
+                        else
+                        {
+                            // Clone other elements (section properties, etc.)
+                            cloned = elem.CloneNode(true) as OpenXmlElement;
+                        }
+                        
+                        if (cloned != null)
+                        {
+                            body.InsertAt(cloned, insertionIndex++);
+                        }
                     }
 
-                    _logger?.LogInformation("✅ [RAW-CONTENT] Inserted raw DOCX body from source at marker '{Marker}'", markerToken);
+                    _logger?.LogInformation("✅ [RAW-CONTENT] Inserted raw DOCX body from source at marker '{Marker}' with styles preserved", markerToken);
                 }
                 catch (Exception ex)
                 {
@@ -4154,6 +5266,86 @@ namespace SMEPilot.FunctionApp.Services
                 }
 
                 break;
+            }
+        }
+
+        /// <summary>
+        /// Copy style definitions from source document to target document
+        /// </summary>
+        private void CopyStyleDefinitions(WordprocessingDocument sourceDoc, WordprocessingDocument targetDoc)
+        {
+            try
+            {
+                var sourceStylesPart = sourceDoc.MainDocumentPart?.StyleDefinitionsPart;
+                if (sourceStylesPart == null)
+                {
+                    _logger?.LogDebug("📋 [STYLES] Source document has no style definitions, skipping");
+                    return;
+                }
+
+                var targetMainPart = targetDoc.MainDocumentPart;
+                if (targetMainPart == null) return;
+
+                // Get or create style definitions part in target
+                var targetStylesPart = targetMainPart.StyleDefinitionsPart;
+                if (targetStylesPart == null)
+                {
+                    targetStylesPart = targetMainPart.AddNewPart<StyleDefinitionsPart>();
+                }
+
+                // Copy styles from source to target
+                using (var sourceStream = sourceStylesPart.GetStream())
+                using (var targetStream = targetStylesPart.GetStream(FileMode.Create))
+                {
+                    sourceStream.CopyTo(targetStream);
+                }
+
+                _logger?.LogDebug("✅ [STYLES] Copied style definitions from source to target document");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "⚠️ [STYLES] Failed to copy style definitions: {Error}", ex.Message);
+                // Continue without style preservation - document will still work but may lose some formatting
+            }
+        }
+
+        /// <summary>
+        /// Copy numbering definitions from source document to target document
+        /// </summary>
+        private void CopyNumberingDefinitions(WordprocessingDocument sourceDoc, WordprocessingDocument targetDoc)
+        {
+            try
+            {
+                var sourceNumberingPart = sourceDoc.MainDocumentPart?.NumberingDefinitionsPart;
+                if (sourceNumberingPart == null)
+                {
+                    _logger?.LogDebug("📋 [NUMBERING] Source document has no numbering definitions, skipping");
+                    return;
+                }
+
+                var targetMainPart = targetDoc.MainDocumentPart;
+                if (targetMainPart == null) return;
+
+                // Get or create numbering definitions part in target
+                var targetNumberingPart = targetMainPart.NumberingDefinitionsPart;
+                if (targetNumberingPart == null)
+                {
+                    targetNumberingPart = targetMainPart.AddNewPart<NumberingDefinitionsPart>();
+                }
+
+                // Copy numbering from source to target
+                using (var sourceStream = sourceNumberingPart.GetStream())
+                using (var targetStream = targetNumberingPart.GetStream(FileMode.Create))
+                {
+                    sourceStream.CopyTo(targetStream);
+                }
+
+                _logger?.LogDebug("✅ [NUMBERING] Copied numbering definitions from source to target document");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "⚠️ [NUMBERING] Failed to copy numbering definitions: {Error}", ex.Message);
+                // Continue without numbering preservation - document will still work but lists may lose formatting
             }
         }
 

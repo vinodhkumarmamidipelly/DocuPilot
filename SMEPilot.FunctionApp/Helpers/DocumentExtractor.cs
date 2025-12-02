@@ -1,3 +1,4 @@
+using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Presentation;
 using DocumentFormat.OpenXml.Spreadsheet;
@@ -225,6 +226,280 @@ namespace SMEPilot.FunctionApp.Helpers
                 dto.Rows.Add(cells);
             }
             return dto;
+        }
+
+        /// <summary>
+        /// Extract a section from DOCX as OpenXML elements (preserving all formatting)
+        /// Returns list of elements (paragraphs, tables) that belong to the section
+        /// Handles numbered headings (1., 1.1, etc.) and partial matches
+        /// </summary>
+        public List<OpenXmlElement> ExtractSectionAsElements(
+            string sourceDocPath,
+            string sectionHeading,
+            bool caseSensitive = false)
+        {
+            var elements = new List<OpenXmlElement>();
+            
+            if (string.IsNullOrWhiteSpace(sourceDocPath) || !File.Exists(sourceDocPath))
+                return elements;
+
+            try
+            {
+                using var doc = WordprocessingDocument.Open(sourceDocPath, false);
+                var body = doc.MainDocumentPart?.Document?.Body;
+                if (body == null) return elements;
+
+                var comparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+                var normalizedHeading = NormalizeHeadingForMatching(sectionHeading?.Trim() ?? "");
+                
+                bool inSection = false;
+                bool foundHeading = false;
+                
+                foreach (var elem in body.Elements())
+                {
+                    // Check if this is a heading that matches our section (with improved matching)
+                    if (IsHeadingMatching(elem, normalizedHeading, comparison))
+                    {
+                        if (foundHeading)
+                        {
+                            // We've reached the next section, stop
+                            break;
+                        }
+                        foundHeading = true;
+                        inSection = true;
+                        continue; // Skip the heading itself
+                    }
+                    
+                    // Check if this is any other heading (end of current section)
+                    if (inSection && IsHeading(elem))
+                    {
+                        break; // End of section
+                    }
+                    
+                    // If we're in the section, collect elements
+                    if (inSection)
+                    {
+                        // Clone element to preserve all formatting
+                        var cloned = elem.CloneNode(true);
+                        elements.Add(cloned);
+                    }
+                }
+                
+                if (elements.Count > 0)
+                {
+                    _logger?.LogInformation("✅ [ELEMENT-EXTRACTION] Extracted section '{Heading}' as {Count} OpenXML elements (formatting preserved)", 
+                        sectionHeading, elements.Count);
+                }
+                else
+                {
+                    _logger?.LogWarning("⚠️ [ELEMENT-EXTRACTION] No elements found for section '{Heading}' - check if heading exists in source document", 
+                        sectionHeading);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to extract section '{Heading}' as elements: {Error}", sectionHeading, ex.Message);
+            }
+            
+            return elements;
+        }
+
+        /// <summary>
+        /// Normalize heading for matching - removes numbers, extra spaces, special chars
+        /// Example: "1. PROJECT OVERVIEW" -> "project overview"
+        /// </summary>
+        private string NormalizeHeadingForMatching(string heading)
+        {
+            if (string.IsNullOrWhiteSpace(heading))
+                return "";
+            
+            // Remove leading numbers and dots (e.g., "1.", "1.1", "2.3.1")
+            var normalized = System.Text.RegularExpressions.Regex.Replace(
+                heading, 
+                @"^\d+([\.\s]+)?", 
+                "", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            
+            // Remove brackets and special chars used in placeholders
+            normalized = normalized.Replace("[", "").Replace("]", "").Replace("_", " ");
+            
+            // Normalize whitespace
+            normalized = System.Text.RegularExpressions.Regex.Replace(
+                normalized, 
+                @"\s+", 
+                " ", 
+                System.Text.RegularExpressions.RegexOptions.Compiled);
+            
+            return normalized.Trim().ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Check if a heading element matches the target heading (with improved matching)
+        /// </summary>
+        private bool IsHeadingMatching(OpenXmlElement? elem, string targetHeading, StringComparison comparison)
+        {
+            if (elem is not Paragraph para)
+                return false;
+
+            // Check if paragraph has a heading style
+            var styleId = para.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+            var isHeadingStyle = !string.IsNullOrEmpty(styleId) && 
+                (styleId.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) ||
+                 styleId.StartsWith("Title", StringComparison.OrdinalIgnoreCase));
+
+            // Also check if paragraph looks like a heading (starts with number, bold, etc.)
+            var paraText = string.Concat(para.Descendants<DocumentFormat.OpenXml.Wordprocessing.Text>().Select(t => t.Text ?? "")).Trim();
+            var looksLikeHeading = !string.IsNullOrWhiteSpace(paraText) && 
+                (System.Text.RegularExpressions.Regex.IsMatch(paraText, @"^\d+[\.\s]") || // Starts with number
+                 paraText.Length < 100); // Short text likely a heading
+
+            if (!isHeadingStyle && !looksLikeHeading)
+                return false;
+
+            // Normalize paragraph text for comparison
+            var normalizedParaText = NormalizeHeadingForMatching(paraText);
+            var normalizedTarget = NormalizeHeadingForMatching(targetHeading);
+            
+            // Try exact match
+            if (normalizedParaText.Equals(normalizedTarget, comparison))
+                return true;
+            
+            // Try contains match (for partial matches like "PROJECT OVERVIEW" matching "1. PROJECT OVERVIEW")
+            if (normalizedParaText.Contains(normalizedTarget, comparison) || 
+                normalizedTarget.Contains(normalizedParaText, comparison))
+                return true;
+            
+            // Try word-by-word match (at least 2 words match)
+            var paraWords = normalizedParaText.Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
+            var targetWords = normalizedTarget.Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
+            
+            if (paraWords.Length > 0 && targetWords.Length > 0)
+            {
+                var matchingWords = paraWords.Count(pw => targetWords.Any(tw => 
+                    pw.Equals(tw, comparison) || pw.Contains(tw, comparison) || tw.Contains(pw, comparison)));
+                
+                // If at least 50% of words match, consider it a match
+                var matchRatio = (double)matchingWords / Math.Max(paraWords.Length, targetWords.Length);
+                if (matchRatio >= 0.5)
+                    return true;
+            }
+            
+            return false;
+        }
+
+        /// <summary>
+        /// Extract all content between two headings (or from a heading to end) as OpenXML elements
+        /// </summary>
+        public List<OpenXmlElement> ExtractContentBetweenHeadings(
+            string sourceDocPath,
+            string startHeading,
+            string? endHeading = null,
+            bool caseSensitive = false)
+        {
+            var elements = new List<OpenXmlElement>();
+            
+            if (string.IsNullOrWhiteSpace(sourceDocPath) || !File.Exists(sourceDocPath))
+                return elements;
+
+            try
+            {
+                using var doc = WordprocessingDocument.Open(sourceDocPath, false);
+                var body = doc.MainDocumentPart?.Document?.Body;
+                if (body == null) return elements;
+
+                var comparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+                var normalizedStart = startHeading?.Trim() ?? "";
+                var normalizedEnd = endHeading?.Trim();
+                
+                bool inSection = false;
+                bool foundStart = false;
+                
+                foreach (var elem in body.Elements())
+                {
+                    // Check if this is the start heading
+                    if (!foundStart && IsHeading(elem, normalizedStart, comparison))
+                    {
+                        foundStart = true;
+                        inSection = true;
+                        continue; // Skip the heading itself
+                    }
+                    
+                    // Check if this is the end heading
+                    if (inSection && !string.IsNullOrWhiteSpace(normalizedEnd) && 
+                        IsHeading(elem, normalizedEnd, comparison))
+                    {
+                        break; // End of section
+                    }
+                    
+                    // Check if this is any other heading (if no end heading specified, stop at next heading)
+                    if (inSection && string.IsNullOrWhiteSpace(normalizedEnd) && IsHeading(elem))
+                    {
+                        break; // End of section
+                    }
+                    
+                    // If we're in the section, collect elements
+                    if (inSection)
+                    {
+                        var cloned = elem.CloneNode(true);
+                        elements.Add(cloned);
+                    }
+                }
+                
+                _logger?.LogDebug("Extracted content between '{Start}' and '{End}' as {Count} elements", 
+                    startHeading, endHeading ?? "end", elements.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to extract content between headings: {Error}", ex.Message);
+            }
+            
+            return elements;
+        }
+
+        /// <summary>
+        /// Check if an element is a heading paragraph
+        /// </summary>
+        private bool IsHeading(OpenXmlElement? elem, string? expectedText = null, StringComparison comparison = StringComparison.OrdinalIgnoreCase)
+        {
+            if (elem is not Paragraph para)
+                return false;
+
+            // Check if paragraph has a heading style
+            var styleId = para.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+            var isHeadingStyle = !string.IsNullOrEmpty(styleId) && 
+                (styleId.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) ||
+                 styleId.StartsWith("Heading1", StringComparison.OrdinalIgnoreCase) ||
+                 styleId.StartsWith("Heading2", StringComparison.OrdinalIgnoreCase) ||
+                 styleId.StartsWith("Heading3", StringComparison.OrdinalIgnoreCase) ||
+                 styleId.StartsWith("Title", StringComparison.OrdinalIgnoreCase));
+
+            // If no expected text, just check if it's a heading style
+            if (string.IsNullOrWhiteSpace(expectedText))
+                return isHeadingStyle;
+
+            // Get paragraph text - use fully qualified name to avoid ambiguity
+            var paraText = string.Concat(para.Descendants<DocumentFormat.OpenXml.Wordprocessing.Text>().Select(t => t.Text ?? "")).Trim();
+            
+            // Check if text matches (normalize for comparison)
+            var normalizedParaText = NormalizeText(paraText);
+            var normalizedExpected = NormalizeText(expectedText);
+            
+            return isHeadingStyle && normalizedParaText.Equals(normalizedExpected, comparison);
+        }
+
+        /// <summary>
+        /// Normalize text for comparison (remove extra whitespace, normalize case)
+        /// </summary>
+        private string NormalizeText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return "";
+            
+            return System.Text.RegularExpressions.Regex.Replace(
+                text.Trim(), 
+                @"\s+", 
+                " ", 
+                System.Text.RegularExpressions.RegexOptions.Compiled);
         }
 
         /// <summary>

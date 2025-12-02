@@ -19,16 +19,14 @@ namespace SMEPilot.FunctionApp.Functions
         private readonly Config _cfg;
         private readonly ILogger<WebhookRenewal> _logger;
         private readonly TelemetryService? _telemetry;
-        private readonly NotificationService? _notifications;
 
         public WebhookRenewal(GraphHelper graph, Config cfg, ILogger<WebhookRenewal> logger, 
-            TelemetryService? telemetry = null, NotificationService? notifications = null)
+            TelemetryService? telemetry = null)
         {
             _graph = graph;
             _cfg = cfg;
             _logger = logger;
             _telemetry = telemetry;
-            _notifications = notifications;
         }
 
         [Function("WebhookRenewal")]

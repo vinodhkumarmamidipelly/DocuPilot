@@ -15,6 +15,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using Azure.Core;
 using Newtonsoft.Json.Linq;
+using SMEPilot.FunctionApp.Models;
 
 namespace SMEPilot.FunctionApp.Helpers
 {
@@ -71,6 +72,404 @@ namespace SMEPilot.FunctionApp.Helpers
             {
                 return null;
             }
+        }
+
+        #region Tracking (SMEPilotRuns) – processing status & idempotency
+
+        /// <summary>
+        /// Logical name of the SharePoint list used to track processing runs.
+        /// </summary>
+        private const string ProcessingRunsListName = "SMEPilotRuns";
+
+        /// <summary>
+        /// Retrieves the latest ProcessingRunRecord for a given raw file (by RawDriveId + RawItemId).
+        /// If the tracking list is missing or cannot be read, this logs a warning and returns null
+        /// so callers can fall back to existing behavior.
+        /// </summary>
+        public async Task<ProcessingRunRecord?> GetLatestProcessingRunAsync(string siteId, string rawDriveId, string rawItemId)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogWarning("⚠️ [Tracking] Graph credentials not configured; cannot read {ListName} list. Falling back to legacy idempotency.", ProcessingRunsListName);
+                return null;
+            }
+
+            try
+            {
+                var listId = await EnsureProcessingRunsListExistsAsync(siteId);
+                if (string.IsNullOrWhiteSpace(listId))
+                {
+                    _logger?.LogWarning("⚠️ [Tracking] {ListName} list not available on site {SiteId}.", ProcessingRunsListName, siteId);
+                    return null;
+                }
+
+                _logger?.LogInformation("🔍 [Tracking] Querying latest run for RawDriveId={DriveId}, RawItemId={ItemId}", rawDriveId, rawItemId);
+
+                var items = await _client!.Sites[siteId].Lists[listId].Items.GetAsync(requestConfig =>
+                {
+                    requestConfig.QueryParameters.Expand = new[] { "fields" };
+                    requestConfig.QueryParameters.Top = 200;
+                });
+
+                if (items?.Value == null || items.Value.Count == 0)
+                {
+                    _logger?.LogInformation("ℹ️ [Tracking] No tracking records found yet for RawDriveId={DriveId}, RawItemId={ItemId}", rawDriveId, rawItemId);
+                    return null;
+                }
+
+                ProcessingRunRecord? latest = null;
+                foreach (var item in items.Value)
+                {
+                    var fields = item.Fields?.AdditionalData;
+                    if (fields == null || fields.Count == 0)
+                        continue;
+
+                    if (!fields.TryGetValue("RawDriveId", out var dObj) ||
+                        !fields.TryGetValue("RawItemId", out var iObj))
+                    {
+                        continue;
+                    }
+
+                    var d = dObj?.ToString();
+                    var i = iObj?.ToString();
+                    if (!string.Equals(d, rawDriveId, StringComparison.OrdinalIgnoreCase) ||
+                        !string.Equals(i, rawItemId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var record = MapFieldsToProcessingRunRecord(fields);
+                    if (latest == null || record.LastUpdatedUtc > latest.LastUpdatedUtc)
+                    {
+                        latest = record;
+                    }
+                }
+
+                if (latest == null)
+                {
+                    _logger?.LogInformation("ℹ️ [Tracking] No matching tracking records for RawDriveId={DriveId}, RawItemId={ItemId}", rawDriveId, rawItemId);
+                }
+                else
+                {
+                    _logger?.LogInformation("📋 [Tracking] Latest run for RawDriveId={DriveId}, RawItemId={ItemId}: Status={Status}, Hash={Hash}, LastUpdated={LastUpdated:o}",
+                        latest.RawDriveId, latest.RawItemId, latest.Status, latest.ContentHash, latest.LastUpdatedUtc);
+                }
+
+                return latest;
+            }
+            catch (ODataError odataError)
+            {
+                _logger?.LogWarning(odataError, "⚠️ [Tracking] ODataError while reading {ListName} on site {SiteId}: Code={Code}, Message={Message}",
+                    ProcessingRunsListName, siteId, odataError.Error?.Code ?? "Unknown", odataError.Error?.Message ?? "Unknown");
+                if (odataError.Error?.AdditionalData != null)
+                {
+                    foreach (var kvp in odataError.Error.AdditionalData)
+                    {
+                        _logger?.LogDebug("   [Tracking] Additional Data: {Key}={Value}", kvp.Key, kvp.Value);
+                    }
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "⚠️ [Tracking] Unexpected error reading {ListName} on site {SiteId}: {Error}. Falling back to legacy idempotency.",
+                    ProcessingRunsListName, siteId, ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Retrieves the latest *Succeeded* ProcessingRunRecord for a given raw file.
+        /// This intentionally ignores newer runs that are still in Processing/Failed state
+        /// so content-hash idempotency can compare against the last known-good run.
+        /// </summary>
+        public async Task<ProcessingRunRecord?> GetLatestSucceededProcessingRunAsync(string siteId, string rawDriveId, string rawItemId)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogWarning("⚠️ [Tracking] Graph credentials not configured; cannot read {ListName} list. Falling back to legacy idempotency.", ProcessingRunsListName);
+                return null;
+            }
+
+            try
+            {
+                var listId = await EnsureProcessingRunsListExistsAsync(siteId);
+                if (string.IsNullOrWhiteSpace(listId))
+                {
+                    _logger?.LogWarning("⚠️ [Tracking] {ListName} list not available on site {SiteId}.", ProcessingRunsListName, siteId);
+                    return null;
+                }
+
+                _logger?.LogInformation("🔍 [Tracking] Querying latest *succeeded* run for RawDriveId={DriveId}, RawItemId={ItemId}", rawDriveId, rawItemId);
+
+                var items = await _client!.Sites[siteId].Lists[listId].Items.GetAsync(requestConfig =>
+                {
+                    requestConfig.QueryParameters.Expand = new[] { "fields" };
+                    requestConfig.QueryParameters.Top = 200;
+                });
+
+                if (items?.Value == null || items.Value.Count == 0)
+                {
+                    _logger?.LogInformation("ℹ️ [Tracking] No tracking records found yet for RawDriveId={DriveId}, RawItemId={ItemId}", rawDriveId, rawItemId);
+                    return null;
+                }
+
+                ProcessingRunRecord? latestSucceeded = null;
+                foreach (var item in items.Value)
+                {
+                    var fields = item.Fields?.AdditionalData;
+                    if (fields == null || fields.Count == 0)
+                        continue;
+
+                    if (!fields.TryGetValue("RawDriveId", out var dObj) ||
+                        !fields.TryGetValue("RawItemId", out var iObj))
+                    {
+                        continue;
+                    }
+
+                    var d = dObj?.ToString();
+                    var i = iObj?.ToString();
+                    if (!string.Equals(d, rawDriveId, StringComparison.OrdinalIgnoreCase) ||
+                        !string.Equals(i, rawItemId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var record = MapFieldsToProcessingRunRecord(fields);
+                    if (!string.Equals(record.Status, "Succeeded", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    if (latestSucceeded == null || record.LastUpdatedUtc > latestSucceeded.LastUpdatedUtc)
+                    {
+                        latestSucceeded = record;
+                    }
+                }
+
+                if (latestSucceeded == null)
+                {
+                    _logger?.LogInformation("ℹ️ [Tracking] No succeeded tracking records for RawDriveId={DriveId}, RawItemId={ItemId}", rawDriveId, rawItemId);
+                }
+                else
+                {
+                    _logger?.LogInformation("📋 [Tracking] Latest *succeeded* run for RawDriveId={DriveId}, RawItemId={ItemId}: Status={Status}, Hash={Hash}, LastUpdated={LastUpdated:o}",
+                        latestSucceeded.RawDriveId, latestSucceeded.RawItemId, latestSucceeded.Status, latestSucceeded.ContentHash, latestSucceeded.LastUpdatedUtc);
+                }
+
+                return latestSucceeded;
+            }
+            catch (ODataError odataError)
+            {
+                _logger?.LogWarning(odataError, "⚠️ [Tracking] ODataError querying latest succeeded run for RawDriveId={DriveId}, RawItemId={ItemId}: Code={Code}, Message={Message}",
+                    rawDriveId, rawItemId, odataError.Error?.Code ?? "Unknown", odataError.Error?.Message ?? "Unknown");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "⚠️ [Tracking] Unexpected error querying latest succeeded run for RawDriveId={DriveId}, RawItemId={ItemId}: {Error}", rawDriveId, rawItemId, ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Upserts a ProcessingRunRecord entry for a given raw file.
+        /// For now we always append a new list item and rely on LastUpdatedUtc when
+        /// querying the "latest" record. If the list or columns are missing, this logs
+        /// detailed errors but does not throw, so enrichment can still succeed.
+        /// </summary>
+        public async Task UpsertProcessingRunAsync(string siteId, ProcessingRunRecord record)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogWarning("⚠️ [Tracking] Graph credentials not configured; cannot write to {ListName}.", ProcessingRunsListName);
+                return;
+            }
+
+            try
+            {
+                var listId = await EnsureProcessingRunsListExistsAsync(siteId);
+                if (string.IsNullOrWhiteSpace(listId))
+                {
+                    _logger?.LogWarning("⚠️ [Tracking] {ListName} list not available on site {SiteId}; skipping tracking write.", ProcessingRunsListName, siteId);
+                    return;
+                }
+
+                var fields = new FieldValueSet
+                {
+                    AdditionalData = new Dictionary<string, object>
+                    {
+                        ["RawDriveId"] = record.RawDriveId,
+                        ["RawItemId"] = record.RawItemId,
+                        ["ContentHash"] = record.ContentHash,
+                        ["Status"] = record.Status,
+                        ["ErrorMessage"] = record.ErrorMessage ?? string.Empty,
+                        ["LastUpdatedUtc"] = record.LastUpdatedUtc.ToString("O")
+                    }
+                };
+
+                var listItem = new ListItem { Fields = fields };
+
+                _logger?.LogInformation("📝 [Tracking] Writing run record to {ListName} for RawDriveId={DriveId}, RawItemId={ItemId}, Status={Status}",
+                    ProcessingRunsListName, record.RawDriveId, record.RawItemId, record.Status);
+
+                await _client!.Sites[siteId].Lists[listId].Items.PostAsync(listItem);
+                _logger?.LogInformation("✅ [Tracking] Tracking record written successfully to {ListName}.", ProcessingRunsListName);
+            }
+            catch (ODataError odataError)
+            {
+                _logger?.LogWarning(odataError, "⚠️ [Tracking] ODataError writing to {ListName} on site {SiteId}: Code={Code}, Message={Message}",
+                    ProcessingRunsListName, siteId, odataError.Error?.Code ?? "Unknown", odataError.Error?.Message ?? "Unknown");
+                if (odataError.Error?.AdditionalData != null)
+                {
+                    foreach (var kvp in odataError.Error.AdditionalData)
+                    {
+                        _logger?.LogDebug("   [Tracking] Additional Data: {Key}={Value}", kvp.Key, kvp.Value);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "⚠️ [Tracking] Unexpected error writing to {ListName} on site {SiteId}: {Error}. Skipping tracking write.",
+                    ProcessingRunsListName, siteId, ex.Message);
+            }
+        }
+
+        #endregion
+
+        private async Task<string?> EnsureProcessingRunsListExistsAsync(string siteId)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogWarning("⚠️ [Tracking] Graph credentials not configured; cannot ensure {ListName} list.", ProcessingRunsListName);
+                return null;
+            }
+
+            try
+            {
+                _logger?.LogInformation("🔍 [Tracking] Ensuring {ListName} list exists on site {SiteId}...", ProcessingRunsListName, siteId);
+
+                // Try to find existing list by display name
+                var lists = await _client!.Sites[siteId].Lists.GetAsync();
+                var existing = lists?.Value?.FirstOrDefault(l =>
+                    string.Equals(l.DisplayName, ProcessingRunsListName, StringComparison.OrdinalIgnoreCase));
+
+                if (existing != null)
+                {
+                    _logger?.LogInformation("✅ [Tracking] Found existing list {ListName} (Id={ListId})", ProcessingRunsListName, existing.Id);
+                    await EnsureProcessingRunsColumnsExistAsync(siteId, existing.Id!);
+                    return existing.Id;
+                }
+
+                // Create list if not found
+                var newList = new List
+                {
+                    DisplayName = ProcessingRunsListName,
+                    Description = "Tracks SMEPilot processing runs for idempotency and diagnostics."
+                    // Rely on SharePoint's default template (generic list); no explicit ListInfo property in this SDK.
+                };
+
+                var created = await _client.Sites[siteId].Lists.PostAsync(newList);
+                if (created == null || string.IsNullOrWhiteSpace(created.Id))
+                {
+                    _logger?.LogWarning("⚠️ [Tracking] Failed to create list {ListName} on site {SiteId}.", ProcessingRunsListName, siteId);
+                    return null;
+                }
+
+                _logger?.LogInformation("✅ [Tracking] Created list {ListName} (Id={ListId}) on site {SiteId}.", ProcessingRunsListName, created.Id, siteId);
+                await EnsureProcessingRunsColumnsExistAsync(siteId, created.Id);
+                return created.Id;
+            }
+            catch (ODataError odataError)
+            {
+                _logger?.LogWarning(odataError, "⚠️ [Tracking] ODataError ensuring {ListName} list on site {SiteId}: Code={Code}, Message={Message}",
+                    ProcessingRunsListName, siteId, odataError.Error?.Code ?? "Unknown", odataError.Error?.Message ?? "Unknown");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "⚠️ [Tracking] Unexpected error ensuring {ListName} list on site {SiteId}: {Error}", ProcessingRunsListName, siteId, ex.Message);
+                return null;
+            }
+        }
+
+        private async Task EnsureProcessingRunsColumnsExistAsync(string siteId, string listId)
+        {
+            try
+            {
+                _logger?.LogInformation("🔍 [Tracking] Ensuring required columns exist on {ListName} (ListId={ListId})", ProcessingRunsListName, listId);
+
+                var existingColumns = await _client!.Sites[siteId].Lists[listId].Columns.GetAsync();
+                var existingNames = existingColumns?.Value?.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                                   ?? new HashSet<string>();
+
+                // Keep schema simple and robust across tenants: all columns are text,
+                // including LastUpdatedUtc (stored as an ISO 8601 string). This avoids
+                // issues with more complex column types and reduces the chances of
+                // invalidRequest errors when creating columns.
+                var requiredColumns = new[]
+                {
+                    new { Name = "RawDriveId", Type = "text", DisplayName = "Raw Drive Id", Description = "DriveId of source document" },
+                    new { Name = "RawItemId", Type = "text", DisplayName = "Raw Item Id", Description = "ItemId of source document" },
+                    new { Name = "ContentHash", Type = "text", DisplayName = "Content Hash", Description = "SHA256 hash of raw content" },
+                    new { Name = "Status", Type = "text", DisplayName = "Status", Description = "Processing status (Processing, Succeeded, Failed, etc.)" },
+                    new { Name = "ErrorMessage", Type = "text", DisplayName = "Error Message", Description = "Error details if processing failed" },
+                    new { Name = "LastUpdatedUtc", Type = "text", DisplayName = "Last Updated (UTC)", Description = "Last time this record was updated (UTC, ISO 8601 string)" }
+                };
+
+                foreach (var col in requiredColumns)
+                {
+                    if (existingNames.Contains(col.Name))
+                    {
+                        _logger?.LogDebug("✅ [Tracking] Column '{ColumnName}' already exists on {ListName}", col.Name, ProcessingRunsListName);
+                        continue;
+                    }
+
+                    ColumnDefinition def = new ColumnDefinition
+                    {
+                        Name = col.Name,
+                        DisplayName = col.DisplayName,
+                        Description = col.Description,
+                        Text = new TextColumn()
+                    };
+
+                    var created = await _client.Sites[siteId].Lists[listId].Columns.PostAsync(def);
+                    _logger?.LogInformation("✅ [Tracking] Created column '{ColumnName}' (Id={ColumnId}) on {ListName}", col.Name, created?.Id ?? "null", ProcessingRunsListName);
+                    existingNames.Add(col.Name);
+                }
+            }
+            catch (ODataError odataError)
+            {
+                _logger?.LogWarning(odataError, "⚠️ [Tracking] ODataError ensuring columns on {ListName} (ListId={ListId}): Code={Code}, Message={Message}",
+                    ProcessingRunsListName, listId, odataError.Error?.Code ?? "Unknown", odataError.Error?.Message ?? "Unknown");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "⚠️ [Tracking] Unexpected error ensuring columns on {ListName} (ListId={ListId}): {Error}", ProcessingRunsListName, listId, ex.Message);
+            }
+        }
+
+        private static ProcessingRunRecord MapFieldsToProcessingRunRecord(IDictionary<string, object> fields)
+        {
+            var record = new ProcessingRunRecord
+            {
+                RawDriveId = fields.TryGetValue("RawDriveId", out var d) ? d?.ToString() ?? string.Empty : string.Empty,
+                RawItemId = fields.TryGetValue("RawItemId", out var i) ? i?.ToString() ?? string.Empty : string.Empty,
+                ContentHash = fields.TryGetValue("ContentHash", out var h) ? h?.ToString() ?? string.Empty : string.Empty,
+                Status = fields.TryGetValue("Status", out var s) ? s?.ToString() ?? string.Empty : string.Empty,
+                ErrorMessage = fields.TryGetValue("ErrorMessage", out var e) ? e?.ToString() : null,
+                LastUpdatedUtc = DateTimeOffset.UtcNow
+            };
+
+            if (fields.TryGetValue("LastUpdatedUtc", out var lu) && lu != null)
+            {
+                if (DateTimeOffset.TryParse(lu.ToString(), out var parsed))
+                {
+                    record.LastUpdatedUtc = parsed;
+                }
+            }
+
+            return record;
         }
 
         /// <summary>
@@ -840,11 +1239,111 @@ namespace SMEPilot.FunctionApp.Helpers
             {
                 _logger?.LogInformation("🔍 [AUTHOR] Resolving list item author for DriveId={DriveId}, ItemId={ItemId}", driveId, itemId);
 
-                // Discover driveItem + list context (re-using the GetListItemFieldsAsync pattern)
-                var driveItem = await _client!.Drives[driveId].Items[itemId].GetAsync(requestConfig =>
+                DriveItem? driveItem = null;
+
+                // 1) Try DriveItem with listItem expanded (createdBy/lastModifiedBy are simple facets and
+                //    do NOT support $expand; selecting them is enough to read uploader/editor info).
+                try
                 {
-                    requestConfig.QueryParameters.Expand = new[] { "listItem" };
-                });
+                    driveItem = await _client!.Drives[driveId].Items[itemId].GetAsync(requestConfig =>
+                    {
+                        requestConfig.QueryParameters.Expand = new[] { "listItem" };
+                    });
+                }
+                catch (ODataError odataError)
+                {
+                    _logger?.LogWarning(odataError, "⚠️ [AUTHOR] DriveItem.GetAsync with createdBy/lastModifiedBy failed for ItemId: {ItemId}. Code={Code}, Message={Message}",
+                        itemId, odataError.Error?.Code, odataError.Error?.Message);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "⚠️ [AUTHOR] DriveItem.GetAsync with createdBy/lastModifiedBy threw unexpected error for ItemId: {ItemId}", itemId);
+                }
+
+                // Helper to read a friendly name from an IdentitySet
+                string? GetUserNameFromIdentity(IdentitySet? identity)
+                {
+                    var name = identity?.User?.DisplayName;
+                    if (!string.IsNullOrWhiteSpace(name))
+                    {
+                        return name;
+                    }
+
+                    // Some tenants expose user info only via AdditionalData
+                    var data = identity?.User?.AdditionalData;
+                    if (data != null)
+                    {
+                        if (data.TryGetValue("displayName", out var raw) && raw != null)
+                        {
+                            var v = raw.ToString();
+                            if (!string.IsNullOrWhiteSpace(v)) return v;
+                        }
+                        if (data.TryGetValue("email", out var rawEmail) && rawEmail != null)
+                        {
+                            var v = rawEmail.ToString();
+                            if (!string.IsNullOrWhiteSpace(v)) return v;
+                        }
+                    }
+
+                    return null;
+                }
+
+                if (driveItem != null)
+                {
+                    var createdByName = GetUserNameFromIdentity(driveItem.CreatedBy);
+                    var modifiedByName = GetUserNameFromIdentity(driveItem.LastModifiedBy);
+
+                    _logger?.LogInformation("📋 [AUTHOR] DriveItem.CreatedBy raw: DisplayName={DisplayName}, Email={Email}",
+                        driveItem.CreatedBy?.User?.DisplayName ?? "null",
+                        driveItem.CreatedBy?.User?.AdditionalData != null && driveItem.CreatedBy.User.AdditionalData.TryGetValue("email", out var cEmail) ? cEmail?.ToString() : "null");
+                    _logger?.LogInformation("📋 [AUTHOR] DriveItem.LastModifiedBy raw: DisplayName={DisplayName}, Email={Email}",
+                        driveItem.LastModifiedBy?.User?.DisplayName ?? "null",
+                        driveItem.LastModifiedBy?.User?.AdditionalData != null && driveItem.LastModifiedBy.User.AdditionalData.TryGetValue("email", out var mEmail) ? mEmail?.ToString() : "null");
+
+                    // Prefer the real human uploader:
+                    // - If LastModifiedBy looks like a system account (e.g. "SharePoint App"), ignore it
+                    // - Otherwise prefer LastModifiedBy, then fall back to CreatedBy.
+                    bool IsSystemAccount(string? name) =>
+                        string.IsNullOrWhiteSpace(name) ||
+                        name.Equals("SharePoint App", StringComparison.OrdinalIgnoreCase);
+
+                    if (!IsSystemAccount(modifiedByName))
+                    {
+                        _logger?.LogInformation("👤 [AUTHOR] Resolved from DriveItem.LastModifiedBy (human): {Author}", modifiedByName);
+                        return modifiedByName;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(createdByName))
+                    {
+                        _logger?.LogInformation("👤 [AUTHOR] Resolved from DriveItem.CreatedBy: {Author}", createdByName);
+                        return createdByName;
+                    }
+
+                    // If both are empty or system accounts, fall through to listItem-based resolution.
+                }
+
+                // 2) Fall back to listItem path (which we know works from GetListItemFieldsAsync) to find site/list/listItem ids.
+                if (driveItem == null)
+                {
+                    try
+                    {
+                        driveItem = await _client!.Drives[driveId].Items[itemId].GetAsync(requestConfig =>
+                        {
+                            requestConfig.QueryParameters.Expand = new[] { "listItem" };
+                        });
+                    }
+                    catch (ODataError odataError)
+                    {
+                        _logger?.LogWarning(odataError, "⚠️ [AUTHOR] DriveItem.GetAsync with listItem expand failed for ItemId: {ItemId}. Code={Code}, Message={Message}",
+                            itemId, odataError.Error?.Code, odataError.Error?.Message);
+                        driveItem = null;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "⚠️ [AUTHOR] DriveItem.GetAsync with listItem expand threw unexpected error for ItemId: {ItemId}", itemId);
+                        driveItem = null;
+                    }
+                }
 
                 if (driveItem == null || driveItem.ListItem == null)
                 {
@@ -873,17 +1372,46 @@ namespace SMEPilot.FunctionApp.Helpers
                 var listId = drive.List.Id;
                 var listItemId = driveItem.ListItem.Id;
 
-                // Expand fields so we can inspect Author/Editor person fields
+                // Expand fields and person navigation props so we can inspect Author/Editor person fields
                 var listItem = await RetryPolicyHelper.ExecuteWithRetryAsync(
                     _retryPolicy,
                     async () => await _client.Sites[siteId].Lists[listId].Items[listItemId].GetAsync(requestConfig =>
                     {
-                        requestConfig.QueryParameters.Expand = new[] { "fields" };
+                        requestConfig.QueryParameters.Expand = new[] { "fields", "createdByUser", "lastModifiedByUser" };
                     }),
                     $"ResolveListItemAuthorDisplayNameAsync for ItemId: {itemId}",
                     _logger);
 
-                if (listItem?.Fields?.AdditionalData == null || listItem.Fields.AdditionalData.Count == 0)
+                if (listItem == null)
+                {
+                    _logger?.LogWarning("⚠️ [AUTHOR] ListItem is null while resolving author for ItemId: {ItemId}", itemId);
+                    return null;
+                }
+
+                // Probe createdByUser / lastModifiedByUser which should mirror SharePoint UI "Created by / Modified"
+                var createdByUser = listItem.CreatedByUser;
+                var modifiedByUser = listItem.LastModifiedByUser;
+
+                _logger?.LogInformation("📋 [AUTHOR] ListItem.CreatedByUser: DisplayName={DisplayName}, UPN={Upn}",
+                    createdByUser?.DisplayName ?? "null",
+                    createdByUser?.UserPrincipalName ?? "null");
+                _logger?.LogInformation("📋 [AUTHOR] ListItem.LastModifiedByUser: DisplayName={DisplayName}, UPN={Upn}",
+                    modifiedByUser?.DisplayName ?? "null",
+                    modifiedByUser?.UserPrincipalName ?? "null");
+
+                if (!string.IsNullOrWhiteSpace(modifiedByUser?.DisplayName))
+                {
+                    _logger?.LogInformation("👤 [AUTHOR] Resolved from ListItem.LastModifiedByUser: {Author}", modifiedByUser.DisplayName);
+                    return modifiedByUser.DisplayName;
+                }
+
+                if (!string.IsNullOrWhiteSpace(createdByUser?.DisplayName))
+                {
+                    _logger?.LogInformation("👤 [AUTHOR] Resolved from ListItem.CreatedByUser: {Author}", createdByUser.DisplayName);
+                    return createdByUser.DisplayName;
+                }
+
+                if (listItem.Fields?.AdditionalData == null || listItem.Fields.AdditionalData.Count == 0)
                 {
                     _logger?.LogWarning("⚠️ [AUTHOR] No fields.AdditionalData returned while resolving author for ItemId: {ItemId}", itemId);
                     return null;
@@ -1035,7 +1563,7 @@ namespace SMEPilot.FunctionApp.Helpers
                         
                         _logger?.LogError(ex, "❌ [UpdateListItemFieldsAsync] PatchAsync failed for ItemId: {ItemId}: {Error}", itemId, ex.Message);
                         _logger?.LogError("   OData Error Code: {Code}, Message: {Message}", errorCode, errorMessage);
-                        
+
                         // CRITICAL: If fields don't exist, try to create them automatically
                         if (errorCode == "invalidRequest" && errorMessage.Contains("is not recognized"))
                         {
@@ -1080,6 +1608,14 @@ namespace SMEPilot.FunctionApp.Helpers
                                 // Don't throw - allow processing to continue
                                 return;
                             }
+                        }
+
+                        // If request is invalid for other reasons (e.g., URL field payload quirks),
+                        // treat this as a non-fatal metadata failure so the enrichment flow still succeeds.
+                        if (errorCode == "invalidRequest")
+                        {
+                            _logger?.LogWarning("⚠️ [UpdateListItemFieldsAsync] InvalidRequest for ItemId: {ItemId}. Skipping metadata update but keeping document enrichment.", itemId);
+                            return;
                         }
                         
                         if (odataError.Error?.AdditionalData != null)

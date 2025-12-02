@@ -79,16 +79,6 @@ try
                 return new TelemetryService(telemetryClient, logger);
             });
             
-            // Add NotificationService
-            services.AddSingleton<NotificationService>(sp =>
-            {
-                var connectionString = Environment.GetEnvironmentVariable("AzureCommunicationServices_ConnectionString");
-                var adminEmail = Environment.GetEnvironmentVariable("AdminEmail") 
-                    ?? Environment.GetEnvironmentVariable("NotificationEmail");
-                var logger = sp.GetService<ILogger<NotificationService>>();
-                return new NotificationService(connectionString, adminEmail, logger);
-            });
-            
             // Add RateLimitingService
             services.AddSingleton<RateLimitingService>(sp =>
             {
@@ -144,13 +134,12 @@ try
                        // TemplateProcessor is singleton
                        var templateProcessor = sp.GetService<TemplateProcessor>();
                        var telemetry = sp.GetService<TelemetryService>();
-                       var notifications = sp.GetService<NotificationService>();
                        var rateLimiter = sp.GetService<RateLimitingService>();
                        return new SMEPilot.FunctionApp.Functions.ProcessSharePointFile(
                            graph, extractor, cfg, logger,
                            documentEnricher: null, // Created per-use in ProcessFileAsync
                            templateProcessor,
-                           telemetry, notifications, rateLimiter);
+                           telemetry, rateLimiter);
                    });
                    
                    // Add Serilog logging - CLEAR all default providers first to prevent console output
