@@ -40,6 +40,24 @@ namespace SMEPilot.FunctionApp.Helpers
         
         // Spire PDF license key (DOCX no longer uses Spire.Doc)
         public string SpirePdfLicense => Environment.GetEnvironmentVariable("SpirePDFLicense");
+
+        // External Word TOC update service configuration
+        public bool EnableWordTocService
+        {
+            get
+            {
+                var value = Environment.GetEnvironmentVariable("EnableWordTocService");
+                return !string.IsNullOrWhiteSpace(value) &&
+                       value.Equals("true", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        public string? WordTocServiceUrl => Environment.GetEnvironmentVariable("WordTocServiceUrl");
+
+        public int WordTocServiceTimeoutSeconds =>
+            int.TryParse(Environment.GetEnvironmentVariable("WordTocServiceTimeoutSeconds"), out var timeout) && timeout > 0
+                ? timeout
+                : 90;
         
         // Retry configuration - from SharePoint config or environment variable
         public int MaxRetryAttempts => GetSharePointConfigIntValue("MaxRetryAttempts") 

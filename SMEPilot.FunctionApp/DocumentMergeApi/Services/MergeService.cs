@@ -72,13 +72,14 @@ public sealed class MergeService
         _tables = tables;
     }
 
-    public MergeResult Merge(Stream templateStream, Stream rawStream, string? author)
+    public MergeResult Merge(Stream templateStream, Stream rawStream, string? author, string? previousVersion = null)
     {
         // Use temporary file to ensure proper document saving
         var tempFile = Path.Combine(Path.GetTempPath(), $"merge_{Guid.NewGuid():N}.docx");
         var rawMemoryStream = new MemoryStream();
         IDictionary<string, string> metadataValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         
+        string effectiveVersion = "1.0";
         try
         {
             // Copy template to temp file
@@ -103,6 +104,12 @@ public sealed class MergeService
                 }
 
                 metadataValues = _metadataExtractor.Extract(rawDoc);
+
+                // Determine the effective VERSION_NUMBER for this run, supporting auto-bump
+                // behavior across enrichments. We combine the version detected from the raw
+                // document (metadataValues["VERSION_NUMBER"]) with any previously-used
+                // version from the tracking list (previousVersion).
+                effectiveVersion = ComputeEffectiveVersion(metadataValues, previousVersion);
 
                 var tokens = _tokens.GetTokens(templateDoc);
                 var sections = _extractor.Extract(rawDoc);
@@ -246,8 +253,18 @@ public sealed class MergeService
                     _toc.EnsureFieldsUpdateOnOpen(templateDoc);
                 }
 
-                _tables.AppendVersionHistory(templateDoc, author);
-                _tables.AppendChangeLog(templateDoc, author);
+                // Build section summary for Change Log (use headings of matched sections)
+                var sectionNames = matchedSet
+                    .Select(s => s.HeadingText)
+                    .Where(h => !string.IsNullOrWhiteSpace(h))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var sectionSummary = sectionNames.Count == 0
+                    ? "Content"
+                    : string.Join(", ", sectionNames);
+
+                _tables.AppendVersionHistory(templateDoc, author, effectiveVersion);
+                _tables.AppendChangeLog(templateDoc, author, sectionSummary);
 
                 // Ensure that the standard confidentiality disclaimer, if present,
                 // always appears as the last paragraph in the document regardless
@@ -289,7 +306,7 @@ public sealed class MergeService
             
             Console.WriteLine($"Document size: {mergedBytes.Length} bytes");
             
-            return new MergeResult(mergedBytes, outputFileName);
+            return new MergeResult(mergedBytes, outputFileName, effectiveVersion);
         }
         finally
         {
@@ -308,6 +325,85 @@ public sealed class MergeService
             
             rawMemoryStream?.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Computes the effective VERSION_NUMBER for the current merge run.
+    ///
+    /// Rules:
+    /// - If there is no previousVersion, keep whatever was detected from the raw
+    ///   document (falling back to 1.0 via MetadataExtractor).
+    /// - If both previousVersion and current metadata version parse as X.Y, then:
+    ///     * If the current metadata version is greater than the previous version,
+    ///       prefer the current metadata (author explicitly bumped it).
+    ///     * Otherwise, auto-bump the minor component of the previous version.
+    /// - If only one parses, prefer the parsed one (bumping previous when only it parses).
+    /// - If neither parses, fall back to 1.0.
+    ///
+    /// The chosen version is written back into metadata["VERSION_NUMBER"] and returned.
+    /// </summary>
+    private static string ComputeEffectiveVersion(IDictionary<string, string> metadata, string? previousVersion)
+    {
+        if (!metadata.TryGetValue("VERSION_NUMBER", out var currentRaw) || string.IsNullOrWhiteSpace(currentRaw))
+        {
+            currentRaw = "1.0";
+        }
+
+        static bool TryParseVersion(string? input, out int major, out int minor)
+        {
+            major = 0;
+            minor = 0;
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                return false;
+            }
+
+            var parts = input.Trim().Split('.', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0 || !int.TryParse(parts[0], out major))
+            {
+                return false;
+            }
+
+            if (parts.Length > 1 && int.TryParse(parts[1], out var parsedMinor))
+            {
+                minor = parsedMinor;
+            }
+
+            return true;
+        }
+
+        var hasPrev = TryParseVersion(previousVersion, out var prevMajor, out var prevMinor);
+        var hasCurr = TryParseVersion(currentRaw, out var currMajor, out var currMinor);
+
+        string chosen;
+        if (!hasPrev && !hasCurr)
+        {
+            chosen = "1.0";
+        }
+        else if (!hasPrev && hasCurr)
+        {
+            chosen = $"{currMajor}.{currMinor}";
+        }
+        else if (hasPrev && !hasCurr)
+        {
+            chosen = $"{prevMajor}.{prevMinor + 1}";
+        }
+        else
+        {
+            // Both parsed; honor explicit bumps in the raw metadata if they move
+            // the version forward, otherwise auto-bump the previous version.
+            if (currMajor > prevMajor || (currMajor == prevMajor && currMinor > prevMinor))
+            {
+                chosen = $"{currMajor}.{currMinor}";
+            }
+            else
+            {
+                chosen = $"{prevMajor}.{prevMinor + 1}";
+            }
+        }
+
+        metadata["VERSION_NUMBER"] = chosen;
+        return chosen;
     }
 
     private void ApplyMetadata(IEnumerable<TokenOccurrence> tokens, IReadOnlyDictionary<TokenOccurrence, RawSection?> matches, IDictionary<string, string> metadata)
@@ -650,4 +746,5 @@ public sealed class MergeService
         return project;
     }
 }
+
 

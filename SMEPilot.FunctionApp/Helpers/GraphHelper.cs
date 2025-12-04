@@ -302,6 +302,7 @@ namespace SMEPilot.FunctionApp.Helpers
                         ["RawDriveId"] = record.RawDriveId,
                         ["RawItemId"] = record.RawItemId,
                         ["ContentHash"] = record.ContentHash,
+                        ["Version"] = record.Version ?? string.Empty,
                         ["Status"] = record.Status,
                         ["ErrorMessage"] = record.ErrorMessage ?? string.Empty,
                         ["LastUpdatedUtc"] = record.LastUpdatedUtc.ToString("O")
@@ -412,6 +413,7 @@ namespace SMEPilot.FunctionApp.Helpers
                     new { Name = "RawDriveId", Type = "text", DisplayName = "Raw Drive Id", Description = "DriveId of source document" },
                     new { Name = "RawItemId", Type = "text", DisplayName = "Raw Item Id", Description = "ItemId of source document" },
                     new { Name = "ContentHash", Type = "text", DisplayName = "Content Hash", Description = "SHA256 hash of raw content" },
+                    new { Name = "Version", Type = "text", DisplayName = "Version", Description = "Logical document version used for this enriched run" },
                     new { Name = "Status", Type = "text", DisplayName = "Status", Description = "Processing status (Processing, Succeeded, Failed, etc.)" },
                     new { Name = "ErrorMessage", Type = "text", DisplayName = "Error Message", Description = "Error details if processing failed" },
                     new { Name = "LastUpdatedUtc", Type = "text", DisplayName = "Last Updated (UTC)", Description = "Last time this record was updated (UTC, ISO 8601 string)" }
@@ -456,6 +458,7 @@ namespace SMEPilot.FunctionApp.Helpers
                 RawDriveId = fields.TryGetValue("RawDriveId", out var d) ? d?.ToString() ?? string.Empty : string.Empty,
                 RawItemId = fields.TryGetValue("RawItemId", out var i) ? i?.ToString() ?? string.Empty : string.Empty,
                 ContentHash = fields.TryGetValue("ContentHash", out var h) ? h?.ToString() ?? string.Empty : string.Empty,
+                Version = fields.TryGetValue("Version", out var v) ? v?.ToString() : null,
                 Status = fields.TryGetValue("Status", out var s) ? s?.ToString() ?? string.Empty : string.Empty,
                 ErrorMessage = fields.TryGetValue("ErrorMessage", out var e) ? e?.ToString() : null,
                 LastUpdatedUtc = DateTimeOffset.UtcNow
@@ -636,6 +639,56 @@ namespace SMEPilot.FunctionApp.Helpers
                 $"DownloadFileStreamAsync for ItemId: {itemId}",
                 _logger);
             
+            var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+            return ms;
+        }
+
+        /// <summary>
+        /// Export a file in a drive to PDF using Microsoft Graph's format=pdf support.
+        /// Returns a memory stream positioned at 0, or null if credentials are not configured.
+        /// </summary>
+        public async Task<Stream?> DownloadFileAsPdfStreamAsync(string driveId, string itemId)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogWarning("⚠️ [PDF] Graph credentials not configured; cannot export item {ItemId} to PDF", itemId);
+                return null;
+            }
+
+            // Use raw HTTP with ?format=pdf so the service renders the document (including TOC/page numbers)
+            var requestUrl = $"https://graph.microsoft.com/v1.0/drives/{driveId}/items/{itemId}/content?format=pdf";
+
+            var stream = await RetryPolicyHelper.ExecuteWithRetryAsync(
+                _retryPolicy,
+                async () =>
+                {
+                    var tokenCredential = new ClientSecretCredential(
+                        _cfg.GraphTenantId,
+                        _cfg.GraphClientId,
+                        _cfg.GraphClientSecret);
+
+                    var token = await tokenCredential.GetTokenAsync(
+                        new TokenRequestContext(new[] { "https://graph.microsoft.com/.default" }));
+
+                    using var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
+
+                    var response = await _httpClient.SendAsync(request);
+                    response.EnsureSuccessStatusCode();
+
+                    return await response.Content.ReadAsStreamAsync();
+                },
+                $"DownloadFileAsPdfStreamAsync for ItemId: {itemId}",
+                _logger);
+
+            if (stream == null)
+            {
+                _logger?.LogWarning("⚠️ [PDF] Export to PDF returned null stream for item {ItemId}", itemId);
+                return null;
+            }
+
             var ms = new MemoryStream();
             await stream.CopyToAsync(ms);
             ms.Position = 0;
@@ -998,6 +1051,15 @@ namespace SMEPilot.FunctionApp.Helpers
                 var useTimeFilter = lookbackWindow > TimeSpan.Zero;
                 var cutoff = useTimeFilter ? DateTimeOffset.UtcNow - lookbackWindow : (DateTimeOffset?)null;
 
+                // High-level diagnostic so we can see exactly how delta is being queried.
+                _logger?.LogInformation(
+                    "🔍 [Delta] Starting GetRecentItemsFromDeltaAsync for DriveId={DriveId}, SourceFolderPath={SourceFolderPath}, NormalizedSource={NormalizedSource}, Lookback={Lookback}, MaxItems={MaxItems}",
+                    driveId,
+                    sourceFolderPath ?? "null",
+                    normalizedSource ?? "<none>",
+                    lookbackWindow,
+                    maxItems);
+
                 // Acquire an access token for calling Graph directly
                 var tokenCredential = new ClientSecretCredential(
                     _cfg.GraphTenantId,
@@ -1062,6 +1124,15 @@ namespace SMEPilot.FunctionApp.Helpers
                             lastModified = lm;
                         }
 
+                        // Log raw delta candidate so we can see what Graph returned before filters.
+                        var parentPathForLog = (string?)v["parentReference"]?["path"];
+                        _logger?.LogDebug(
+                            "🔍 [Delta] Candidate from delta: Id={Id}, Name={Name}, ParentPath={ParentPath}, LastModified={LastModified:o}",
+                            id,
+                            name,
+                            parentPathForLog ?? "<null>",
+                            lastModified);
+
                         if (useTimeFilter && cutoff.HasValue && lastModified.HasValue && lastModified.Value < cutoff.Value)
                         {
                             // Older than lookback window – skip
@@ -1071,7 +1142,7 @@ namespace SMEPilot.FunctionApp.Helpers
                         // Path filter based on parentReference.path
                         if (!string.IsNullOrWhiteSpace(normalizedSource))
                         {
-                            var parentPath = (string?)v["parentReference"]?["path"];
+                            var parentPath = parentPathForLog;
                             if (string.IsNullOrWhiteSpace(parentPath))
                             {
                                 continue;
@@ -1091,15 +1162,15 @@ namespace SMEPilot.FunctionApp.Helpers
                             }
                         }
 
-                        // Build a minimal DriveItem so callers can reuse existing code paths
-                        var driveItem = new DriveItem
-                        {
-                            Id = id,
-                            Name = name,
-                            LastModifiedDateTime = lastModified
-                        };
+                // Build a minimal DriveItem so callers can reuse existing code paths
+                var driveItem = new DriveItem
+                {
+                    Id = id,
+                    Name = name,
+                    LastModifiedDateTime = lastModified
+                };
 
-                        results.Add(driveItem);
+                results.Add(driveItem);
                     }
 
                     // Follow nextLink if present
@@ -1112,8 +1183,31 @@ namespace SMEPilot.FunctionApp.Helpers
                     requestUrl = nextLink;
                 }
 
-                _logger?.LogInformation("✅ [Delta] Retrieved {Count} recent candidate files from delta for drive {DriveId}", results.Count, driveId);
-                return results;
+            // Order candidates by most-recent modification time so callers see the freshest items first.
+            var orderedResults = results
+                .OrderByDescending(r => r.LastModifiedDateTime ?? DateTimeOffset.MinValue)
+                .ToList();
+
+            if (orderedResults.Count > 0)
+            {
+                var previewNames = string.Join(
+                    ", ",
+                    orderedResults
+                        .Take(Math.Min(orderedResults.Count, 5))
+                        .Select(r => $"{r.Name} @ {r.LastModifiedDateTime:O}"));
+
+                _logger?.LogInformation(
+                    "✅ [Delta] Retrieved {Count} recent candidate files from delta for drive {DriveId}. Top candidates (most recent first): {Candidates}",
+                    orderedResults.Count,
+                    driveId,
+                    previewNames);
+            }
+            else
+            {
+                _logger?.LogInformation("✅ [Delta] Retrieved 0 recent candidate files from delta for drive {DriveId}", driveId);
+            }
+
+            return orderedResults;
             }
             catch (Exception ex)
             {
@@ -1977,7 +2071,10 @@ namespace SMEPilot.FunctionApp.Helpers
                     return siteId;
                 }
 
-                _logger?.LogWarning("⚠️ [GetSiteIdFromDriveAsync] SiteId not found in drive root for drive {DriveId}", driveId);
+                // This is not a fatal condition in our flow because we also capture
+                // SiteId from the file/list context. Log at Debug to avoid noisy
+                // warnings once SiteId is reliably available elsewhere.
+                _logger?.LogDebug("ℹ️ [GetSiteIdFromDriveAsync] SiteId not present in drive root for drive {DriveId}", driveId);
                 return null;
             }
             catch (Exception ex)

@@ -12,6 +12,7 @@ namespace SMEPilot.FunctionApp.Models
         public string RawDriveId { get; set; } = string.Empty;
         public string RawItemId { get; set; } = string.Empty;
         public string ContentHash { get; set; } = string.Empty;
+        public string? Version { get; set; }
         public string Status { get; set; } = string.Empty; // e.g. Processing, Succeeded, Failed
         public string? ErrorMessage { get; set; }
         public string? EnrichedUrl { get; set; }

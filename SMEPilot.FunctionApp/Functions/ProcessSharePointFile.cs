@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -81,6 +83,74 @@ namespace SMEPilot.FunctionApp.Functions
             _templateProcessor = templateProcessor;
             _telemetry = telemetry;
             _rateLimiter = rateLimiter;
+        }
+
+        /// <summary>
+        /// Run the TOC update pipeline for a generated document.
+        /// Uses an external Word-based TOC service when configured; otherwise returns the original bytes.
+        /// </summary>
+        private async Task<byte[]> RunTocUpdatePipelineAsync(byte[] enrichedBytes)
+        {
+            if (enrichedBytes == null || enrichedBytes.Length == 0)
+            {
+                return enrichedBytes ?? Array.Empty<byte>();
+            }
+
+            // 1. Try external Word TOC update service if enabled.
+            if (_cfg.EnableWordTocService && !string.IsNullOrWhiteSpace(_cfg.WordTocServiceUrl))
+            {
+                try
+                {
+                    var timeoutSeconds = _cfg.WordTocServiceTimeoutSeconds;
+
+                    using var httpClient = new HttpClient
+                    {
+                        Timeout = TimeSpan.FromSeconds(timeoutSeconds)
+                    };
+
+                    using var content = new ByteArrayContent(enrichedBytes);
+                    content.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+
+                    _logger.LogInformation("📑 [TOC] Calling external Word TOC service at {Url} with timeout {TimeoutSeconds}s...",
+                        _cfg.WordTocServiceUrl, timeoutSeconds);
+
+                    using var response = await httpClient.PostAsync(_cfg.WordTocServiceUrl, content);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        _logger.LogWarning("⚠️ [TOC] External TOC service returned status {StatusCode} ({ReasonPhrase}). Falling back to in-process updater.",
+                            (int)response.StatusCode, response.ReasonPhrase ?? "no reason");
+                    }
+                    else
+                    {
+                        var updatedBytes = await response.Content.ReadAsByteArrayAsync();
+                        if (updatedBytes != null && updatedBytes.Length > 0)
+                        {
+                            _logger.LogInformation("✅ [TOC] External Word TOC service completed successfully. Updated size: {Size} bytes", updatedBytes.Length);
+                            return updatedBytes;
+                        }
+
+                        _logger.LogWarning("⚠️ [TOC] External TOC service returned empty body. Falling back to in-process updater.");
+                    }
+                }
+                catch (TaskCanceledException ex)
+                {
+                    _logger.LogWarning(ex, "⚠️ [TOC] External TOC service timed out after {TimeoutSeconds}s. Falling back to in-process updater.",
+                        _cfg.WordTocServiceTimeoutSeconds);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "⚠️ [TOC] External TOC service failed. Falling back to in-process updater.");
+                }
+            }
+            else
+            {
+                _logger.LogDebug("📑 [TOC] External Word TOC service disabled or URL not configured; using in-process updater only.");
+            }
+
+            // 2. No local TOC engine; return the original document bytes.
+            _logger.LogInformation("📑 [TOC] No local TOC updater configured. Returning original document bytes.");
+            return enrichedBytes;
         }
 
         [Function("ProcessSharePointFile")]
@@ -395,7 +465,9 @@ namespace SMEPilot.FunctionApp.Functions
 
                                     if (recentItems != null && recentItems.Count > 0)
                                     {
-                                        // Find the first file that hasn't been processed yet
+                                        // Find the first suitable candidate file.
+                                        // NOTE: We no longer rely on raw item SMEPilot_* columns here;
+                                        // idempotency is handled by the SMEPilotRuns tracking list once we know the itemId.
                                         DriveItem? candidateFile = null;
                                         
                                         foreach (var item in recentItems)
@@ -403,7 +475,7 @@ namespace SMEPilot.FunctionApp.Functions
                                             // Skip folders
                                             if (item.Folder != null) continue;
                                             
-                                            // CRITICAL FIX 1: Skip enriched files (files we created) - they end with "_enriched"
+                                            // Skip enriched output files (we never want to treat our own outputs as new inputs)
                                             var itemName = item.Name ?? "";
                                             if (itemName.EndsWith("_enriched.docx", StringComparison.OrdinalIgnoreCase) ||
                                                 itemName.EndsWith("_enriched.pptx", StringComparison.OrdinalIgnoreCase) ||
@@ -414,7 +486,7 @@ namespace SMEPilot.FunctionApp.Functions
                                                 continue;
                                             }
 
-                                            // CRITICAL FIX 2: Skip obviously unsupported extensions here
+                                            // Skip obviously unsupported extensions here
                                             // so we don't keep selecting template DOTX or other files that will always fail.
                                             var lowerName = itemName.ToLowerInvariant();
                                             if (lowerName.EndsWith(".dotx") || lowerName.EndsWith(".dot") ||
@@ -423,74 +495,39 @@ namespace SMEPilot.FunctionApp.Functions
                                                 _logger.LogDebug("⏭️ Skipping unsupported input file type in recent-items scan: {FileName}", itemName);
                                                 continue;
                                             }
-                                            
-                                            // Check metadata to avoid re-processing or repeatedly picking permanently failed items
-                                            var itemIdToCheck = item.Id ?? "";
-                                            if (!string.IsNullOrWhiteSpace(itemIdToCheck))
-                                            {
-                                                var metadata = await _graph.GetListItemFieldsAsync(driveId, itemIdToCheck);
-                                                if (metadata != null)
-                                                {
-                                                    // Already enriched?
-                                                    if (metadata.TryGetValue("SMEPilot_Enriched", out var enrichedObj) && enrichedObj != null)
-                                                    {
-                                                        var enrichedValue = enrichedObj.ToString();
-                                                        var isEnriched = enrichedValue == "True" || enrichedValue == "true" || enrichedValue == "1";
-                                                        if (isEnriched)
-                                                        {
-                                                            _logger.LogDebug("⏭️ Recent file {FileName} already processed (SMEPilot_Enriched), checking next...", item.Name);
-                                                            continue; // Skip already processed files
-                                                        }
-                                                    }
 
-                                                    // Currently being processed? (avoid choosing in-flight items as candidates)
-                                                    if (metadata.TryGetValue("SMEPilot_Status", out var statusObj) &&
-                                                        string.Equals(statusObj?.ToString(), "Processing", StringComparison.OrdinalIgnoreCase))
-                                                    {
-                                                        _logger.LogDebug("⏭️ Recent file {FileName} is currently being processed (SMEPilot_Status=Processing), checking next...", item.Name);
-                                                        continue;
-                                                    }
+                                            // (Legacy) Previously we also read SMEPilot_Enriched / SMEPilot_Status
+                                            // from the raw item to avoid re-processing. That logic has been retired
+                                            // in favor of SMEPilotRuns tracking, so we now accept any remaining
+                                            // candidate here and let downstream idempotency decide.
+                                            // This ensures older raw files with SMEPilot_Enriched still set (from the old engine)
+                                            // can be reprocessed by the new TESTAPI-style pipeline.
 
-                                                    // Previously failed with an unsupported file-type error?
-                                                    if (metadata.TryGetValue("SMEPilot_Status", out statusObj) &&
-                                                        string.Equals(statusObj?.ToString(), "Failed", StringComparison.OrdinalIgnoreCase) &&
-                                                        metadata.TryGetValue("SMEPilot_ErrorMessage", out var errorObj))
-                                                    {
-                                                        var errorMsg = errorObj?.ToString() ?? string.Empty;
-                                                        if (errorMsg.IndexOf("Unsupported file type", StringComparison.OrdinalIgnoreCase) >= 0)
-                                                        {
-                                                            _logger.LogDebug("⏭️ Recent file {FileName} previously failed as unsupported type, skipping in recent-items scan", item.Name);
-                                                            continue;
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            
-                                            // Found a file that hasn't been processed
                                             candidateFile = item;
                                             break;
                                         }
-                                        
+
                                         if (candidateFile == null)
                                         {
-                                            _logger.LogDebug("⚠️ All recent files have already been processed");
-                                            continue;
+                                            _logger.LogWarning("⚠️ [Delta] No suitable recent candidate file found from delta/recent-items scan.");
                                         }
-                                        
-                                        itemId = candidateFile.Id ?? "";
-                                        fileName = candidateFile.Name ?? "unknown";
-                                        var email = candidateFile.CreatedBy?.User?.AdditionalData != null &&
-                                                    candidateFile.CreatedBy.User.AdditionalData.TryGetValue("email", out var emailObj)
-                                            ? emailObj?.ToString()
-                                            : null;
-                                        var displayName = candidateFile.CreatedBy?.User?.DisplayName ?? candidateFile.CreatedBy?.Application?.DisplayName ?? "";
+                                        else
+                                        {
+                                            _logger.LogInformation("✅ [Delta] Selected recent candidate file from delta/recent-items scan: {FileName} (Id={ItemId})", candidateFile.Name, candidateFile.Id);
+                                        }
 
-                                        uploaderEmail = !string.IsNullOrWhiteSpace(email)
-                                            ? email
-                                            : displayName;
-
-                                        _logger.LogInformation("👤 [AUTHOR] From recent candidate file - Email: {Email}, DisplayName: {DisplayName}", email, displayName);
-                                        _logger.LogDebug("✅ Found unprocessed file: {FileName} (ID: {ItemId})", fileName, itemId);
+                                        if (candidateFile != null)
+                                        {
+                                            // Use this file's id/name/drive as our inferred target.
+                                            var candidateId = candidateFile.Id;
+                                            var candidateName = candidateFile.Name;
+                                            if (!string.IsNullOrWhiteSpace(candidateId))
+                                            {
+                                                _logger.LogInformation("🧭 [Delta] Using candidate file from delta as target: {FileName} (ItemId={ItemId})", candidateName, candidateId);
+                                                itemId = candidateId;
+                                                fileName = candidateName ?? fileName;
+                                            }
+                                        }
                                     }
                                     else
                                     {
@@ -638,8 +675,23 @@ namespace SMEPilot.FunctionApp.Functions
 
                                         if (string.Equals(latestRun.Status, "Processing", StringComparison.OrdinalIgnoreCase))
                                         {
-                                            _logger.LogInformation("⏭️ [TRACKING] Skipping {FileName} because latest tracking status is Processing.", fileName);
-                                            shouldSkip = true;
+                                            // Treat Processing as "in-flight" only for a limited window.
+                                            // If the record is older than this, consider it stale and allow re-processing.
+                                            var now = DateTimeOffset.UtcNow;
+                                            var age = now - latestRun.LastUpdatedUtc;
+                                            var inFlightWindow = TimeSpan.FromMinutes(5);
+
+                                            if (age <= inFlightWindow)
+                                            {
+                                                _logger.LogInformation("⏭️ [TRACKING] Skipping {FileName} because latest tracking status is Processing (age {Age}).",
+                                                    fileName, age);
+                                                shouldSkip = true;
+                                            }
+                                            else
+                                            {
+                                                _logger.LogWarning("⏱️ [TRACKING] Latest run for {FileName} is stuck in Processing since {LastUpdated:o} (age {Age}). Allowing re-processing.",
+                                                    fileName, latestRun.LastUpdatedUtc, age);
+                                            }
                                         }
                                         else if (string.Equals(latestRun.Status, "Failed", StringComparison.OrdinalIgnoreCase) &&
                                                  !string.IsNullOrWhiteSpace(latestRun.ErrorMessage) &&
@@ -1124,6 +1176,7 @@ namespace SMEPilot.FunctionApp.Functions
             long fileSizeBytes = 0;
             string? enrichedUrl = null;
             string? processingContentHash = null;
+            string? logicalVersionForThisRun = null;
             
             try
             {
@@ -1179,119 +1232,9 @@ namespace SMEPilot.FunctionApp.Functions
                     await _graph.UpsertProcessingRunAsync(siteId, runRecord);
                 }
             
-            // TODO: TEMPORARILY DISABLED - 'temp' itemId resolution logic
-            // This logic was added to support manual uploads via DocumentUploader component
-            // which is not part of base requirements. Hidden for now, can be re-enabled later.
-            // Base requirement: Files should be uploaded to SharePoint and processed via webhooks
-            // which provide correct driveId and itemId automatically.
-            /*
-            // Handle 'temp' itemId case - resolve file by name
-            if (itemId == "temp" || string.IsNullOrWhiteSpace(itemId))
-            {
-                _logger.LogInformation("🔍 [RESOLVE] itemId is 'temp', resolving file by name: {FileName}", fileName);
-                
-                // Get site ID from driveId
-                string? siteIdForResolve = null;
-                try
-                {
-                    siteIdForResolve = await _graph.GetSiteIdFromDriveAsync(driveId);
-                    if (!string.IsNullOrWhiteSpace(siteIdForResolve))
-                    {
-                        _logger.LogInformation("✅ [RESOLVE] Got site ID from drive: {SiteId}", siteIdForResolve);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "⚠️ [RESOLVE] Could not get site ID from drive: {Error}", ex.Message);
-                }
-                
-                // Load configuration to get source folder path
-                if (!string.IsNullOrWhiteSpace(siteIdForResolve))
-                {
-                    try
-                    {
-                        await _cfg.LoadSharePointConfigAsync(_graph, siteIdForResolve, _logger, forceRefresh: true);
-                        _logger.LogInformation("✅ [RESOLVE] Configuration loaded. Source folder: {SourcePath}", _cfg.SourceFolderPath);
-                    }
-                    catch (Exception configEx)
-                    {
-                        _logger.LogWarning(configEx, "⚠️ [RESOLVE] Failed to load configuration: {Error}", configEx.Message);
-                    }
-                }
-                
-                // Try to resolve file by name in the source folder
-                if (!string.IsNullOrWhiteSpace(_cfg.SourceFolderPath) && !string.IsNullOrWhiteSpace(siteIdForResolve))
-                {
-                    try
-                    {
-                        // Resolve source folder to get drive ID
-                        var (sourceDriveId, sourceFolderItemId) = await _graph.ResolveFolderPathAsync(siteIdForResolve, _cfg.SourceFolderPath);
-                        if (!string.IsNullOrWhiteSpace(sourceDriveId))
-                        {
-                            _logger.LogInformation("✅ [RESOLVE] Resolved source folder. DriveId: {DriveId}", sourceDriveId);
-                            
-                            // Extract just the file name (no path)
-                            var sanitizedFileName = Path.GetFileName(fileName);
-                            
-                            // Try to get file by name in the drive root (if source folder is library root)
-                            // or in the subfolder if sourceFolderItemId is set
-                            try
-                            {
-                                DriveItem? fileItem = null;
-                                if (string.IsNullOrWhiteSpace(sourceFolderItemId))
-                                {
-                                    // File is in library root
-                                    fileItem = await _graph.GetDriveItemByPathAsync(sourceDriveId, sanitizedFileName);
-                                }
-                                else
-                                {
-                                    // File is in a subfolder - need to construct path
-                                    // Get folder name from source folder path
-                                    var folderParts = _cfg.SourceFolderPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-                                    var folderName = folderParts.Length > 0 ? folderParts[folderParts.Length - 1] : "";
-                                    var filePath = string.IsNullOrWhiteSpace(folderName) ? sanitizedFileName : $"{folderName}/{sanitizedFileName}";
-                                    fileItem = await _graph.GetDriveItemByPathAsync(sourceDriveId, filePath);
-                                }
-                                
-                                if (fileItem != null && !string.IsNullOrWhiteSpace(fileItem.Id))
-                                {
-                                    // Update driveId and itemId with resolved values
-                                    driveId = sourceDriveId;
-                                    itemId = fileItem.Id;
-                                    _logger.LogInformation("✅ [RESOLVE] Successfully resolved file. New DriveId: {DriveId}, ItemId: {ItemId}", driveId, itemId);
-                                }
-                                else
-                                {
-                                    _logger.LogWarning("⚠️ [RESOLVE] File item found but ID is null or empty");
-                                    return (false, null, $"File '{fileName}' not found in source folder '{_cfg.SourceFolderPath}'");
-                                }
-                            }
-                            catch (ODataError odataError) when (odataError.Error?.Code == "itemNotFound" || odataError.Error?.Code == "NotFound")
-                            {
-                                _logger.LogWarning("⚠️ [RESOLVE] File '{FileName}' not found in source folder '{SourcePath}'", fileName, _cfg.SourceFolderPath);
-                                return (false, null, $"File '{fileName}' not found in source folder '{_cfg.SourceFolderPath}'. Please ensure the file was uploaded successfully.");
-                            }
-                        }
-                        else
-                        {
-                            _logger.LogWarning("⚠️ [RESOLVE] Could not resolve source folder path: {SourcePath}", _cfg.SourceFolderPath);
-                            return (false, null, $"Could not resolve source folder path: '{_cfg.SourceFolderPath}'. Please check configuration.");
-                        }
-                    }
-                    catch (Exception resolveEx)
-                    {
-                        _logger.LogError(resolveEx, "❌ [RESOLVE] Error resolving file by name: {Error}", resolveEx.Message);
-                        return (false, null, $"Failed to resolve file '{fileName}': {resolveEx.Message}");
-                    }
-                }
-                else
-                {
-                    _logger.LogWarning("⚠️ [RESOLVE] Cannot resolve file - missing siteId or source folder path");
-                    return (false, null, "Cannot resolve file: siteId or source folder path is missing. Please check configuration.");
-                }
-            }
-            */
-            
+            // NOTE: Legacy 'temp' itemId resolution logic (for manual uploader flows) was removed
+            // to keep this function focused on webhook-driven processing. Webhooks always supply
+            // the correct driveId/itemId pair.
             // Reject 'temp' itemId - webhooks should provide correct itemId
             if (itemId == "temp" || string.IsNullOrWhiteSpace(itemId))
             {
@@ -1382,6 +1325,7 @@ namespace SMEPilot.FunctionApp.Functions
                 List<byte[]> imagesBytes;
                 string tempInputPath = null; // For .docx files, we'll save to temp for DocumentEnricherService
                 string fileId = Guid.NewGuid().ToString(); // Generate file ID early for temp file naming
+                string? previousVersionForAutoBump = null;
                 
                 _logger.LogDebug("📄 [EXTRACTION] Detected file type: {FileExtension}", fileExtension);
                 
@@ -1414,13 +1358,17 @@ namespace SMEPilot.FunctionApp.Functions
                             // Important: compare against the last known *succeeded* run,
                             // ignoring any newer Processing/Failed entries for this file.
                             var latestSucceededRun = await _graph.GetLatestSucceededProcessingRunAsync(siteId, driveId, itemId);
-                            if (latestSucceededRun != null &&
-                                !string.IsNullOrWhiteSpace(latestSucceededRun.ContentHash) &&
-                                string.Equals(latestSucceededRun.ContentHash, currentHash, StringComparison.OrdinalIgnoreCase))
+                            if (latestSucceededRun != null)
                             {
-                                _logger.LogInformation("⏭️ [IDEMPOTENCY] Skipping enrichment for {FileName}: content hash unchanged and latest succeeded tracking run found. Hash={Hash}", 
-                                    fileName, currentHash);
-                                return (true, latestSucceededRun.EnrichedUrl, "Skipped - duplicate content (content hash unchanged)");
+                                previousVersionForAutoBump = latestSucceededRun.Version;
+
+                                if (!string.IsNullOrWhiteSpace(latestSucceededRun.ContentHash) &&
+                                    string.Equals(latestSucceededRun.ContentHash, currentHash, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    _logger.LogInformation("⏭️ [IDEMPOTENCY] Skipping enrichment for {FileName}: content hash unchanged and latest succeeded tracking run found. Hash={Hash}", 
+                                        fileName, currentHash);
+                                    return (true, latestSucceededRun.EnrichedUrl, "Skipped - duplicate content (content hash unchanged)");
+                                }
                             }
                         }
                         catch (Exception trackingEx)
@@ -1737,7 +1685,8 @@ namespace SMEPilot.FunctionApp.Functions
                         new TocManager(),
                         new TableUpdater());
 
-                    var mergeResult = mergeService.Merge(templateStream, rawStream, mergeAuthor);
+                    var mergeResult = mergeService.Merge(templateStream, rawStream, mergeAuthor, previousVersionForAutoBump);
+                    logicalVersionForThisRun = mergeResult.Version;
 
                     // Use the same name as the uploaded file (no extra naming logic)
                     enrichedBytes = mergeResult.Content;
@@ -1876,6 +1825,18 @@ namespace SMEPilot.FunctionApp.Functions
                 {
                     _logger.LogError("❌ [TEMPLATE] Failed to create enriched document - enrichedBytes or enrichedName is null");
                     return (false, null, "Failed to create enriched document");
+                }
+
+                // Attempt TOC update via external Word service (preferred) with in-process fallback.
+                try
+                {
+                    _logger.LogInformation("📑 [TOC] Attempting to update Table of Contents before upload...");
+                    enrichedBytes = await RunTocUpdatePipelineAsync(enrichedBytes);
+                    _logger.LogInformation("✅ [TOC] TOC update pipeline completed.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "⚠️ [TOC] TOC update failed; proceeding with original enriched document. Error: {Error}", ex.Message);
                 }
                 
                 // Skip embedding generation/storage in no-DB mode (log only)
@@ -2159,6 +2120,38 @@ namespace SMEPilot.FunctionApp.Functions
                 }
 
                 _logger.LogDebug("✅ Successfully processed {FileName}, enriched document: {Url}", fileName, uploaded.WebUrl);
+
+                // Optional: also render a PDF version via Microsoft Graph for better SharePoint preview with TOC/page numbers.
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(enrichedName) &&
+                        enrichedName.EndsWith(".docx", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.LogInformation("📄 [PDF] Exporting enriched DOCX to PDF via Microsoft Graph for SharePoint preview...");
+
+                        // Use the destination drive and the uploaded item's ID for export.
+                        var pdfStream = await _graph.DownloadFileAsPdfStreamAsync(destinationDriveId!, uploaded.Id!);
+                        if (pdfStream != null)
+                        {
+                            using var pdfMs = new MemoryStream();
+                            await pdfStream.CopyToAsync(pdfMs);
+                            var pdfBytes = pdfMs.ToArray();
+
+                            var pdfName = Path.ChangeExtension(enrichedName, ".pdf");
+                            await _graph.UploadFileBytesAsync(destinationDriveId!, destinationUploadPath, pdfName, pdfBytes);
+
+                            _logger.LogInformation("✅ [PDF] PDF version '{PdfName}' uploaded alongside enriched DOCX for preview.", pdfName);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("⚠️ [PDF] PDF export stream was null for item {ItemId}", uploaded.Id);
+                        }
+                    }
+                }
+                catch (Exception pdfEx)
+                {
+                    _logger.LogWarning(pdfEx, "⚠️ [PDF] Failed to export or upload PDF version for preview: {Error}", pdfEx.Message);
+                }
                 
                 // Track successful processing
                 var processingDuration = DateTimeOffset.UtcNow - processingStartTime;
@@ -2174,6 +2167,7 @@ namespace SMEPilot.FunctionApp.Functions
                         RawDriveId = driveId,
                         RawItemId = itemId,
                         ContentHash = hashForTracking,
+                        Version = logicalVersionForThisRun,
                         Status = "Succeeded",
                         ErrorMessage = null,
                         EnrichedUrl = uploaded.WebUrl,
@@ -2223,6 +2217,7 @@ namespace SMEPilot.FunctionApp.Functions
                         RawDriveId = driveId,
                         RawItemId = itemId,
                         ContentHash = hashForTracking,
+                        Version = logicalVersionForThisRun,
                         Status = "Failed",
                         ErrorMessage = errorMessage,
                         EnrichedUrl = null,

@@ -217,3 +217,5 @@ private Table CopyTableWithFormatting(
 3. `DocumentEnricher.cs` - Update to work with OpenXML elements
 4. `ProcessSharePointFile.cs` - Update to pass elements instead of text
 
+
+

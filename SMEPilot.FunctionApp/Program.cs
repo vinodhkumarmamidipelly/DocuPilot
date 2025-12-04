@@ -48,7 +48,7 @@ try
 {
     Log.Information("🚀 SMEPilot Function App starting...");
     Log.Information("📁 Log files location: {LogPath}", logPath);
-    
+
     var host = new HostBuilder()
         .ConfigureFunctionsWorkerDefaults()
         .ConfigureServices(services =>

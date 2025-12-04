@@ -14,7 +14,8 @@
     "description": { "default": "Manage document enrichments and view logs" },
     "officeFabricIconFontName": "Admin",
     "properties": {
-      "functionAppUrl": "https://bdc321032804.ngrok-free.app"
+      //"functionAppUrl": "https://smepilotfunction.azurewebsites.net"
+      "functionAppUrl":"https://93756b43c2e8.ngrok-free.app"
     }
   }],
   "loaderConfig": {

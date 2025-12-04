@@ -75,3 +75,4 @@ public sealed class RawSectionExtractor
         !string.IsNullOrWhiteSpace(text) && HeadingRegex.IsMatch(text);
 }
 
+

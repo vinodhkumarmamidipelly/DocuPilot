@@ -55,15 +55,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Reuse core merge engine source from RefAPP/TESTAPI without taking a project reference -->
-    <!-- Include only models that do NOT depend on ASP.NET Core (exclude MergeRequest/IFormFile) -->
-    <Compile Include="..\RefAPP\TESTAPI\src\DocumentMergeApi\Models\MergeResult.cs" />
-    <Compile Include="..\RefAPP\TESTAPI\src\DocumentMergeApi\Models\RawSection.cs" />
-    <Compile Include="..\RefAPP\TESTAPI\src\DocumentMergeApi\Models\TokenOccurrence.cs" />
-    <Compile Include="..\RefAPP\TESTAPI\src\DocumentMergeApi\Services\*.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Folder Include="Enriched\" />
   </ItemGroup>
 </Project>
