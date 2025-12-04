@@ -20,6 +20,9 @@ using System.Text.RegularExpressions;
 using SMEPilot.FunctionApp.Models;
 using SMEPilot.FunctionApp.Services;
 using DocumentMergeApi.Services;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
 
 namespace SMEPilot.FunctionApp.Functions
 {
@@ -96,6 +99,14 @@ namespace SMEPilot.FunctionApp.Functions
                 return enrichedBytes ?? Array.Empty<byte>();
             }
 
+            // 0. If document already appears to contain a populated TOC (static or previously updated),
+            // skip the TOC pipeline entirely to avoid re-processing and potential corruption.
+            if (HasExistingTocContent(enrichedBytes))
+            {
+                _logger.LogInformation("📑 [TOC] Document already contains TOC content; skipping TOC update pipeline.");
+                return enrichedBytes;
+            }
+
             // 1. Try external Word TOC update service if enabled.
             if (_cfg.EnableWordTocService && !string.IsNullOrWhiteSpace(_cfg.WordTocServiceUrl))
             {
@@ -148,9 +159,182 @@ namespace SMEPilot.FunctionApp.Functions
                 _logger.LogDebug("📑 [TOC] External Word TOC service disabled or URL not configured; using in-process updater only.");
             }
 
-            // 2. No local TOC engine; return the original document bytes.
-            _logger.LogInformation("📑 [TOC] No local TOC updater configured. Returning original document bytes.");
-            return enrichedBytes;
+            // 2. Static TOC fallback: build a simple, non-paginated TOC from headings if possible.
+            try
+            {
+                _logger.LogInformation("📑 [TOC] Attempting static TOC generation as fallback...");
+                var staticBytes = InsertStaticToc(enrichedBytes);
+                _logger.LogInformation("✅ [TOC] Static TOC generation completed.");
+                return staticBytes;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "⚠️ [TOC] Static TOC generation failed. Returning original document bytes.");
+                return enrichedBytes;
+            }
+        }
+
+        /// <summary>
+        /// Heuristic check: does the document already contain visible TOC content under the "Table of Contents" heading?
+        /// We treat any non-placeholder paragraph following the heading as evidence of an existing TOC (static or updated).
+        /// </summary>
+        private static bool HasExistingTocContent(byte[] docBytes)
+        {
+            try
+            {
+                using var ms = new MemoryStream(docBytes);
+                using var doc = WordprocessingDocument.Open(ms, false);
+                var body = doc.MainDocumentPart?.Document?.Body;
+                if (body == null)
+                    return false;
+
+                var paragraphs = body.Elements<Paragraph>().ToList();
+                for (int i = 0; i < paragraphs.Count; i++)
+                {
+                    var text = paragraphs[i].InnerText?.Trim() ?? string.Empty;
+                    if (!text.Equals("Table of Contents", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    // Scan a few paragraphs after the heading for real content.
+                    for (int j = i + 1; j < paragraphs.Count && j <= i + 20; j++)
+                    {
+                        var p = paragraphs[j];
+                        var pText = p.InnerText?.Trim() ?? string.Empty;
+                        if (string.IsNullOrEmpty(pText))
+                            continue;
+
+                        if (pText.StartsWith("TOC will appear here", StringComparison.OrdinalIgnoreCase))
+                            return false;
+
+                        // Any non-placeholder text directly under the heading counts as existing TOC content.
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                // If inspection fails, be conservative and allow pipeline to run.
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Build a simple static TOC (no page numbers) under the "Table of Contents" heading,
+        /// based on Heading1-3 paragraphs in the document.
+        /// </summary>
+        private static byte[] InsertStaticToc(byte[] docBytes)
+        {
+            using var ms = new MemoryStream();
+            ms.Write(docBytes, 0, docBytes.Length);
+            ms.Position = 0;
+
+            using (var doc = WordprocessingDocument.Open(ms, true))
+            {
+                var mainPart = doc.MainDocumentPart;
+                var body = mainPart?.Document?.Body;
+                if (body == null)
+                    return docBytes;
+
+                var paragraphs = body.Elements<Paragraph>().ToList();
+
+                // 1. Collect headings (H1-H3) from the document, excluding the TOC heading itself.
+                var headings = new List<(string Text, int Level)>();
+                foreach (var p in paragraphs)
+                {
+                    var text = p.InnerText?.Trim();
+                    if (string.IsNullOrWhiteSpace(text))
+                        continue;
+
+                    var styleId = p.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+                    if (string.Equals(styleId, "Heading1", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(styleId, "Heading2", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(styleId, "Heading3", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (text.Equals("Table of Contents", StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        var level = styleId!.EndsWith("1") ? 1 : styleId.EndsWith("2") ? 2 : 3;
+                        headings.Add((text, level));
+                    }
+                }
+
+                if (headings.Count == 0)
+                    return docBytes; // Nothing to build a TOC from.
+
+                // 2. Locate the TOC heading.
+                Paragraph? tocHeading = null;
+                int tocIndex = -1;
+                for (int i = 0; i < paragraphs.Count; i++)
+                {
+                    var text = paragraphs[i].InnerText?.Trim() ?? string.Empty;
+                    if (text.Equals("Table of Contents", StringComparison.OrdinalIgnoreCase))
+                    {
+                        tocHeading = paragraphs[i];
+                        tocIndex = i;
+                        break;
+                    }
+                }
+
+                if (tocHeading == null)
+                    return docBytes;
+
+                // 3. Remove existing TOC content directly under the heading (field codes, placeholder text, old static TOC),
+                // stopping when we hit a likely non-TOC section (blank line + next content, or another Heading1).
+                var toRemove = new List<Paragraph>();
+                for (int j = tocIndex + 1; j < paragraphs.Count; j++)
+                {
+                    var p = paragraphs[j];
+                    var text = p.InnerText?.Trim() ?? string.Empty;
+                    var styleId = p.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+
+                    // Stop when we reach a clear section boundary.
+                    if (string.IsNullOrEmpty(text) && string.IsNullOrEmpty(styleId))
+                        break;
+
+                    if (string.Equals(styleId, "Heading1", StringComparison.OrdinalIgnoreCase) &&
+                        !text.Equals("Table of Contents", StringComparison.OrdinalIgnoreCase))
+                        break;
+
+                    toRemove.Add(p);
+                }
+
+                foreach (var p in toRemove)
+                {
+                    p.Remove();
+                }
+
+                // Refresh paragraph list after removals.
+                paragraphs = body.Elements<Paragraph>().ToList();
+
+                // 4. Insert simple TOC entries after the heading.
+                OpenXmlElement insertAfter = tocHeading;
+                foreach (var (text, level) in headings)
+                {
+                    var para = new Paragraph();
+                    var pPr = new ParagraphProperties();
+
+                    // Indent based on heading level (H2 = 0.5", H3 = 1").
+                    if (level == 2)
+                    {
+                        pPr.Append(new Indentation { Left = "720" });
+                    }
+                    else if (level == 3)
+                    {
+                        pPr.Append(new Indentation { Left = "1440" });
+                    }
+
+                    para.Append(pPr);
+                    para.Append(new Run(new Text(text) { Space = SpaceProcessingModeValues.Preserve }));
+
+                    body.InsertAfter(para, insertAfter);
+                    insertAfter = para;
+                }
+
+                mainPart.Document.Save();
+            }
+
+            return ms.ToArray();
         }
 
         [Function("ProcessSharePointFile")]

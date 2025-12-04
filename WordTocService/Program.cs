@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.OpenApi;
@@ -71,6 +72,8 @@ app.MapPost("/api/toc/update", async (
             wordApp.Visible = false;
 
             logger.LogInformation("📑 [TOC-SVC] Opening document in Word to update fields...");
+            // Open without automatic repair; if Word considers the file invalid it will throw a COMException,
+            // which we catch and surface as a failure so the caller can fall back to the original bytes.
             doc = wordApp.Documents.Open(tempPath, ReadOnly: false, Visible: false);
 
             // Update all fields (includes TOC and page numbers)
@@ -79,6 +82,14 @@ app.MapPost("/api/toc/update", async (
             // Save in-place
             doc.Save();
             logger.LogInformation("✅ [TOC-SVC] Fields updated and document saved.");
+        }
+        catch (COMException ex)
+        {
+            // Word sometimes reports "file appears to be corrupted" for documents it would otherwise repair interactively.
+            // In service mode we can't interact with repair dialogs, so we log and return an error
+            // so the caller can fall back to the original document bytes.
+            logger.LogWarning(ex, "⚠️ [TOC-SVC] Word failed to open or update the document (COMException).");
+            return Results.StatusCode(StatusCodes.Status500InternalServerError);
         }
         finally
         {
