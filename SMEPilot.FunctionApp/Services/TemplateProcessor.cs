@@ -688,16 +688,75 @@ namespace SMEPilot.FunctionApp.Services
                     // Feedback1: Preserve numbering definitions from template
                     PreserveNumberingDefinitions(wordDoc, templatePath);
                     
-                    // Ensure a real Word TOC field exists at the TABLE_OF_CONTENTS placeholder,
-                    // and also inject a static heading list so something is visible in Markdown/online viewers.
+                    // TOC behavior:
+                    // - If template has a TOC token, try to insert a dynamic Word TOC field at that position.
+                    // - If dynamic insertion throws for some reason, fall back to inserting a static TOC text block.
+                    // - If no TOC token exists in the template, we skip TOC generation entirely.
+                    string? staticToc = null;
+                    contentMap.TryGetValue("TableOfContents", out staticToc);
+
                     try
                     {
-                        contentMap.TryGetValue("TableOfContents", out var staticToc);
-                        InsertTocFieldAtPlaceholder(wordDoc, "[TABLE_OF_CONTENTS]", staticToc);
+                        var tocTokens = new[]
+                        {
+                            "[TABLE_OF_CONTENTS]",
+                            "[TOC]",
+                            "[Table of Contents]"
+                        };
+
+                        bool tocInserted = false;
+                        foreach (var token in tocTokens)
+                        {
+                            if (InsertTocFieldAtPlaceholder(wordDoc, token))
+                            {
+                                tocInserted = true;
+                                _logger?.LogInformation("✅ [TEMPLATE] Inserted dynamic TOC at placeholder token: {Token}", token);
+                                break; // Insert TOC only once
+                            }
+                        }
+
+                        if (!tocInserted)
+                        {
+                            _logger?.LogInformation("⏭️ [TEMPLATE] No TOC placeholder token found ([TOC]/[TABLE_OF_CONTENTS]/[Table of Contents]) - skipping TOC generation");
+                        }
                     }
                     catch (Exception ex)
                     {
-                        _logger?.LogWarning(ex, "⚠️ [TEMPLATE] Failed to insert TOC at [TABLE_OF_CONTENTS]: {Error}", ex.Message);
+                        _logger?.LogWarning(ex, "⚠️ [TEMPLATE] Failed to insert dynamic TOC at placeholder: {Error}", ex.Message);
+
+                        // Fallback: if we have a precomputed static TOC text, try to insert that only
+                        if (!string.IsNullOrWhiteSpace(staticToc))
+                        {
+                            try
+                            {
+                                var tocTokens = new[]
+                                {
+                                    "[TABLE_OF_CONTENTS]",
+                                    "[TOC]",
+                                    "[Table of Contents]"
+                                };
+
+                                bool staticInserted = false;
+                                foreach (var token in tocTokens)
+                                {
+                                    if (InsertStaticTocAtPlaceholder(wordDoc, token, staticToc))
+                                    {
+                                        staticInserted = true;
+                                        _logger?.LogInformation("✅ [TEMPLATE] Inserted static TOC at placeholder token as fallback: {Token}", token);
+                                        break;
+                                    }
+                                }
+
+                                if (!staticInserted)
+                                {
+                                    _logger?.LogInformation("⏭️ [TEMPLATE] TOC placeholder not found during static fallback - no TOC inserted");
+                                }
+                            }
+                            catch (Exception fallbackEx)
+                            {
+                                _logger?.LogWarning(fallbackEx, "⚠️ [TEMPLATE] Failed to insert static TOC fallback: {Error}", fallbackEx.Message);
+                            }
+                        }
                     }
 
                     var mainPart = wordDoc.MainDocumentPart;
@@ -1354,6 +1413,12 @@ namespace SMEPilot.FunctionApp.Services
                     // Populate structured tables if present
                     ExpandRevisionHistoryTable(body, mainPart, revisions);
                     ExpandChangeLogTable(body, mainPart, contentMap);
+
+                    // Cleanup: remove any internal marker paragraphs like
+                    // [Document Content Starts Here] / [Document Content Ends Here]
+                    // so that these technical tokens do not appear in the final document.
+                    RemoveInternalMarkerParagraphs(body);
+
                     mainPart.Document.Save();
                     _logger?.LogDebug("💾 [TEMPLATE] Document saved successfully");
                 }
@@ -4864,6 +4929,38 @@ namespace SMEPilot.FunctionApp.Services
         }
 
         /// <summary>
+        /// Remove internal marker paragraphs such as
+        /// [Document Content Starts Here] and [Document Content Ends Here]
+        /// so they never appear in the final user-facing document.
+        /// </summary>
+        private void RemoveInternalMarkerParagraphs(Body body)
+        {
+            if (body == null) return;
+
+            var markers = new[]
+            {
+                "[Document Content Starts Here]",
+                "[Document Content Ends Here]",
+                "[RemainingContent]",
+                "[Remaining Content]",
+                "[Remaining Document Content]"
+            };
+
+            var paragraphs = body.Elements<Paragraph>().ToList();
+            foreach (var para in paragraphs)
+            {
+                var full = string.Concat(para.Descendants<Text>().Select(t => t.Text ?? string.Empty));
+                if (string.IsNullOrWhiteSpace(full))
+                    continue;
+
+                if (markers.Any(m => full.Contains(m, StringComparison.OrdinalIgnoreCase)))
+                {
+                    para.Remove();
+                }
+            }
+        }
+
+        /// <summary>
         /// Append remaining sections (excluding already-extracted ones) from source DOCX
         /// at the end of the document body.
         /// </summary>
@@ -5352,11 +5449,12 @@ namespace SMEPilot.FunctionApp.Services
         /// <summary>
         /// Insert a real Word TOC field at the given placeholder token.
         /// This ensures the document has a dynamic TOC that Word / Word Online can render with page numbers.
+        /// Returns true if a TOC was inserted, false if the placeholder was not found.
         /// </summary>
-        private void InsertTocFieldAtPlaceholder(WordprocessingDocument doc, string placeholderToken, string? staticToc = null)
+        private bool InsertTocFieldAtPlaceholder(WordprocessingDocument doc, string placeholderToken)
         {
             if (doc?.MainDocumentPart?.Document?.Body == null || string.IsNullOrWhiteSpace(placeholderToken))
-                return;
+                return false;
 
             var body = doc.MainDocumentPart.Document.Body;
             var paragraphs = body.Elements<Paragraph>().ToList();
@@ -5381,23 +5479,6 @@ namespace SMEPilot.FunctionApp.Services
                 };
                 body.InsertAt(headingPara, insertionIndex++);
 
-                // Optional: insert a static TOC list (headings only) so that Markdown and
-                // simple viewers show something even if the Word TOC field isn't updated.
-                if (!string.IsNullOrWhiteSpace(staticToc))
-                {
-                    var lines = staticToc.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    foreach (var line in lines)
-                    {
-                        var run = new Run(new Text(line) { Space = SpaceProcessingModeValues.Preserve });
-                        var tocListPara = new Paragraph(run)
-                        {
-                            ParagraphProperties = new ParagraphProperties(
-                                new SpacingBetweenLines() { After = "40" })
-                        };
-                        body.InsertAt(tocListPara, insertionIndex++);
-                    }
-                }
-
                 // TOC field paragraph (same switches as BuildDocx: \o "1-3" \h \z \u)
                 var tocParagraph = new Paragraph();
                 var tocRun = new Run();
@@ -5413,8 +5494,56 @@ namespace SMEPilot.FunctionApp.Services
 
                 body.InsertAt(tocParagraph, insertionIndex);
 
-                break;
+                // Successfully inserted TOC for this placeholder token
+                return true;
             }
+
+            // Placeholder token not found in document
+            return false;
+        }
+
+        /// <summary>
+        /// Insert only the static TOC text (no dynamic Word TOC field) at the given placeholder token.
+        /// Used as a fallback when dynamic TOC insertion fails.
+        /// </summary>
+        private bool InsertStaticTocAtPlaceholder(WordprocessingDocument doc, string placeholderToken, string staticToc)
+        {
+            if (doc?.MainDocumentPart?.Document?.Body == null ||
+                string.IsNullOrWhiteSpace(placeholderToken) ||
+                string.IsNullOrWhiteSpace(staticToc))
+                return false;
+
+            var body = doc.MainDocumentPart.Document.Body;
+            var paragraphs = body.Elements<Paragraph>().ToList();
+
+            for (int i = 0; i < paragraphs.Count; i++)
+            {
+                var para = paragraphs[i];
+                var full = string.Concat(para.Descendants<Text>().Select(t => t.Text));
+                if (string.IsNullOrEmpty(full) || !full.Contains(placeholderToken, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // Remove the placeholder paragraph and insert TOC text at its position
+                var insertionIndex = body.ChildElements.ToList().IndexOf(para);
+                para.Remove();
+
+                var lines = staticToc.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
+                {
+                    var run = new Run(new Text(line) { Space = SpaceProcessingModeValues.Preserve });
+                    var tocListPara = new Paragraph(run)
+                    {
+                        ParagraphProperties = new ParagraphProperties(
+                            new SpacingBetweenLines() { After = "40" })
+                    };
+                    body.InsertAt(tocListPara, insertionIndex++);
+                }
+
+                return true;
+            }
+
+            // Placeholder token not found
+            return false;
         }
 
         /// <summary>

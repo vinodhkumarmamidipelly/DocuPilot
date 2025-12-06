@@ -30,6 +30,11 @@ export interface WebhookSubscriptionResponse {
   expirationDateTime: string;
   success: boolean;
   message?: string;
+  /**
+   * True when the Function App indicates that Graph rejected the subscription
+   * due to missing admin consent / insufficient application permissions.
+   */
+  needsAdminConsent?: boolean;
 }
 
 export class FunctionAppService {
@@ -130,7 +135,34 @@ export class FunctionAppService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Failed to create webhook subscription (${response.status}): ${errorText}`);
+
+        // Detect common case: Graph subscription fails with ExtensionError / Unauthorized
+        const lower = errorText.toLowerCase();
+        const isAdminConsentIssue =
+          (response.status === 500 || response.status === 401 || response.status === 403) &&
+          lower.includes('graph api error') &&
+          lower.includes('extensionerror') &&
+          (lower.includes('unauthorized') || lower.includes('general exception while processing'));
+
+        if (isAdminConsentIssue) {
+          return {
+            subscriptionId: '',
+            expirationDateTime: '',
+            success: false,
+            needsAdminConsent: true,
+            message:
+              'Graph rejected the webhook subscription because the SMEPilot Azure AD app does not have admin consent for the required SharePoint permissions.'
+          };
+        }
+
+        // Fallback: generic error
+        return {
+          subscriptionId: '',
+          expirationDateTime: '',
+          success: false,
+          needsAdminConsent: false,
+          message: `Failed to create webhook subscription (${response.status}): ${errorText}`
+        };
       }
 
       const result = await response.json();
@@ -146,6 +178,7 @@ export class FunctionAppService {
         subscriptionId: '',
         expirationDateTime: '',
         success: false,
+        needsAdminConsent: false,
         message: error.message
       };
     }

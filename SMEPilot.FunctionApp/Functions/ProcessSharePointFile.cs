@@ -338,7 +338,7 @@ namespace SMEPilot.FunctionApp.Functions
         }
 
         [Function("ProcessSharePointFile")]
-        public async Task<HttpResponseData> Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", "options")] HttpRequestData req)
+        public async Task<HttpResponseData> Run([HttpTrigger(AuthorizationLevel.Function, "get", "post", "options")] HttpRequestData req)
         {
             // CRITICAL: Handle webhook validation FIRST - must respond within 10 seconds!
             // Graph API sends validation token via GET request with query parameter
@@ -601,17 +601,22 @@ namespace SMEPilot.FunctionApp.Functions
                                 _logger.LogDebug("⚠️ No itemId in notification, querying Graph API for recent changes in drive {DriveId} (delta + recent-items)...", driveId);
                                 try
                                 {
+                                    // Ensure SharePoint configuration is loaded so we know the configured SourceFolderPath.
+                                    // For this early-path lookup (no itemId yet), derive tenant context directly from the notification.
+                                    var tenantIdForDelta = GetTenantIdFromNotification(notification) ?? _cfg.GraphTenantId ?? "default";
+
                                     // Ensure SharePoint configuration is loaded so we know the configured SourceFolderPath
+                                    string? siteIdForDelta = null;
                                     var sourceFolderPathForFilter = _cfg.SourceFolderPath;
                                     if (string.IsNullOrWhiteSpace(sourceFolderPathForFilter))
                                     {
                                         try
                                         {
-                                            var siteIdForDelta = await _graph.GetSiteIdFromDriveAsync(driveId);
+                                            siteIdForDelta = await _graph.GetSiteIdFromDriveAsync(driveId, tenantIdForDelta);
                                             if (!string.IsNullOrWhiteSpace(siteIdForDelta))
                                             {
                                                 _logger.LogInformation("🔄 [Delta] Loading SharePoint configuration for site {SiteId} before delta lookup", siteIdForDelta);
-                                                await _cfg.LoadSharePointConfigAsync(_graph, siteIdForDelta, _logger);
+                                                await _cfg.LoadSharePointConfigAsync(_graph, siteIdForDelta, _logger, tenantId: tenantIdForDelta);
                                                 sourceFolderPathForFilter = _cfg.SourceFolderPath;
                                                 _logger.LogInformation("✅ [Delta] Loaded configuration. SourceFolderPath for delta filter: '{SourcePath}'", sourceFolderPathForFilter ?? "null");
                                             }
@@ -632,7 +637,8 @@ namespace SMEPilot.FunctionApp.Functions
                                         driveId,
                                         sourceFolderPathForFilter,
                                         lookback,
-                                        maxItems: 10);
+                                        maxItems: 10,
+                                        tenantId: tenantIdForDelta);
 
                                     List<DriveItem> recentItems;
                                     if (deltaCandidates != null && deltaCandidates.Count > 0)
@@ -643,7 +649,7 @@ namespace SMEPilot.FunctionApp.Functions
                                     else
                                     {
                                         // 2) Fallback: Query for recent items in the drive root (only files, not folders)
-                                        recentItems = await _graph.GetRecentDriveItemsAsync(driveId, maxItems: 10);
+                                        recentItems = await _graph.GetRecentDriveItemsAsync(driveId, maxItems: 10, tenantId: tenantIdForDelta);
                                         _logger.LogDebug("ℹ️ [Delta] No suitable delta candidates, falling back to GetRecentDriveItemsAsync (Count={Count})", recentItems?.Count ?? 0);
                                     }
 
@@ -715,9 +721,37 @@ namespace SMEPilot.FunctionApp.Functions
                                     }
                                     else
                                     {
-                                        // No recent files found - this likely indicates a file deletion
-                                        // When a file is deleted, SharePoint sends "updated" notification but file no longer exists
-                                        _logger.LogDebug("🗑️ [DELETION] No recent files found in drive - likely file deletion event. Skipping processing.");
+                                        // No recent files found - this likely indicates a file deletion.
+                                        // When a file is deleted, SharePoint sends "updated" notification but file no longer exists.
+                                        _logger.LogDebug("🗑️ [DELETION] No recent files found in drive - likely file deletion event. Attempting enriched-file cleanup.");
+
+                                        try
+                                        {
+                                            if (!string.IsNullOrWhiteSpace(siteIdForDelta))
+                                            {
+                                                var latestRunForDelete = await _graph.GetLatestSucceededProcessingRunAsync(siteIdForDelta, driveId, itemIdForDedup, tenantIdForDelta);
+                                                if (latestRunForDelete != null &&
+                                                    !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedDriveId) &&
+                                                    !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedItemId))
+                                                {
+                                                    _logger.LogInformation("🗑️ [DELETION] Deleting enriched file for RawItemId={ItemId}. EnrichedDriveId={EnrichedDriveId}, EnrichedItemId={EnrichedItemId}",
+                                                        itemIdForDedup, latestRunForDelete.EnrichedDriveId, latestRunForDelete.EnrichedItemId);
+
+                                                    await _graph.DeleteFileAsync(latestRunForDelete.EnrichedDriveId!, latestRunForDelete.EnrichedItemId!, tenantIdForDelta);
+                                                }
+                                                else
+                                                {
+                                                    _logger.LogInformation("ℹ️ [DELETION] No enriched file metadata found for RawDriveId={DriveId}, RawItemId={ItemId}. Nothing to delete.",
+                                                        driveId, itemIdForDedup);
+                                                }
+                                            }
+                                        }
+                                        catch (Exception deleteEx)
+                                        {
+                                            _logger.LogWarning(deleteEx, "⚠️ [DELETION] Failed to delete enriched file for RawDriveId={DriveId}, RawItemId={ItemId}: {Error}",
+                                                driveId, itemIdForDedup, deleteEx.Message);
+                                        }
+
                                         continue;
                                     }
                                 }
@@ -735,15 +769,26 @@ namespace SMEPilot.FunctionApp.Functions
                                 continue;
                             }
 
-                            // Get tenant ID from resource path or use default
-                            var tenantId = ExtractTenantIdFromResource(notification.Resource) ?? "default";
+                            // Get tenant ID from notification (resourceData / siteId) with safe fallback
+                            var tenantId = GetTenantIdFromNotification(notification) ?? _cfg.GraphTenantId ?? "default";
+
+                            // Optional per-tenant rate limiting (protects shared Function App from a single noisy tenant)
+                            if (_rateLimiter != null)
+                            {
+                                var tenantKey = $"tenant:{tenantId}";
+                                if (_rateLimiter.IsRateLimited(tenantKey, out var tenantRateReason))
+                                {
+                                    _logger.LogWarning("🚫 [RateLimit] Tenant-level rate limit hit for {TenantId}: {Reason}", tenantId, tenantRateReason);
+                                    continue; // Skip this notification for now; it will be retried by Graph later
+                                }
+                            }
 
                             // CRITICAL: Capture site ID from file's DriveItem BEFORE loading config (needed for validation)
                             // This is the same approach used in ProcessFileAsync
                             string? siteId = null;
                             try
                             {
-                                var driveItem = await _graph.GetDriveItemAsync(driveId, itemId);
+                                var driveItem = await _graph.GetDriveItemAsync(driveId, itemId, tenantId);
                                 if (driveItem != null)
                                 {
                                     siteId = driveItem.ParentReference?.SiteId;
@@ -763,7 +808,7 @@ namespace SMEPilot.FunctionApp.Functions
                             {
                                 try
                                 {
-                                    siteId = await _graph.GetSiteIdFromDriveAsync(driveId);
+                                    siteId = await _graph.GetSiteIdFromDriveAsync(driveId, tenantId);
                                     if (!string.IsNullOrWhiteSpace(siteId))
                                     {
                                         _logger.LogInformation("✅ [SITE_ID] Got site ID from drive: {SiteId}", siteId);
@@ -780,8 +825,22 @@ namespace SMEPilot.FunctionApp.Functions
                             {
                                 try
                                 {
-                                    _logger.LogInformation("🔄 [CONFIG] Loading SharePoint configuration for site {SiteId}", siteId);
-                                    await _cfg.LoadSharePointConfigAsync(_graph, siteId, _logger);
+                                    _logger.LogInformation("🔄 [CONFIG] Loading SharePoint configuration for site {SiteId} (tenant={TenantId})", siteId, tenantId);
+                                    await _cfg.LoadSharePointConfigAsync(_graph, siteId, _logger, tenantId: tenantId);
+
+                                    // Validate clientState from Graph notification against stored ClientStateSecret (per-site/tenant)
+                                    var expectedClientState = _cfg.ClientStateSecret;
+                                    if (!string.IsNullOrWhiteSpace(expectedClientState))
+                                    {
+                                        var incomingClientState = notification.ClientState;
+                                        if (!string.Equals(expectedClientState, incomingClientState, StringComparison.Ordinal))
+                                        {
+                                            _logger.LogWarning("🚫 [SECURITY] ClientState mismatch for subscription {SubscriptionId} on site {SiteId}, tenant {TenantId}. Expected '{Expected}', got '{Actual}'. Skipping notification.",
+                                                notification.SubscriptionId, siteId, tenantId, expectedClientState, incomingClientState ?? "<null>");
+                                            continue;
+                                        }
+                                    }
+
                                     _logger.LogInformation("✅ [CONFIG] SharePoint configuration loaded. Source: {SourcePath}, Destination: {DestPath}, MaxSize: {MaxSize}MB", 
                                         _cfg.SourceFolderPath, _cfg.EnrichedFolderRelativePath, _cfg.MaxFileSizeBytes / 1024 / 1024);
                                 }
@@ -851,7 +910,7 @@ namespace SMEPilot.FunctionApp.Functions
                                 {
                                     try
                                     {
-                                        var latestRun = await _graph.GetLatestProcessingRunAsync(siteId, driveId, itemId);
+                                        var latestRun = await _graph.GetLatestProcessingRunAsync(siteId, driveId, itemId, tenantId);
                                     if (latestRun != null)
                                     {
                                         _logger.LogInformation("📋 [TRACKING] Latest run for {FileName}: Status={Status}, Hash={Hash}, LastUpdated={LastUpdated:o}",
@@ -901,7 +960,7 @@ namespace SMEPilot.FunctionApp.Functions
                                     continue;
                                 }
 
-                                var existingMetadata = await _graph.GetListItemFieldsAsync(driveId, itemId);
+                                var existingMetadata = await _graph.GetListItemFieldsAsync(driveId, itemId, tenantId);
                                 if (existingMetadata != null)
                                 {
                                     _logger.LogInformation("📋 [IDEMPOTENCY] Metadata found for {FileName}. Keys: {Keys}", fileName, string.Join(", ", existingMetadata.Keys));
@@ -916,7 +975,7 @@ namespace SMEPilot.FunctionApp.Functions
                                         if (isEnriched)
                                         {
                                             // Versioning detection: Check if file was modified after last enrichment
-                                            var driveItem = await _graph.GetDriveItemAsync(driveId, itemId);
+                                            var driveItem = await _graph.GetDriveItemAsync(driveId, itemId, tenantId);
                                             if (driveItem?.LastModifiedDateTime != null)
                                             {
                                                 var lastModified = driveItem.LastModifiedDateTime.Value.DateTime;
@@ -1074,7 +1133,7 @@ namespace SMEPilot.FunctionApp.Functions
                                 _logger.LogInformation("🔍 [IDEMPOTENCY] Double-checking metadata inside lock for {FileName} (ItemId: {ItemId})", fileName, itemId);
                                 try
                                 {
-                                    var existingMetadata = await _graph.GetListItemFieldsAsync(driveId, itemId);
+                                    var existingMetadata = await _graph.GetListItemFieldsAsync(driveId, itemId, tenantId);
                                     if (existingMetadata != null)
                                     {
                                         _logger.LogInformation("📋 [IDEMPOTENCY] Double-check metadata found. Keys: {Keys}", string.Join(", ", existingMetadata.Keys));
@@ -1088,7 +1147,7 @@ namespace SMEPilot.FunctionApp.Functions
                                             if (isEnriched)
                                             {
                                                 // Versioning detection: Check if file was modified after last enrichment
-                                                var driveItem = await _graph.GetDriveItemAsync(driveId, itemId);
+                                                var driveItem = await _graph.GetDriveItemAsync(driveId, itemId, tenantId);
                                                 if (driveItem?.LastModifiedDateTime != null)
                                                 {
                                                     var lastModified = driveItem.LastModifiedDateTime.Value.DateTime;
@@ -1267,11 +1326,11 @@ namespace SMEPilot.FunctionApp.Functions
                 // Load SharePoint configuration for manual processing
                 try
                 {
-                    var siteId = await _graph.GetSiteIdFromDriveAsync(evt.driveId);
+                    var siteId = await _graph.GetSiteIdFromDriveAsync(evt.driveId, evt.tenantId);
                     if (!string.IsNullOrWhiteSpace(siteId))
                     {
-                        _logger.LogInformation("🔄 [CONFIG] Loading SharePoint configuration for site {SiteId} (manual processing)", siteId);
-                        await _cfg.LoadSharePointConfigAsync(_graph, siteId, _logger);
+                        _logger.LogInformation("🔄 [CONFIG] Loading SharePoint configuration for site {SiteId} (manual processing, tenant={TenantId})", siteId, evt.tenantId ?? "default");
+                        await _cfg.LoadSharePointConfigAsync(_graph, siteId, _logger, tenantId: evt.tenantId);
                         _logger.LogInformation("✅ [CONFIG] SharePoint configuration loaded. Source: {SourcePath}, Destination: {DestPath}, MaxSize: {MaxSize}MB", 
                             _cfg.SourceFolderPath, _cfg.EnrichedFolderRelativePath, _cfg.MaxFileSizeBytes / 1024 / 1024);
                     }
@@ -1291,7 +1350,7 @@ namespace SMEPilot.FunctionApp.Functions
                 string? manualSiteId = null;
                 try
                 {
-                    manualSiteId = await _graph.GetSiteIdFromDriveAsync(evt.driveId);
+                    manualSiteId = await _graph.GetSiteIdFromDriveAsync(evt.driveId, evt.tenantId);
                 }
                 catch (Exception ex)
                 {
@@ -1350,6 +1409,58 @@ namespace SMEPilot.FunctionApp.Functions
             }
             catch { }
             
+            return null;
+        }
+
+        /// <summary>
+        /// Best-effort extraction of tenantId from a Graph notification.
+        /// Prefers explicit resourceData.tenantId, then siteId, and finally resource path.
+        /// Falls back to null; callers may use configured GraphTenantId as a last resort.
+        /// </summary>
+        private string? GetTenantIdFromNotification(GraphNotificationItem notification)
+        {
+            if (notification == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                var rd = notification.ResourceData;
+                if (rd != null)
+                {
+                    // 1) Prefer explicit tenantId if present
+                    if (!string.IsNullOrWhiteSpace(rd.TenantId))
+                    {
+                        return rd.TenantId;
+                    }
+
+                    // 2) Try to parse from siteId (domain,tenantId,siteId)
+                    if (!string.IsNullOrWhiteSpace(rd.SiteId))
+                    {
+                        var siteParts = rd.SiteId.Split(',');
+                        if (siteParts.Length >= 2 && !string.IsNullOrWhiteSpace(siteParts[1]))
+                        {
+                            return siteParts[1];
+                        }
+                    }
+                }
+
+                // 3) Fallback: infer from resource path if it contains /sites/{siteId}/...
+                if (!string.IsNullOrWhiteSpace(notification.Resource))
+                {
+                    var fromResource = ExtractTenantIdFromResource(notification.Resource);
+                    if (!string.IsNullOrWhiteSpace(fromResource))
+                    {
+                        return fromResource;
+                    }
+                }
+            }
+            catch
+            {
+                // Swallow and return null; caller will decide on fallback behavior.
+            }
+
             return null;
         }
 
@@ -1413,7 +1524,7 @@ namespace SMEPilot.FunctionApp.Functions
                         LastUpdatedUtc = DateTimeOffset.UtcNow
                     };
 
-                    await _graph.UpsertProcessingRunAsync(siteId, runRecord);
+                    await _graph.UpsertProcessingRunAsync(siteId, runRecord, tenantId);
                 }
             
             // NOTE: Legacy 'temp' itemId resolution logic (for manual uploader flows) was removed
@@ -1432,7 +1543,7 @@ namespace SMEPilot.FunctionApp.Functions
             string? sourceSiteId = null;
             try
             {
-                var driveItem = await _graph.GetDriveItemAsync(driveId, itemId);
+                var driveItem = await _graph.GetDriveItemAsync(driveId, itemId, tenantId);
                 if (driveItem == null)
                 {
                     _logger.LogDebug("🗑️ [DELETION] File {FileName} (ID: {ItemId}) no longer exists - likely deleted. Skipping processing.", fileName, itemId);
@@ -1455,7 +1566,7 @@ namespace SMEPilot.FunctionApp.Functions
                     try
                     {
                         _logger.LogInformation("🔄 [CONFIG] Loading SharePoint configuration using captured site ID: {SiteId}", sourceSiteId);
-                        await _cfg.LoadSharePointConfigAsync(_graph, sourceSiteId, _logger, forceRefresh: true);
+                        await _cfg.LoadSharePointConfigAsync(_graph, sourceSiteId, _logger, forceRefresh: true, tenantId: tenantId);
                         _logger.LogInformation("✅ [CONFIG] SharePoint configuration loaded. Source: {SourcePath}, Destination: {DestPath}, MaxSize: {MaxSize}MB", 
                             _cfg.SourceFolderPath, _cfg.EnrichedFolderRelativePath, _cfg.MaxFileSizeBytes / 1024 / 1024);
                     }
@@ -1484,7 +1595,7 @@ namespace SMEPilot.FunctionApp.Functions
             // 0. Download file
                 _logger.LogDebug("📥 [DOWNLOAD] Downloading file: {FileName}", fileName);
                 var downloadStartTime = DateTimeOffset.UtcNow;
-                using var fileStream = await _graph.DownloadFileStreamAsync(driveId, itemId);
+                using var fileStream = await _graph.DownloadFileStreamAsync(driveId, itemId, tenantId);
                 fileSizeBytes = fileStream.Length;
                 var downloadDuration = DateTimeOffset.UtcNow - downloadStartTime;
                 _telemetry?.TrackDependency("GraphAPI", "DownloadFile", driveId, downloadStartTime, downloadDuration, true);
@@ -1541,7 +1652,7 @@ namespace SMEPilot.FunctionApp.Functions
                         {
                             // Important: compare against the last known *succeeded* run,
                             // ignoring any newer Processing/Failed entries for this file.
-                            var latestSucceededRun = await _graph.GetLatestSucceededProcessingRunAsync(siteId, driveId, itemId);
+                            var latestSucceededRun = await _graph.GetLatestSucceededProcessingRunAsync(siteId, driveId, itemId, tenantId);
                             if (latestSucceededRun != null)
                             {
                                 previousVersionForAutoBump = latestSucceededRun.Version;
@@ -1797,12 +1908,13 @@ namespace SMEPilot.FunctionApp.Functions
                 string? templatePath = null;
                 if (!string.IsNullOrWhiteSpace(sourceSiteId))
                 {
-                    _logger.LogInformation("📥 [TEMPLATE] Attempting to download template from SharePoint config...");
+                    _logger.LogInformation("📥 [TEMPLATE] Attempting to download template from SharePoint config (tenant={TenantId})...", tenantId);
                     templatePath = await _graph.DownloadTemplateFileAsync(
                         sourceSiteId,
                         _cfg.TemplateLibraryPath,
                         _cfg.TemplateFileName,
-                        _cfg.TemplateFileUrl);
+                        _cfg.TemplateFileUrl,
+                        tenantId);
 
                     if (!string.IsNullOrWhiteSpace(templatePath) && File.Exists(templatePath))
                     {
@@ -1839,7 +1951,7 @@ namespace SMEPilot.FunctionApp.Functions
                     string? mergeAuthor = null;
                     try
                     {
-                        mergeAuthor = await _graph.ResolveListItemAuthorDisplayNameAsync(driveId, itemId);
+                        mergeAuthor = await _graph.ResolveListItemAuthorDisplayNameAsync(driveId, itemId, tenantId);
                         if (string.IsNullOrWhiteSpace(mergeAuthor) && !string.IsNullOrWhiteSpace(uploaderEmail))
                         {
                             mergeAuthor = uploaderEmail;
@@ -1900,7 +2012,7 @@ namespace SMEPilot.FunctionApp.Functions
                     // Resolve human author for template fields
                     try
                     {
-                        var resolvedAuthor = await _graph.ResolveListItemAuthorDisplayNameAsync(driveId, itemId);
+                        var resolvedAuthor = await _graph.ResolveListItemAuthorDisplayNameAsync(driveId, itemId, tenantId);
                         if (string.IsNullOrWhiteSpace(resolvedAuthor))
                         {
                             // Fallback to uploader email/display name if list item author cannot be resolved
@@ -1929,7 +2041,7 @@ namespace SMEPilot.FunctionApp.Functions
                     // DocumentId: try to reuse existing SMEPilot_DocumentId if present, otherwise generate a new one.
                     try
                     {
-                        var listFields = await _graph.GetListItemFieldsAsync(driveId, itemId);
+                        var listFields = await _graph.GetListItemFieldsAsync(driveId, itemId, tenantId);
                         if (listFields != null && listFields.TryGetValue("SMEPilot_DocumentId", out var existingDocIdObj))
                         {
                             var existingDocId = existingDocIdObj?.ToString();
@@ -2063,7 +2175,7 @@ namespace SMEPilot.FunctionApp.Functions
                     if (!string.IsNullOrWhiteSpace(_cfg.SourceFolderPath))
                     {
                         // Get current file's parent path within the drive
-                        var fileItem = await _graph.GetDriveItemAsync(driveId, itemId);
+                        var fileItem = await _graph.GetDriveItemAsync(driveId, itemId, tenantId);
                         var parentPath = fileItem?.ParentReference?.Path; // e.g., "/drives/{driveId}/root:/Raw Documents/Team1/Employee1"
 
                         if (!string.IsNullOrWhiteSpace(parentPath))
@@ -2162,7 +2274,7 @@ namespace SMEPilot.FunctionApp.Functions
                 {
                     // Fallback 1: Try to get site ID from drive
                     _logger.LogDebug("🔍 [UPLOAD] Site ID not captured from source file, trying to get from drive...");
-                    destinationSiteId = await _graph.GetSiteIdFromDriveAsync(driveId);
+                    destinationSiteId = await _graph.GetSiteIdFromDriveAsync(driveId, tenantId);
                     if (!string.IsNullOrWhiteSpace(destinationSiteId))
                     {
                         _logger.LogInformation("✅ [UPLOAD] Got site ID from drive: {SiteId}", destinationSiteId);
@@ -2175,7 +2287,7 @@ namespace SMEPilot.FunctionApp.Functions
                     _logger.LogDebug("🔍 [UPLOAD] Site ID still not available, trying to get from drive item directly...");
                     try
                     {
-                        var driveItemForSiteId = await _graph.GetDriveItemAsync(driveId, itemId);
+                        var driveItemForSiteId = await _graph.GetDriveItemAsync(driveId, itemId, tenantId);
                         destinationSiteId = driveItemForSiteId?.ParentReference?.SiteId;
                         if (!string.IsNullOrWhiteSpace(destinationSiteId))
                         {
@@ -2267,7 +2379,7 @@ namespace SMEPilot.FunctionApp.Functions
                 {
                     try
                     {
-                        uploaded = await _graph.UploadFileBytesAsync(destinationDriveId!, destinationUploadPath, enrichedName, enrichedBytes);
+                        uploaded = await _graph.UploadFileBytesAsync(destinationDriveId!, destinationUploadPath, enrichedName, enrichedBytes, tenantId);
                         _logger.LogDebug("✅ [UPLOAD] File uploaded successfully: {EnrichedName}", enrichedName);
                         break; // Success!
                     }
@@ -2281,7 +2393,7 @@ namespace SMEPilot.FunctionApp.Functions
                             await Task.Delay(_cfg.FileLockWaitSeconds * 1000);
                             try
                             {
-                                uploaded = await _graph.UploadFileBytesAsync(destinationDriveId!, destinationUploadPath, enrichedName, enrichedBytes);
+                                uploaded = await _graph.UploadFileBytesAsync(destinationDriveId!, destinationUploadPath, enrichedName, enrichedBytes, tenantId);
                                 _logger.LogDebug("✅ [UPLOAD] File uploaded successfully on final attempt");
                             }
                             catch (Exception finalEx)
@@ -2305,16 +2417,25 @@ namespace SMEPilot.FunctionApp.Functions
 
                 _logger.LogDebug("✅ Successfully processed {FileName}, enriched document: {Url}", fileName, uploaded.WebUrl);
 
-                // Optional: also render a PDF version via Microsoft Graph for better SharePoint preview with TOC/page numbers.
-                try
+                // Handle output type based on configuration:
+                // - Docx : keep only the enriched DOCX (no PDF)
+                // - Pdf  : delete the enriched DOCX and upload only a rendered PDF
+                // - Both : keep DOCX and also upload a rendered PDF (default / backwards compatible)
+                var outputType = _cfg.EnrichedOutputType; // "Docx" | "Pdf" | "Both"
+
+                // 1) If PDF (Pdf or Both), try to render/export a PDF via Microsoft Graph.
+                DriveItem? pdfUploaded = null;
+                if (!string.IsNullOrWhiteSpace(enrichedName) &&
+                    enrichedName.EndsWith(".docx", StringComparison.OrdinalIgnoreCase) &&
+                    (string.Equals(outputType, "Pdf", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(outputType, "Both", StringComparison.OrdinalIgnoreCase)))
                 {
-                    if (!string.IsNullOrWhiteSpace(enrichedName) &&
-                        enrichedName.EndsWith(".docx", StringComparison.OrdinalIgnoreCase))
+                    try
                     {
-                        _logger.LogInformation("📄 [PDF] Exporting enriched DOCX to PDF via Microsoft Graph for SharePoint preview...");
+                        _logger.LogInformation("📄 [PDF] Exporting enriched DOCX to PDF via Microsoft Graph (OutputType={OutputType})...", outputType);
 
                         // Use the destination drive and the uploaded item's ID for export.
-                        var pdfStream = await _graph.DownloadFileAsPdfStreamAsync(destinationDriveId!, uploaded.Id!);
+                        var pdfStream = await _graph.DownloadFileAsPdfStreamAsync(destinationDriveId!, uploaded.Id!, tenantId);
                         if (pdfStream != null)
                         {
                             using var pdfMs = new MemoryStream();
@@ -2322,25 +2443,54 @@ namespace SMEPilot.FunctionApp.Functions
                             var pdfBytes = pdfMs.ToArray();
 
                             var pdfName = Path.ChangeExtension(enrichedName, ".pdf");
-                            await _graph.UploadFileBytesAsync(destinationDriveId!, destinationUploadPath, pdfName, pdfBytes);
+                            pdfUploaded = await _graph.UploadFileBytesAsync(destinationDriveId!, destinationUploadPath, pdfName, pdfBytes, tenantId);
 
-                            _logger.LogInformation("✅ [PDF] PDF version '{PdfName}' uploaded alongside enriched DOCX for preview.", pdfName);
+                            _logger.LogInformation("✅ [PDF] PDF version '{PdfName}' uploaded (OutputType={OutputType}).", pdfName, outputType);
                         }
                         else
                         {
                             _logger.LogWarning("⚠️ [PDF] PDF export stream was null for item {ItemId}", uploaded.Id);
                         }
                     }
+                    catch (Exception pdfEx)
+                    {
+                        _logger.LogWarning(pdfEx, "⚠️ [PDF] Failed to export or upload PDF version for preview: {Error}", pdfEx.Message);
+                    }
                 }
-                catch (Exception pdfEx)
+
+                // 2) If output type is Pdf only, delete the DOCX after (best-effort).
+                if (string.Equals(outputType, "Pdf", StringComparison.OrdinalIgnoreCase))
                 {
-                    _logger.LogWarning(pdfEx, "⚠️ [PDF] Failed to export or upload PDF version for preview: {Error}", pdfEx.Message);
+                    try
+                    {
+                        _logger.LogInformation("🧹 [OUTPUT] EnrichedOutputType=Pdf; deleting DOCX '{Name}' and keeping only PDF.", enrichedName);
+                        await _graph.DeleteFileAsync(destinationDriveId!, uploaded.Id!, tenantId);
+                    }
+                    catch (Exception deleteEx)
+                    {
+                        _logger.LogWarning(deleteEx, "⚠️ [OUTPUT] Failed to delete DOCX after PDF export (OutputType=Pdf). The DOCX will remain. Error: {Error}", deleteEx.Message);
+                    }
                 }
                 
                 // Track successful processing
                 var processingDuration = DateTimeOffset.UtcNow - processingStartTime;
-                enrichedUrl = uploaded.WebUrl;
-                _telemetry?.TrackDocumentProcessing(itemId, fileName, fileSizeBytes, "Succeeded", processingDuration);
+
+                // Decide which enriched artifact to treat as primary, based on output type:
+                // - Docx/Both: use DOCX URL
+                // - Pdf only: prefer PDF URL if available
+                string? trackedEnrichedUrl = uploaded.WebUrl;
+                string? trackedEnrichedDriveId = destinationDriveId;
+                string? trackedEnrichedItemId = uploaded.Id;
+
+                if (string.Equals(outputType, "Pdf", StringComparison.OrdinalIgnoreCase) && pdfUploaded != null)
+                {
+                    trackedEnrichedUrl = pdfUploaded.WebUrl;
+                    trackedEnrichedDriveId = destinationDriveId;
+                    trackedEnrichedItemId = pdfUploaded.Id;
+                }
+
+                enrichedUrl = trackedEnrichedUrl;
+                _telemetry?.TrackDocumentProcessing(itemId, fileName, fileSizeBytes, "Succeeded", processingDuration, tenantId, siteId, outputType);
 
                 // Record success in tracking list (does not affect main flow if it fails)
                 if (!string.IsNullOrWhiteSpace(siteId))
@@ -2354,14 +2504,16 @@ namespace SMEPilot.FunctionApp.Functions
                         Version = logicalVersionForThisRun,
                         Status = "Succeeded",
                         ErrorMessage = null,
-                        EnrichedUrl = uploaded.WebUrl,
+                        EnrichedUrl = trackedEnrichedUrl,
+                        EnrichedDriveId = trackedEnrichedDriveId,
+                        EnrichedItemId = trackedEnrichedItemId,
                         LastUpdatedUtc = DateTimeOffset.UtcNow
                     };
 
-                    await _graph.UpsertProcessingRunAsync(siteId, runRecord);
+                    await _graph.UpsertProcessingRunAsync(siteId, runRecord, tenantId);
                 }
                 
-                return (true, uploaded.WebUrl, null);
+                return (true, enrichedUrl, null);
             }
             catch (Exception ex)
             {
@@ -2383,13 +2535,13 @@ namespace SMEPilot.FunctionApp.Functions
                         }
                     }
                     
-                    _telemetry?.TrackProcessingFailure(itemId, fileName, errorMessage, odataError);
+                    _telemetry?.TrackProcessingFailure(itemId, fileName, errorMessage, odataError, tenantId, siteId);
                 }
                 else
                 {
                     errorMessage = ex.Message;
                     _logger.LogError(ex, "❌ Error processing file {FileName}: {ErrorType}: {Message}", fileName, ex.GetType().Name, ex.Message);
-                    _telemetry?.TrackProcessingFailure(itemId, fileName, errorMessage, ex);
+                    _telemetry?.TrackProcessingFailure(itemId, fileName, errorMessage, ex, tenantId, siteId);
                 }
 
                 // Record failure in tracking list (does not affect main flow if it fails)
@@ -2408,7 +2560,7 @@ namespace SMEPilot.FunctionApp.Functions
                         LastUpdatedUtc = DateTimeOffset.UtcNow
                     };
 
-                    await _graph.UpsertProcessingRunAsync(siteId, runRecord);
+                    await _graph.UpsertProcessingRunAsync(siteId, runRecord, tenantId);
                 }
                 
                 return (false, null, errorMessage);

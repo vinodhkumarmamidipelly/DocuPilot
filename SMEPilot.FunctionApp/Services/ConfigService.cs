@@ -18,6 +18,7 @@ namespace SMEPilot.FunctionApp.Services
         private readonly ILogger<ConfigService>? _logger;
         private readonly string _siteId;
         private readonly string _listName;
+        private readonly string? _tenantId;
         
         // Configuration cache
         private static Dictionary<string, object>? _cachedConfig;
@@ -25,12 +26,13 @@ namespace SMEPilot.FunctionApp.Services
         private static readonly TimeSpan CacheRefreshInterval = TimeSpan.FromMinutes(5);
         private static readonly object _cacheLock = new object();
 
-        public ConfigService(GraphHelper graph, string siteId, string listName = "SMEPilotConfig", ILogger<ConfigService>? logger = null)
+        public ConfigService(GraphHelper graph, string siteId, string listName = "SMEPilotConfig", ILogger<ConfigService>? logger = null, string? tenantId = null)
         {
             _graph = graph;
             _siteId = siteId;
             _listName = listName;
             _logger = logger;
+            _tenantId = tenantId;
         }
 
         /// <summary>
@@ -51,11 +53,11 @@ namespace SMEPilot.FunctionApp.Services
 
             try
             {
-                _logger?.LogInformation("🔄 [ConfigService] Fetching configuration from SharePoint list '{ListName}' in site {SiteId}", 
-                    _listName, _siteId);
+                _logger?.LogInformation("🔄 [ConfigService] Fetching configuration from SharePoint list '{ListName}' in site {SiteId} (tenant={TenantId})", 
+                    _listName, _siteId, _tenantId ?? "default");
 
                 // Get list items
-                var items = await _graph.GetListItemsByNameAsync(_siteId, _listName, top: 1);
+                var items = await _graph.GetListItemsByNameAsync(_siteId, _listName, top: 1, sourceFolderPath: null, tenantId: _tenantId);
 
                 if (items == null || !items.Any())
                 {
@@ -81,6 +83,8 @@ namespace SMEPilot.FunctionApp.Services
                     config["SourceFolderPath"] = sourcePath.ToString() ?? "";
                 if (fields.TryGetValue("DestinationFolderPath", out var destPath) && destPath != null)
                     config["DestinationFolderPath"] = destPath.ToString() ?? "";
+                if (fields.TryGetValue("EnrichedOutputType", out var outputType) && outputType != null)
+                    config["EnrichedOutputType"] = outputType.ToString() ?? "";
                 if (fields.TryGetValue("TargetLibraryUrl", out var targetUrl) && targetUrl != null)
                     config["DestinationFolderPath"] = targetUrl.ToString() ?? config.GetValueOrDefault("DestinationFolderPath", "").ToString() ?? "";
 
@@ -91,6 +95,10 @@ namespace SMEPilot.FunctionApp.Services
                     config["TemplateLibraryPath"] = templateLib.ToString() ?? "";
                 if (fields.TryGetValue("TemplateFileName", out var templateName) && templateName != null)
                     config["TemplateFileName"] = templateName.ToString() ?? "";
+
+                // Webhook client state secret (used to validate incoming notifications)
+                if (fields.TryGetValue("ClientStateSecret", out var clientState) && clientState != null)
+                    config["ClientStateSecret"] = clientState.ToString() ?? "";
 
                 // Processing settings
                 if (fields.TryGetValue("MaxFileSizeMB", out var maxSize) && maxSize != null)
@@ -165,6 +173,7 @@ namespace SMEPilot.FunctionApp.Services
             {
                 ["SourceFolderPath"] = "",
                 ["DestinationFolderPath"] = "/Shared Documents/SMEPilot Enriched Docs",
+                ["EnrichedOutputType"] = "Both",
                 ["TemplateFileUrl"] = "",
                 ["TemplateLibraryPath"] = "/Shared Documents/Templates",
                 ["TemplateFileName"] = "UniversalOrgTemplate.dotx",

@@ -21,6 +21,9 @@ export interface IConfiguration {
   accessO365: boolean;
   subscriptionId?: string;
   lastUpdated?: Date;
+  clientStateSecret?: string;
+  // New: Controls enriched document output type (Docx / Pdf / Both)
+  enrichedOutputType?: string;
 }
 
 export interface IValidationResult {
@@ -32,12 +35,14 @@ export class SharePointService {
   private context: WebPartContext;
   private httpClient: SPHttpClient;
   private webUrl: string;
+  private webServerRelativeUrl: string;
   private listName: string = 'SMEPilotConfig';
 
   constructor(context: WebPartContext) {
     this.context = context;
     this.httpClient = context.spHttpClient;
     this.webUrl = context.pageContext.web.absoluteUrl;
+    this.webServerRelativeUrl = context.pageContext.web.serverRelativeUrl || '/';
   }
 
   /**
@@ -48,6 +53,20 @@ export class SharePointService {
       // Check if list already exists
       const listExists = await this.listExists();
       if (listExists) {
+        // Ensure required columns exist even for existing lists (handles upgrades)
+        try {
+          const listUrl = `${this.webUrl}/_api/web/lists/getbytitle('${this.listName}')?$select=Id`;
+          const listResponse = await this.httpClient.get(listUrl, SPHttpClient.configurations.v1);
+          if (listResponse.ok) {
+            const listData = await listResponse.json();
+            const listId = listData.Id || listData.d?.Id;
+            if (listId) {
+              await this.addListColumns(listId);
+            }
+          }
+        } catch (e) {
+          console.warn('[createSMEPilotConfigList] Failed to ensure columns on existing list:', e);
+        }
         return true;
       }
 
@@ -198,7 +217,9 @@ export class SharePointService {
       `<Field Type='Text' Name='TemplateLibraryPath' StaticName='TemplateLibraryPath' DisplayName='TemplateLibraryPath' MaxLength='1024' />`,
       `<Field Type='Text' Name='TemplateFileName' StaticName='TemplateFileName' DisplayName='TemplateFileName' MaxLength='255' />`,
       `<Field Type='Text' Name='MetadataChangeHandling' StaticName='MetadataChangeHandling' DisplayName='MetadataChangeHandling' MaxLength='50' />`,
-      `<Field Type='DateTime' Name='LastUpdated' StaticName='LastUpdated' DisplayName='LastUpdated' Format='DateTime' />`
+      `<Field Type='DateTime' Name='LastUpdated' StaticName='LastUpdated' DisplayName='LastUpdated' Format='DateTime' />`,
+      `<Field Type='Text' Name='ClientStateSecret' StaticName='ClientStateSecret' DisplayName='ClientStateSecret' MaxLength='255' />`,
+      `<Field Type='Text' Name='EnrichedOutputType' StaticName='EnrichedOutputType' DisplayName='EnrichedOutputType' MaxLength='50' />`
     ];
 
     const columnNames = [
@@ -217,7 +238,9 @@ export class SharePointService {
       'TemplateLibraryPath',
       'TemplateFileName',
       'MetadataChangeHandling',
-      'LastUpdated'
+      'LastUpdated',
+      'ClientStateSecret',
+      'EnrichedOutputType'
     ];
 
     console.log(`[addListColumns] Starting to add ${fieldsXml.length} columns to list ${listId}`);
@@ -616,6 +639,13 @@ export class SharePointService {
         return internalName || title;
       };
 
+      // Friendly title for the configuration row so it isn't blank in the UI
+      const siteTitle =
+        this.context.pageContext.web.title ||
+        this.context.pageContext.web.serverRelativeUrl ||
+        this.webUrl ||
+        'SMEPilot configuration';
+
       // Helper to normalize library names (Documents -> Shared Documents)
       // SharePoint uses "Documents" as display name but "Shared Documents" as actual library name
       const normalizeLibraryName = (path: string): string => {
@@ -664,6 +694,7 @@ export class SharePointService {
 
       // Using odata=nometadata format - NO __metadata allowed!
       const itemBody: any = {
+        [getFieldName('Title')]: `SMEPilot configuration - ${siteTitle}`,
         [getFieldName('SourceFolderPath')]: normalizePathForSave(config.sourceFolderPath),
         [getFieldName('DestinationFolderPath')]: normalizePathForSave(config.destinationFolderPath),
         [getFieldName('TemplateFileUrl')]: normalizePathForSave(config.templateFileUrl),
@@ -679,6 +710,41 @@ export class SharePointService {
 
       if (config.subscriptionId) {
         itemBody[getFieldName('SubscriptionId')] = config.subscriptionId;
+      }
+      if (config.clientStateSecret) {
+        itemBody[getFieldName('ClientStateSecret')] = config.clientStateSecret;
+      }
+
+      // Optional: EnrichedOutputType (Docx / Pdf / Both). If not provided, backend will default to Both.
+      // IMPORTANT: Only write this field if the column actually exists in the list mapping.
+      if (config.enrichedOutputType && fieldMapping.has('EnrichedOutputType')) {
+        const internal = getFieldName('EnrichedOutputType');
+        itemBody[internal] = config.enrichedOutputType;
+      }
+
+      // Derive TemplateLibraryPath and TemplateFileName from TemplateFileUrl (if present),
+      // so the Function App has a reliable fallback even if URL parsing fails.
+      if (config.templateFileUrl) {
+        try {
+          let serverRelative = config.templateFileUrl.trim();
+          if (serverRelative.toLowerCase().startsWith(this.webUrl.toLowerCase())) {
+            serverRelative = serverRelative.substring(this.webUrl.length);
+          }
+          if (!serverRelative.startsWith('/')) {
+            serverRelative = '/' + serverRelative;
+          }
+
+          const parts = serverRelative.split('/').filter(p => p && p.trim() !== '');
+          if (parts.length >= 2) {
+            const fileName = parts[parts.length - 1];
+            const libraryPath = '/' + parts.slice(0, parts.length - 1).join('/');
+
+            itemBody[getFieldName('TemplateLibraryPath')] = libraryPath;
+            itemBody[getFieldName('TemplateFileName')] = fileName;
+          }
+        } catch (e) {
+          console.warn('[saveConfiguration] Failed to derive TemplateLibraryPath/TemplateFileName from TemplateFileUrl:', e);
+        }
       }
 
       // Get request digest once for both create and update
@@ -859,7 +925,10 @@ export class SharePointService {
         accessWeb: getFieldValue('AccessWeb') !== false,
         accessO365: getFieldValue('AccessO365') !== false,
         subscriptionId: getFieldValue('SubscriptionId'),
-        lastUpdated: getFieldValue('LastUpdated') ? new Date(getFieldValue('LastUpdated')) : undefined
+        lastUpdated: getFieldValue('LastUpdated') ? new Date(getFieldValue('LastUpdated')) : undefined,
+        clientStateSecret: getFieldValue('ClientStateSecret') || undefined,
+        // Default to Both when not set to preserve current behavior
+        enrichedOutputType: (getFieldValue('EnrichedOutputType') as string) || 'Both'
       };
 
       console.log('[getConfiguration] Parsed configuration:', config);
@@ -908,6 +977,47 @@ export class SharePointService {
     const errors: string[] = [];
 
     try {
+      // Cross-folder validation: prevent destination inside source or same as source
+      const normalizePath = (path: string): string => {
+        let p = (path || '').trim();
+        if (!p) {
+          return '';
+        }
+
+        if (p.toLowerCase().startsWith(this.webUrl.toLowerCase())) {
+          p = p.substring(this.webUrl.length);
+        }
+
+        if (!p.startsWith('/')) {
+          p = '/' + p;
+        }
+
+        if (p.length > 1 && p.endsWith('/')) {
+          p = p.slice(0, -1);
+        }
+
+        return p.toLowerCase();
+      };
+
+      const src = normalizePath(config.sourceFolderPath);
+      const dest = normalizePath(config.destinationFolderPath);
+
+      if (src && dest) {
+        if (src === dest) {
+          errors.push(
+            `Destination folder must be different from Source folder to avoid processing the same documents repeatedly. Source/Destination: ${config.sourceFolderPath}`
+          );
+        } else if (dest.startsWith(src + '/')) {
+          errors.push(
+            `Destination folder cannot be inside the Source folder. Source: ${config.sourceFolderPath}, Destination: ${config.destinationFolderPath}`
+          );
+        } else if (src.startsWith(dest + '/')) {
+          errors.push(
+            `Source folder cannot be inside the Destination folder. Source: ${config.sourceFolderPath}, Destination: ${config.destinationFolderPath}`
+          );
+        }
+      }
+
       // Validate source folder exists
       if (!await this.folderExists(config.sourceFolderPath)) {
         errors.push(`Source folder does not exist: ${config.sourceFolderPath}`);
@@ -1695,6 +1805,40 @@ export class SharePointService {
    */
   public async uploadTemplateFile(file: File, targetFolderPath: string): Promise<string> {
     try {
+      // Normalize target folder to a server-relative URL that starts with the web's ServerRelativeUrl
+      const normalizeFolder = (folderPath: string): string => {
+        let p = (folderPath || '').trim();
+        if (!p) {
+          p = '/Shared Documents/Templates';
+        }
+
+        // Strip absolute web URL if present
+        if (p.toLowerCase().startsWith(this.webUrl.toLowerCase())) {
+          p = p.substring(this.webUrl.length);
+        }
+
+        if (!p.startsWith('/')) {
+          p = '/' + p;
+        }
+
+        // Ensure it starts with the web's server-relative URL (e.g. /sites/SMEPilot)
+        const webRoot = (this.webServerRelativeUrl || '/').replace(/\/$/, '');
+        if (!p.toLowerCase().startsWith(webRoot.toLowerCase() + '/')
+          && p.toLowerCase() !== webRoot.toLowerCase()) {
+          const suffix = p.startsWith('/') ? p.substring(1) : p;
+          p = `${webRoot}/${suffix}`;
+        }
+
+        // Remove trailing slash
+        if (p.length > 1 && p.endsWith('/')) {
+          p = p.slice(0, -1);
+        }
+
+        return p;
+      };
+
+      const serverRelativeFolder = normalizeFolder(targetFolderPath);
+
       // Get request digest
       const digestUrl = `${this.webUrl}/_api/contextinfo`;
       const digestResponse = await this.httpClient.post(
@@ -1721,7 +1865,7 @@ export class SharePointService {
       }
 
       // Ensure folder exists
-      const encodedPath = encodeURIComponent(targetFolderPath);
+      const encodedPath = encodeURIComponent(serverRelativeFolder);
       const folderCheckUrl = `${this.webUrl}/_api/web/GetFolderByServerRelativeUrl('${encodedPath}')`;
       const folderCheck = await this.httpClient.get(folderCheckUrl, SPHttpClient.configurations.v1);
       
@@ -1753,7 +1897,7 @@ export class SharePointService {
       }
 
       const uploadData = await uploadResponse.json();
-      const fileUrl = uploadData.d?.ServerRelativeUrl || `${targetFolderPath}/${file.name}`;
+      const fileUrl = uploadData.d?.ServerRelativeUrl || `${serverRelativeFolder}/${file.name}`;
       
       // Return normalized path
       return fileUrl.replace(this.webUrl, '') || fileUrl;

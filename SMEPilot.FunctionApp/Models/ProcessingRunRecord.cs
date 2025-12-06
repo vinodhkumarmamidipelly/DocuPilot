@@ -16,6 +16,15 @@ namespace SMEPilot.FunctionApp.Models
         public string Status { get; set; } = string.Empty; // e.g. Processing, Succeeded, Failed
         public string? ErrorMessage { get; set; }
         public string? EnrichedUrl { get; set; }
+        /// <summary>
+        /// Optional driveId of the enriched file (destination library), if known.
+        /// Used so we can clean up enriched copies when the source file is deleted.
+        /// </summary>
+        public string? EnrichedDriveId { get; set; }
+        /// <summary>
+        /// Optional itemId of the enriched file in the destination drive.
+        /// </summary>
+        public string? EnrichedItemId { get; set; }
         public DateTimeOffset LastUpdatedUtc { get; set; }
     }
 }

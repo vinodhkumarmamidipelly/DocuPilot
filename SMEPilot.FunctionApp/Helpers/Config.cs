@@ -22,6 +22,33 @@ namespace SMEPilot.FunctionApp.Helpers
             ?? Environment.GetEnvironmentVariable("EnrichedFolderRelativePath") 
             ?? "/Shared Documents/SMEPilot Enriched Docs";
         
+        /// <summary>
+        /// Configurable output type for enriched documents.
+        /// Supported values (case-insensitive):
+        /// - "Docx"  : upload only the enriched DOCX
+        /// - "Pdf"   : upload only a rendered PDF (no DOCX)
+        /// - "Both"  : upload DOCX and also a rendered PDF (default, matches current behavior)
+        /// </summary>
+        public string EnrichedOutputType
+        {
+            get
+            {
+                // Prefer SharePoint config so admins can change per site without redeploy
+                var value = GetSharePointConfigValue("EnrichedOutputType")
+                            ?? Environment.GetEnvironmentVariable("EnrichedOutputType")
+                            ?? "Both";
+
+                // Normalize to one of the three allowed values
+                if (value.Equals("Docx", StringComparison.OrdinalIgnoreCase))
+                    return "Docx";
+                if (value.Equals("Pdf", StringComparison.OrdinalIgnoreCase))
+                    return "Pdf";
+
+                // Treat anything else as "Both" for safety / backwards compatibility
+                return "Both";
+            }
+        }
+        
         // Source folder path - from SharePoint config
         public string SourceFolderPath => GetSharePointConfigValue("SourceFolderPath") ?? "";
         
@@ -92,12 +119,25 @@ namespace SMEPilot.FunctionApp.Helpers
         
         // Notification deduplication
         public int NotificationDedupWindowSeconds => int.TryParse(Environment.GetEnvironmentVariable("NotificationDedupWindowSeconds"), out var dedupWindow) ? dedupWindow : 30;
+
+        /// <summary>
+        /// Renewal window in hours for Graph webhook subscriptions.
+        /// Any subscription expiring within this window will be renewed by WebhookRenewal.
+        /// Default: 24 hours.
+        /// </summary>
+        public int SubscriptionRenewalWindowHours =>
+            int.TryParse(Environment.GetEnvironmentVariable("SubscriptionRenewalWindowHours"), out var window) && window > 0
+                ? window
+                : 24;
         
         // Retry state configuration
         public int RetryWaitMinutes => int.TryParse(Environment.GetEnvironmentVariable("RetryWaitMinutes"), out var retryWait) ? retryWait : 5;
         
         // Metadata change handling - from SharePoint config
         public string MetadataChangeHandling => GetSharePointConfigValue("MetadataChangeHandling") ?? "Skip";
+
+        // Webhook client state secret (per-site/tenant) used to validate incoming Graph notifications
+        public string? ClientStateSecret => GetSharePointConfigValue("ClientStateSecret");
         
         // Current site ID (set when loading SharePoint config)
         private string? _currentSiteId;
@@ -109,7 +149,8 @@ namespace SMEPilot.FunctionApp.Helpers
         /// <param name="siteId">SharePoint site ID</param>
         /// <param name="logger">Optional logger</param>
         /// <param name="forceRefresh">Force refresh even if cached</param>
-        public async Task LoadSharePointConfigAsync(GraphHelper graph, string siteId, ILogger? logger = null, bool forceRefresh = false)
+        /// <param name="tenantId">Optional tenant ID for multi-tenant Graph calls</param>
+        public async Task LoadSharePointConfigAsync(GraphHelper graph, string siteId, ILogger? logger = null, bool forceRefresh = false, string? tenantId = null)
         {
             _currentSiteId = siteId;
             
@@ -125,10 +166,14 @@ namespace SMEPilot.FunctionApp.Helpers
 
             try
             {
-                logger?.LogInformation("🔄 [Config] Loading configuration from SharePoint for site {SiteId}", siteId);
+                logger?.LogInformation("🔄 [Config] Loading configuration from SharePoint for site {SiteId} (tenant={TenantId})", siteId, tenantId ?? "default");
                 
-                var configService = new ConfigService(graph, siteId, "SMEPilotConfig", 
-                    logger != null ? new LoggerFactory().CreateLogger<ConfigService>() : null);
+                var configService = new ConfigService(
+                    graph,
+                    siteId,
+                    "SMEPilotConfig",
+                    logger != null ? new LoggerFactory().CreateLogger<ConfigService>() : null,
+                    tenantId);
                 
                 var config = await configService.GetConfigurationAsync(forceRefresh);
                 

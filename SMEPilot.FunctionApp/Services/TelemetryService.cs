@@ -22,9 +22,9 @@ namespace SMEPilot.FunctionApp.Services
         }
 
         /// <summary>
-        /// Track document processing event
+        /// Track document processing event (includes optional tenant/site context)
         /// </summary>
-        public void TrackDocumentProcessing(string itemId, string fileName, long fileSizeBytes, string status, TimeSpan processingTime)
+        public void TrackDocumentProcessing(string itemId, string fileName, long fileSizeBytes, string status, TimeSpan processingTime, string? tenantId = null, string? siteId = null, string? outputType = null)
         {
             var properties = new Dictionary<string, string>
             {
@@ -33,6 +33,21 @@ namespace SMEPilot.FunctionApp.Services
                 { "FileSizeMB", (fileSizeBytes / 1024.0 / 1024.0).ToString("F2") },
                 { "Status", status }
             };
+
+            if (!string.IsNullOrWhiteSpace(tenantId))
+            {
+                properties["TenantId"] = tenantId;
+            }
+
+            if (!string.IsNullOrWhiteSpace(siteId))
+            {
+                properties["SiteId"] = siteId;
+            }
+
+            if (!string.IsNullOrWhiteSpace(outputType))
+            {
+                properties["EnrichedOutputType"] = outputType;
+            }
 
             var metrics = new Dictionary<string, double>
             {
@@ -46,9 +61,9 @@ namespace SMEPilot.FunctionApp.Services
         }
 
         /// <summary>
-        /// Track processing failure
+        /// Track processing failure (includes optional tenant/site context)
         /// </summary>
-        public void TrackProcessingFailure(string itemId, string fileName, string errorMessage, Exception? exception = null)
+        public void TrackProcessingFailure(string itemId, string fileName, string errorMessage, Exception? exception = null, string? tenantId = null, string? siteId = null)
         {
             var properties = new Dictionary<string, string>
             {
@@ -56,6 +71,16 @@ namespace SMEPilot.FunctionApp.Services
                 { "FileName", fileName },
                 { "ErrorMessage", errorMessage }
             };
+
+            if (!string.IsNullOrWhiteSpace(tenantId))
+            {
+                properties["TenantId"] = tenantId;
+            }
+
+            if (!string.IsNullOrWhiteSpace(siteId))
+            {
+                properties["SiteId"] = siteId;
+            }
 
             if (exception != null)
             {
@@ -70,9 +95,9 @@ namespace SMEPilot.FunctionApp.Services
         }
 
         /// <summary>
-        /// Track webhook subscription event
+        /// Track webhook subscription event (per tenant)
         /// </summary>
-        public void TrackWebhookSubscription(string subscriptionId, string action, bool success, string? errorMessage = null)
+        public void TrackWebhookSubscription(string subscriptionId, string action, bool success, string? tenantId = null, string? errorMessage = null)
         {
             var properties = new Dictionary<string, string>
             {
@@ -80,6 +105,11 @@ namespace SMEPilot.FunctionApp.Services
                 { "Action", action },
                 { "Success", success.ToString() }
             };
+
+            if (!string.IsNullOrWhiteSpace(tenantId))
+            {
+                properties["TenantId"] = tenantId;
+            }
 
             if (!string.IsNullOrWhiteSpace(errorMessage))
             {
@@ -91,9 +121,9 @@ namespace SMEPilot.FunctionApp.Services
         }
 
         /// <summary>
-        /// Track configuration loading
+        /// Track configuration loading (per tenant)
         /// </summary>
-        public void TrackConfigurationLoad(string siteId, bool fromCache, int configItemCount)
+        public void TrackConfigurationLoad(string siteId, bool fromCache, int configItemCount, string? tenantId = null)
         {
             var properties = new Dictionary<string, string>
             {
@@ -101,6 +131,11 @@ namespace SMEPilot.FunctionApp.Services
                 { "FromCache", fromCache.ToString() },
                 { "ConfigItemCount", configItemCount.ToString() }
             };
+
+            if (!string.IsNullOrWhiteSpace(tenantId))
+            {
+                properties["TenantId"] = tenantId;
+            }
 
             _telemetryClient.TrackEvent("ConfigurationLoaded", properties);
             _logger?.LogDebug("📊 [Telemetry] Tracked configuration load: SiteId: {SiteId}, FromCache: {FromCache}", siteId, fromCache);

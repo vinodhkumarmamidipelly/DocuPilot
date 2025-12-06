@@ -37,18 +37,16 @@ namespace SMEPilot.FunctionApp.Helpers
 
             if (_hasCredentials)
             {
-                var cca = ConfidentialClientApplicationBuilder
-                            .Create(_cfg.GraphClientId)
-                            .WithClientSecret(_cfg.GraphClientSecret)
-                            .WithTenantId(_cfg.GraphTenantId)
-                            .Build();
-
+                // Default client bound to the configured Graph_TenantId.
                 var tokenCredential = new ClientSecretCredential(
                     _cfg.GraphTenantId,
                     _cfg.GraphClientId,
                     _cfg.GraphClientSecret);
 
-                var authProvider = new AzureIdentityAuthenticationProvider(tokenCredential, scopes: new[] { "https://graph.microsoft.com/.default" });
+                var authProvider = new AzureIdentityAuthenticationProvider(
+                    tokenCredential,
+                    scopes: new[] { "https://graph.microsoft.com/.default" });
+
                 _client = new GraphServiceClient(authProvider);
             }
             else
@@ -57,7 +55,45 @@ namespace SMEPilot.FunctionApp.Helpers
             }
         }
 
-        public async Task<DriveItem?> GetDriveItemAsync(string driveId, string itemId)
+        /// <summary>
+        /// Creates a GraphServiceClient for the specified tenant. If tenantId is null or empty,
+        /// the default client (bound to Graph_TenantId) is returned.
+        /// </summary>
+        private GraphServiceClient GetClientForTenant(string? tenantId = null)
+        {
+            if (!_hasCredentials)
+            {
+                throw new InvalidOperationException("Graph credentials are not configured.");
+            }
+
+            // If no specific tenant requested or it matches the configured tenant, reuse the default client.
+            if (string.IsNullOrWhiteSpace(tenantId) ||
+                tenantId.Equals(_cfg.GraphTenantId, StringComparison.OrdinalIgnoreCase))
+            {
+                if (_client == null)
+                {
+                    throw new InvalidOperationException("Default Graph client is not initialized.");
+                }
+
+                return _client;
+            }
+
+            // Create a lightweight client for this tenant on demand.
+            _logger?.LogInformation("🌐 [GraphHelper] Creating per-tenant Graph client for TenantId={TenantId}", tenantId);
+
+            var tokenCredential = new ClientSecretCredential(
+                tenantId,
+                _cfg.GraphClientId,
+                _cfg.GraphClientSecret);
+
+            var authProvider = new AzureIdentityAuthenticationProvider(
+                tokenCredential,
+                scopes: new[] { "https://graph.microsoft.com/.default" });
+
+            return new GraphServiceClient(authProvider);
+        }
+
+        public async Task<DriveItem?> GetDriveItemAsync(string driveId, string itemId, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -66,7 +102,8 @@ namespace SMEPilot.FunctionApp.Helpers
 
             try
             {
-                return await _client!.Drives[driveId].Items[itemId].GetAsync();
+                var client = GetClientForTenant(tenantId);
+                return await client.Drives[driveId].Items[itemId].GetAsync();
             }
             catch
             {
@@ -86,7 +123,7 @@ namespace SMEPilot.FunctionApp.Helpers
         /// If the tracking list is missing or cannot be read, this logs a warning and returns null
         /// so callers can fall back to existing behavior.
         /// </summary>
-        public async Task<ProcessingRunRecord?> GetLatestProcessingRunAsync(string siteId, string rawDriveId, string rawItemId)
+        public async Task<ProcessingRunRecord?> GetLatestProcessingRunAsync(string siteId, string rawDriveId, string rawItemId, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -96,16 +133,17 @@ namespace SMEPilot.FunctionApp.Helpers
 
             try
             {
-                var listId = await EnsureProcessingRunsListExistsAsync(siteId);
+                var client = GetClientForTenant(tenantId);
+                var listId = await EnsureProcessingRunsListExistsAsync(siteId, tenantId);
                 if (string.IsNullOrWhiteSpace(listId))
                 {
-                    _logger?.LogWarning("⚠️ [Tracking] {ListName} list not available on site {SiteId}.", ProcessingRunsListName, siteId);
+                    _logger?.LogWarning("⚠️ [Tracking] {ListName} list not available on site {SiteId} for tenant {TenantId}.", ProcessingRunsListName, siteId, tenantId ?? "default");
                     return null;
                 }
 
-                _logger?.LogInformation("🔍 [Tracking] Querying latest run for RawDriveId={DriveId}, RawItemId={ItemId}", rawDriveId, rawItemId);
+                _logger?.LogInformation("🔍 [Tracking] Querying latest run for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}", rawDriveId, rawItemId, tenantId ?? "default");
 
-                var items = await _client!.Sites[siteId].Lists[listId].Items.GetAsync(requestConfig =>
+                var items = await client.Sites[siteId].Lists[listId].Items.GetAsync(requestConfig =>
                 {
                     requestConfig.QueryParameters.Expand = new[] { "fields" };
                     requestConfig.QueryParameters.Top = 200;
@@ -147,12 +185,12 @@ namespace SMEPilot.FunctionApp.Helpers
 
                 if (latest == null)
                 {
-                    _logger?.LogInformation("ℹ️ [Tracking] No matching tracking records for RawDriveId={DriveId}, RawItemId={ItemId}", rawDriveId, rawItemId);
+                    _logger?.LogInformation("ℹ️ [Tracking] No matching tracking records for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}", rawDriveId, rawItemId, tenantId ?? "default");
                 }
                 else
                 {
-                    _logger?.LogInformation("📋 [Tracking] Latest run for RawDriveId={DriveId}, RawItemId={ItemId}: Status={Status}, Hash={Hash}, LastUpdated={LastUpdated:o}",
-                        latest.RawDriveId, latest.RawItemId, latest.Status, latest.ContentHash, latest.LastUpdatedUtc);
+                    _logger?.LogInformation("📋 [Tracking] Latest run for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}: Status={Status}, Hash={Hash}, LastUpdated={LastUpdated:o}",
+                        latest.RawDriveId, latest.RawItemId, tenantId ?? "default", latest.Status, latest.ContentHash, latest.LastUpdatedUtc);
                 }
 
                 return latest;
@@ -183,7 +221,7 @@ namespace SMEPilot.FunctionApp.Helpers
         /// This intentionally ignores newer runs that are still in Processing/Failed state
         /// so content-hash idempotency can compare against the last known-good run.
         /// </summary>
-        public async Task<ProcessingRunRecord?> GetLatestSucceededProcessingRunAsync(string siteId, string rawDriveId, string rawItemId)
+        public async Task<ProcessingRunRecord?> GetLatestSucceededProcessingRunAsync(string siteId, string rawDriveId, string rawItemId, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -193,16 +231,17 @@ namespace SMEPilot.FunctionApp.Helpers
 
             try
             {
+                var client = GetClientForTenant(tenantId);
                 var listId = await EnsureProcessingRunsListExistsAsync(siteId);
                 if (string.IsNullOrWhiteSpace(listId))
                 {
-                    _logger?.LogWarning("⚠️ [Tracking] {ListName} list not available on site {SiteId}.", ProcessingRunsListName, siteId);
+                    _logger?.LogWarning("⚠️ [Tracking] {ListName} list not available on site {SiteId} for tenant {TenantId}.", ProcessingRunsListName, siteId, tenantId ?? "default");
                     return null;
                 }
 
-                _logger?.LogInformation("🔍 [Tracking] Querying latest *succeeded* run for RawDriveId={DriveId}, RawItemId={ItemId}", rawDriveId, rawItemId);
+                _logger?.LogInformation("🔍 [Tracking] Querying latest *succeeded* run for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}", rawDriveId, rawItemId, tenantId ?? "default");
 
-                var items = await _client!.Sites[siteId].Lists[listId].Items.GetAsync(requestConfig =>
+                var items = await client.Sites[siteId].Lists[listId].Items.GetAsync(requestConfig =>
                 {
                     requestConfig.QueryParameters.Expand = new[] { "fields" };
                     requestConfig.QueryParameters.Top = 200;
@@ -249,12 +288,12 @@ namespace SMEPilot.FunctionApp.Helpers
 
                 if (latestSucceeded == null)
                 {
-                    _logger?.LogInformation("ℹ️ [Tracking] No succeeded tracking records for RawDriveId={DriveId}, RawItemId={ItemId}", rawDriveId, rawItemId);
+                    _logger?.LogInformation("ℹ️ [Tracking] No succeeded tracking records for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}", rawDriveId, rawItemId, tenantId ?? "default");
                 }
                 else
                 {
-                    _logger?.LogInformation("📋 [Tracking] Latest *succeeded* run for RawDriveId={DriveId}, RawItemId={ItemId}: Status={Status}, Hash={Hash}, LastUpdated={LastUpdated:o}",
-                        latestSucceeded.RawDriveId, latestSucceeded.RawItemId, latestSucceeded.Status, latestSucceeded.ContentHash, latestSucceeded.LastUpdatedUtc);
+                    _logger?.LogInformation("📋 [Tracking] Latest *succeeded* run for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}: Status={Status}, Hash={Hash}, LastUpdated={LastUpdated:o}",
+                        latestSucceeded.RawDriveId, latestSucceeded.RawItemId, tenantId ?? "default", latestSucceeded.Status, latestSucceeded.ContentHash, latestSucceeded.LastUpdatedUtc);
                 }
 
                 return latestSucceeded;
@@ -278,7 +317,7 @@ namespace SMEPilot.FunctionApp.Helpers
         /// querying the "latest" record. If the list or columns are missing, this logs
         /// detailed errors but does not throw, so enrichment can still succeed.
         /// </summary>
-        public async Task UpsertProcessingRunAsync(string siteId, ProcessingRunRecord record)
+        public async Task UpsertProcessingRunAsync(string siteId, ProcessingRunRecord record, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -288,10 +327,11 @@ namespace SMEPilot.FunctionApp.Helpers
 
             try
             {
-                var listId = await EnsureProcessingRunsListExistsAsync(siteId);
+                var client = GetClientForTenant(tenantId);
+                var listId = await EnsureProcessingRunsListExistsAsync(siteId, tenantId);
                 if (string.IsNullOrWhiteSpace(listId))
                 {
-                    _logger?.LogWarning("⚠️ [Tracking] {ListName} list not available on site {SiteId}; skipping tracking write.", ProcessingRunsListName, siteId);
+                    _logger?.LogWarning("⚠️ [Tracking] {ListName} list not available on site {SiteId} for tenant {TenantId}; skipping tracking write.", ProcessingRunsListName, siteId, tenantId ?? "default");
                     return;
                 }
 
@@ -303,6 +343,9 @@ namespace SMEPilot.FunctionApp.Helpers
                         ["RawItemId"] = record.RawItemId,
                         ["ContentHash"] = record.ContentHash,
                         ["Version"] = record.Version ?? string.Empty,
+                        ["EnrichedUrl"] = record.EnrichedUrl ?? string.Empty,
+                        ["EnrichedDriveId"] = record.EnrichedDriveId ?? string.Empty,
+                        ["EnrichedItemId"] = record.EnrichedItemId ?? string.Empty,
                         ["Status"] = record.Status,
                         ["ErrorMessage"] = record.ErrorMessage ?? string.Empty,
                         ["LastUpdatedUtc"] = record.LastUpdatedUtc.ToString("O")
@@ -311,11 +354,11 @@ namespace SMEPilot.FunctionApp.Helpers
 
                 var listItem = new ListItem { Fields = fields };
 
-                _logger?.LogInformation("📝 [Tracking] Writing run record to {ListName} for RawDriveId={DriveId}, RawItemId={ItemId}, Status={Status}",
-                    ProcessingRunsListName, record.RawDriveId, record.RawItemId, record.Status);
+                _logger?.LogInformation("📝 [Tracking] Writing run record to {ListName} for RawDriveId={DriveId}, RawItemId={ItemId}, Status={Status} in tenant {TenantId}",
+                    ProcessingRunsListName, record.RawDriveId, record.RawItemId, record.Status, tenantId ?? "default");
 
-                await _client!.Sites[siteId].Lists[listId].Items.PostAsync(listItem);
-                _logger?.LogInformation("✅ [Tracking] Tracking record written successfully to {ListName}.", ProcessingRunsListName);
+                await client.Sites[siteId].Lists[listId].Items.PostAsync(listItem);
+                _logger?.LogInformation("✅ [Tracking] Tracking record written successfully to {ListName} for tenant {TenantId}.", ProcessingRunsListName, tenantId ?? "default");
             }
             catch (ODataError odataError)
             {
@@ -338,7 +381,7 @@ namespace SMEPilot.FunctionApp.Helpers
 
         #endregion
 
-        private async Task<string?> EnsureProcessingRunsListExistsAsync(string siteId)
+        private async Task<string?> EnsureProcessingRunsListExistsAsync(string siteId, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -348,17 +391,19 @@ namespace SMEPilot.FunctionApp.Helpers
 
             try
             {
-                _logger?.LogInformation("🔍 [Tracking] Ensuring {ListName} list exists on site {SiteId}...", ProcessingRunsListName, siteId);
+                _logger?.LogInformation("🔍 [Tracking] Ensuring {ListName} list exists on site {SiteId} for tenant {TenantId}...", ProcessingRunsListName, siteId, tenantId ?? "default");
+
+                var client = GetClientForTenant(tenantId);
 
                 // Try to find existing list by display name
-                var lists = await _client!.Sites[siteId].Lists.GetAsync();
+                var lists = await client.Sites[siteId].Lists.GetAsync();
                 var existing = lists?.Value?.FirstOrDefault(l =>
                     string.Equals(l.DisplayName, ProcessingRunsListName, StringComparison.OrdinalIgnoreCase));
 
                 if (existing != null)
                 {
-                    _logger?.LogInformation("✅ [Tracking] Found existing list {ListName} (Id={ListId})", ProcessingRunsListName, existing.Id);
-                    await EnsureProcessingRunsColumnsExistAsync(siteId, existing.Id!);
+                    _logger?.LogInformation("✅ [Tracking] Found existing list {ListName} (Id={ListId}) for tenant {TenantId}", ProcessingRunsListName, existing.Id, tenantId ?? "default");
+                    await EnsureProcessingRunsColumnsExistAsync(siteId, existing.Id!, tenantId);
                     return existing.Id;
                 }
 
@@ -370,37 +415,38 @@ namespace SMEPilot.FunctionApp.Helpers
                     // Rely on SharePoint's default template (generic list); no explicit ListInfo property in this SDK.
                 };
 
-                var created = await _client.Sites[siteId].Lists.PostAsync(newList);
+                var created = await client.Sites[siteId].Lists.PostAsync(newList);
                 if (created == null || string.IsNullOrWhiteSpace(created.Id))
                 {
-                    _logger?.LogWarning("⚠️ [Tracking] Failed to create list {ListName} on site {SiteId}.", ProcessingRunsListName, siteId);
+                    _logger?.LogWarning("⚠️ [Tracking] Failed to create list {ListName} on site {SiteId} for tenant {TenantId}.", ProcessingRunsListName, siteId, tenantId ?? "default");
                     return null;
                 }
 
-                _logger?.LogInformation("✅ [Tracking] Created list {ListName} (Id={ListId}) on site {SiteId}.", ProcessingRunsListName, created.Id, siteId);
-                await EnsureProcessingRunsColumnsExistAsync(siteId, created.Id);
+                _logger?.LogInformation("✅ [Tracking] Created list {ListName} (Id={ListId}) on site {SiteId} for tenant {TenantId}.", ProcessingRunsListName, created.Id, siteId, tenantId ?? "default");
+                await EnsureProcessingRunsColumnsExistAsync(siteId, created.Id, tenantId);
                 return created.Id;
             }
             catch (ODataError odataError)
             {
-                _logger?.LogWarning(odataError, "⚠️ [Tracking] ODataError ensuring {ListName} list on site {SiteId}: Code={Code}, Message={Message}",
-                    ProcessingRunsListName, siteId, odataError.Error?.Code ?? "Unknown", odataError.Error?.Message ?? "Unknown");
+                _logger?.LogWarning(odataError, "⚠️ [Tracking] ODataError ensuring {ListName} list on site {SiteId} for tenant {TenantId}: Code={Code}, Message={Message}",
+                    ProcessingRunsListName, siteId, tenantId ?? "default", odataError.Error?.Code ?? "Unknown", odataError.Error?.Message ?? "Unknown");
                 return null;
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning(ex, "⚠️ [Tracking] Unexpected error ensuring {ListName} list on site {SiteId}: {Error}", ProcessingRunsListName, siteId, ex.Message);
+                _logger?.LogWarning(ex, "⚠️ [Tracking] Unexpected error ensuring {ListName} list on site {SiteId} for tenant {TenantId}: {Error}", ProcessingRunsListName, siteId, tenantId ?? "default", ex.Message);
                 return null;
             }
         }
 
-        private async Task EnsureProcessingRunsColumnsExistAsync(string siteId, string listId)
+        private async Task EnsureProcessingRunsColumnsExistAsync(string siteId, string listId, string? tenantId = null)
         {
             try
             {
-                _logger?.LogInformation("🔍 [Tracking] Ensuring required columns exist on {ListName} (ListId={ListId})", ProcessingRunsListName, listId);
+                _logger?.LogInformation("🔍 [Tracking] Ensuring required columns exist on {ListName} (ListId={ListId}) for tenant {TenantId}", ProcessingRunsListName, listId, tenantId ?? "default");
 
-                var existingColumns = await _client!.Sites[siteId].Lists[listId].Columns.GetAsync();
+                var client = GetClientForTenant(tenantId);
+                var existingColumns = await client.Sites[siteId].Lists[listId].Columns.GetAsync();
                 var existingNames = existingColumns?.Value?.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase)
                                    ?? new HashSet<string>();
 
@@ -414,6 +460,9 @@ namespace SMEPilot.FunctionApp.Helpers
                     new { Name = "RawItemId", Type = "text", DisplayName = "Raw Item Id", Description = "ItemId of source document" },
                     new { Name = "ContentHash", Type = "text", DisplayName = "Content Hash", Description = "SHA256 hash of raw content" },
                     new { Name = "Version", Type = "text", DisplayName = "Version", Description = "Logical document version used for this enriched run" },
+                    new { Name = "EnrichedUrl", Type = "text", DisplayName = "Enriched Url", Description = "Url of the enriched document" },
+                    new { Name = "EnrichedDriveId", Type = "text", DisplayName = "Enriched Drive Id", Description = "DriveId of enriched (destination) document" },
+                    new { Name = "EnrichedItemId", Type = "text", DisplayName = "Enriched Item Id", Description = "ItemId of enriched (destination) document" },
                     new { Name = "Status", Type = "text", DisplayName = "Status", Description = "Processing status (Processing, Succeeded, Failed, etc.)" },
                     new { Name = "ErrorMessage", Type = "text", DisplayName = "Error Message", Description = "Error details if processing failed" },
                     new { Name = "LastUpdatedUtc", Type = "text", DisplayName = "Last Updated (UTC)", Description = "Last time this record was updated (UTC, ISO 8601 string)" }
@@ -435,19 +484,19 @@ namespace SMEPilot.FunctionApp.Helpers
                         Text = new TextColumn()
                     };
 
-                    var created = await _client.Sites[siteId].Lists[listId].Columns.PostAsync(def);
-                    _logger?.LogInformation("✅ [Tracking] Created column '{ColumnName}' (Id={ColumnId}) on {ListName}", col.Name, created?.Id ?? "null", ProcessingRunsListName);
+                    var created = await client.Sites[siteId].Lists[listId].Columns.PostAsync(def);
+                    _logger?.LogInformation("✅ [Tracking] Created column '{ColumnName}' (Id={ColumnId}) on {ListName} for tenant {TenantId}", col.Name, created?.Id ?? "null", ProcessingRunsListName, tenantId ?? "default");
                     existingNames.Add(col.Name);
                 }
             }
             catch (ODataError odataError)
             {
-                _logger?.LogWarning(odataError, "⚠️ [Tracking] ODataError ensuring columns on {ListName} (ListId={ListId}): Code={Code}, Message={Message}",
-                    ProcessingRunsListName, listId, odataError.Error?.Code ?? "Unknown", odataError.Error?.Message ?? "Unknown");
+                _logger?.LogWarning(odataError, "⚠️ [Tracking] ODataError ensuring columns on {ListName} (ListId={ListId}) for tenant {TenantId}: Code={Code}, Message={Message}",
+                    ProcessingRunsListName, listId, tenantId ?? "default", odataError.Error?.Code ?? "Unknown", odataError.Error?.Message ?? "Unknown");
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning(ex, "⚠️ [Tracking] Unexpected error ensuring columns on {ListName} (ListId={ListId}): {Error}", ProcessingRunsListName, listId, ex.Message);
+                _logger?.LogWarning(ex, "⚠️ [Tracking] Unexpected error ensuring columns on {ListName} (ListId={ListId}) for tenant {TenantId}: {Error}", ProcessingRunsListName, listId, tenantId ?? "default", ex.Message);
             }
         }
 
@@ -461,6 +510,9 @@ namespace SMEPilot.FunctionApp.Helpers
                 Version = fields.TryGetValue("Version", out var v) ? v?.ToString() : null,
                 Status = fields.TryGetValue("Status", out var s) ? s?.ToString() ?? string.Empty : string.Empty,
                 ErrorMessage = fields.TryGetValue("ErrorMessage", out var e) ? e?.ToString() : null,
+                EnrichedUrl = fields.TryGetValue("EnrichedUrl", out var url) ? url?.ToString() : null,
+                EnrichedDriveId = fields.TryGetValue("EnrichedDriveId", out var ed) ? ed?.ToString() : null,
+                EnrichedItemId = fields.TryGetValue("EnrichedItemId", out var ei) ? ei?.ToString() : null,
                 LastUpdatedUtc = DateTimeOffset.UtcNow
             };
 
@@ -612,7 +664,7 @@ namespace SMEPilot.FunctionApp.Helpers
         /// <summary>
         /// Feedback2: Download file stream with retry policy
         /// </summary>
-        public async Task<Stream> DownloadFileStreamAsync(string driveId, string itemId)
+        public async Task<Stream> DownloadFileStreamAsync(string driveId, string itemId, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -633,9 +685,10 @@ namespace SMEPilot.FunctionApp.Helpers
             }
 
             // Feedback2: Use retry policy for download
+            var client = GetClientForTenant(tenantId);
             var stream = await RetryPolicyHelper.ExecuteWithRetryAsync(
                 _retryPolicy,
-                async () => await _client!.Drives[driveId].Items[itemId].Content.GetAsync(),
+                async () => await client.Drives[driveId].Items[itemId].Content.GetAsync(),
                 $"DownloadFileStreamAsync for ItemId: {itemId}",
                 _logger);
             
@@ -649,7 +702,7 @@ namespace SMEPilot.FunctionApp.Helpers
         /// Export a file in a drive to PDF using Microsoft Graph's format=pdf support.
         /// Returns a memory stream positioned at 0, or null if credentials are not configured.
         /// </summary>
-        public async Task<Stream?> DownloadFileAsPdfStreamAsync(string driveId, string itemId)
+        public async Task<Stream?> DownloadFileAsPdfStreamAsync(string driveId, string itemId, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -664,8 +717,9 @@ namespace SMEPilot.FunctionApp.Helpers
                 _retryPolicy,
                 async () =>
                 {
+                    var effectiveTenant = string.IsNullOrWhiteSpace(tenantId) ? _cfg.GraphTenantId : tenantId;
                     var tokenCredential = new ClientSecretCredential(
-                        _cfg.GraphTenantId,
+                        effectiveTenant,
                         _cfg.GraphClientId,
                         _cfg.GraphClientSecret);
 
@@ -696,9 +750,42 @@ namespace SMEPilot.FunctionApp.Helpers
         }
 
         /// <summary>
+        /// Deletes a file (driveItem) by driveId + itemId.
+        /// Best-effort helper used for cleanup scenarios (e.g., when only PDF output is desired).
+        /// </summary>
+        public async Task DeleteFileAsync(string driveId, string itemId, string? tenantId = null)
+        {
+            if (!_hasCredentials)
+            {
+                _logger?.LogWarning("⚠️ [DELETE] Graph credentials not configured; cannot delete item {ItemId} from drive {DriveId}", itemId, driveId);
+                return;
+            }
+
+            try
+            {
+                var client = GetClientForTenant(tenantId);
+                await RetryPolicyHelper.ExecuteWithRetryAsync(
+                    _retryPolicy,
+                    async () =>
+                    {
+                        await client.Drives[driveId].Items[itemId].DeleteAsync();
+                        return true;
+                    },
+                    $"DeleteFileAsync for ItemId: {itemId}",
+                    _logger);
+
+                _logger?.LogInformation("🗑️ [DELETE] Deleted file {ItemId} from drive {DriveId}", itemId, driveId);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "⚠️ [DELETE] Failed to delete file {ItemId} from drive {DriveId}: {Error}", itemId, driveId, ex.Message);
+            }
+        }
+
+        /// <summary>
         /// Downloads a template file from SharePoint using the configured template path or file URL
         /// </summary>
-        public async Task<string?> DownloadTemplateFileAsync(string siteId, string templateLibraryPath, string templateFileName, string? templateFileUrl = null)
+        public async Task<string?> DownloadTemplateFileAsync(string siteId, string templateLibraryPath, string templateFileName, string? templateFileUrl = null, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -712,81 +799,100 @@ namespace SMEPilot.FunctionApp.Helpers
                 string? targetDriveId = null;
                 string? targetItemId = null;
 
-                // Option 1: If TemplateFileUrl is provided, parse and use it
+                // Option 1: If TemplateFileUrl is provided, parse and use it (including subfolders within the library)
                 if (!string.IsNullOrWhiteSpace(templateFileUrl))
                 {
                     _logger?.LogInformation("📥 [TEMPLATE] Attempting to download template from URL: {Url}", templateFileUrl);
                     
-                    // Parse the URL format: /sites/SiteName/LibraryName/FileName or /LibraryName/FileName
+                    // Parse the URL format:
+                    // - /sites/SiteName/Library[/Subfolder...]/FileName
+                    // - /Library[/Subfolder...]/FileName
                     var normalizedUrl = templateFileUrl.TrimStart('/').TrimEnd('/');
                     var urlParts = normalizedUrl.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
                     
                     string? parsedLibraryName = null;
                     string? parsedFileName = null;
+                    string? parsedSubfolderPath = null; // path inside the library, e.g. "Templates" or "Sub1/Sub2"
                     
                     if (urlParts.Length >= 3 && urlParts[0].Equals("sites", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Format: /sites/SiteName/LibraryName/FileName
-                        // Skip "sites" and site name, library is at index 2, file is last
+                        // Example: sites/SMEPilot/Shared Documents/Templates/Basic_Template.dotx
                         if (urlParts.Length >= 4)
                         {
-                            parsedLibraryName = urlParts[2];
-                            parsedFileName = urlParts[urlParts.Length - 1];
-                            _logger?.LogInformation("📥 [TEMPLATE] Parsed URL - Library: '{Library}', File: '{File}'", parsedLibraryName, parsedFileName);
+                            var afterSite = urlParts.Skip(2).ToArray(); // [Library, (Subfolder... ), FileName]
+                            parsedLibraryName = afterSite[0];
+                            parsedFileName = afterSite[^1];
+                            if (afterSite.Length > 2)
+                            {
+                                parsedSubfolderPath = string.Join("/", afterSite.Skip(1).Take(afterSite.Length - 2));
+                            }
+
+                            _logger?.LogInformation("📥 [TEMPLATE] Parsed URL - Library: '{Library}', Subfolder: '{Subfolder}', File: '{File}'",
+                                parsedLibraryName, parsedSubfolderPath ?? "<root>", parsedFileName);
                         }
                         else if (urlParts.Length == 3)
                         {
-                            // Format: /sites/SiteName/LibraryName (no file name, invalid)
                             _logger?.LogWarning("⚠️ [TEMPLATE] URL format invalid - missing file name: {Url}", templateFileUrl);
                         }
                     }
                     else if (urlParts.Length >= 2)
                     {
-                        // Format: /LibraryName/FileName (relative path)
+                        // Example: Shared Documents/Templates/Basic_Template.dotx
                         parsedLibraryName = urlParts[0];
-                        parsedFileName = urlParts[urlParts.Length - 1];
-                        _logger?.LogInformation("📥 [TEMPLATE] Parsed URL - Library: '{Library}', File: '{File}'", parsedLibraryName, parsedFileName);
+                        parsedFileName = urlParts[^1];
+                        if (urlParts.Length > 2)
+                        {
+                            parsedSubfolderPath = string.Join("/", urlParts.Skip(1).Take(urlParts.Length - 2));
+                        }
+
+                        _logger?.LogInformation("📥 [TEMPLATE] Parsed URL - Library: '{Library}', Subfolder: '{Subfolder}', File: '{File}'",
+                            parsedLibraryName, parsedSubfolderPath ?? "<root>", parsedFileName);
                     }
                     else if (urlParts.Length == 1)
                     {
-                        // Format: /FileName (just file name, no library - invalid)
                         _logger?.LogWarning("⚠️ [TEMPLATE] URL format invalid - missing library name: {Url}", templateFileUrl);
                     }
                     
                     // If we successfully parsed the URL, try to resolve and download
                     if (!string.IsNullOrWhiteSpace(parsedLibraryName) && !string.IsNullOrWhiteSpace(parsedFileName))
                     {
-                        // Resolve the library to get drive ID
-                        var (driveId, folderItemId) = await ResolveFolderPathAsync(siteId, parsedLibraryName);
+                        // Build a folder path for ResolveFolderPathAsync (library + optional subfolders)
+                        var resolvePath = string.IsNullOrWhiteSpace(parsedSubfolderPath)
+                            ? parsedLibraryName
+                            : $"{parsedLibraryName}/{parsedSubfolderPath}";
+
+                        var (driveId, folderItemId) = await ResolveFolderPathAsync(siteId, resolvePath, tenantId);
                         if (!string.IsNullOrWhiteSpace(driveId))
                         {
                             targetDriveId = driveId;
                             
-                            // File is in library root (no subfolder)
-                            string filePath = parsedFileName;
+                            // Build the file path within the drive (subfolders + filename)
+                            var filePath = string.IsNullOrWhiteSpace(parsedSubfolderPath)
+                                ? parsedFileName
+                                : $"{parsedSubfolderPath}/{parsedFileName}";
                             
                             try
                             {
-                                // Try to get the file using ItemWithPath
-                                var fileItem = await _client!.Drives[targetDriveId].Root.ItemWithPath(filePath).GetAsync();
+                                var client = GetClientForTenant(tenantId);
+                                var fileItem = await client.Drives[targetDriveId].Root.ItemWithPath(filePath).GetAsync();
                                 targetItemId = fileItem.Id;
-                                _logger?.LogInformation("✅ [TEMPLATE] Found template file in SharePoint from URL: {Library}/{File} (ItemId: {ItemId})", 
-                                    parsedLibraryName, parsedFileName, targetItemId);
+                                _logger?.LogInformation("✅ [TEMPLATE] Found template file in SharePoint from URL: {LibraryPath}/{File} (ItemId: {ItemId})", 
+                                    resolvePath, parsedFileName, targetItemId);
                                 
                                 // Update templateFileName for download path
                                 templateFileName = parsedFileName;
                             }
                             catch (ODataError odataError) when (odataError.Error?.Code == "itemNotFound" || odataError.Error?.Code == "NotFound")
                             {
-                                _logger?.LogWarning("⚠️ [TEMPLATE] Template file not found at parsed URL path: {Library}/{File}", 
-                                    parsedLibraryName, parsedFileName);
+                                _logger?.LogWarning("⚠️ [TEMPLATE] Template file not found at parsed URL path: {LibraryPath}/{File}", 
+                                    resolvePath, parsedFileName);
                                 // Continue to fallback option 2
                             }
                         }
                         else
                         {
-                            _logger?.LogWarning("⚠️ [TEMPLATE] Could not resolve library '{Library}' from URL, falling back to TemplateLibraryPath", 
-                                parsedLibraryName);
+                            _logger?.LogWarning("⚠️ [TEMPLATE] Could not resolve library path '{LibraryPath}' from URL, falling back to TemplateLibraryPath", 
+                                resolvePath);
                             // Continue to fallback option 2
                         }
                     }
@@ -805,7 +911,7 @@ namespace SMEPilot.FunctionApp.Helpers
                         _logger?.LogInformation("📥 [TEMPLATE] Resolving template path: {LibraryPath}/{FileName}", templateLibraryPath, templateFileName);
                     
                         // Resolve the library path to get drive ID
-                        var (driveId, folderItemId) = await ResolveFolderPathAsync(siteId, templateLibraryPath);
+                        var (driveId, folderItemId) = await ResolveFolderPathAsync(siteId, templateLibraryPath, tenantId);
                         if (string.IsNullOrWhiteSpace(driveId))
                         {
                             _logger?.LogWarning("⚠️ [TEMPLATE] Could not resolve template library path: {Path}", templateLibraryPath);
@@ -853,7 +959,8 @@ namespace SMEPilot.FunctionApp.Helpers
                         try
                         {
                             // Try to get the file using ItemWithPath
-                            var fileItem = await _client!.Drives[targetDriveId].Root.ItemWithPath(normalizedPath).GetAsync();
+                            var client = GetClientForTenant(tenantId);
+                            var fileItem = await client.Drives[targetDriveId].Root.ItemWithPath(normalizedPath).GetAsync();
                             targetItemId = fileItem.Id;
                             _logger?.LogInformation("✅ [TEMPLATE] Found template file in SharePoint: {Path} (ItemId: {ItemId})", normalizedPath, targetItemId);
                         }
@@ -894,7 +1001,7 @@ namespace SMEPilot.FunctionApp.Helpers
             }
         }
 
-        public async Task<DriveItem> UploadFileBytesAsync(string driveId, string folderPath, string fileName, byte[] bytes)
+        public async Task<DriveItem> UploadFileBytesAsync(string driveId, string folderPath, string fileName, byte[] bytes, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -935,9 +1042,10 @@ namespace SMEPilot.FunctionApp.Helpers
             
             // Feedback2: Use retry policy for upload
             using var ms = new MemoryStream(bytes);
+            var client = GetClientForTenant(tenantId);
             var item = await RetryPolicyHelper.ExecuteWithRetryAsync(
                 _retryPolicy,
-                async () => await _client!.Drives[driveId].Root.ItemWithPath(fullPath).Content.PutAsync(ms),
+                async () => await client.Drives[driveId].Root.ItemWithPath(fullPath).Content.PutAsync(ms),
                 $"UploadFileBytesAsync to {fullPath}",
                 _logger);
             
@@ -947,7 +1055,7 @@ namespace SMEPilot.FunctionApp.Helpers
             return item;
         }
 
-        public async Task<List<DriveItem>> GetRecentDriveItemsAsync(string driveId, int maxItems = 10)
+        public async Task<List<DriveItem>> GetRecentDriveItemsAsync(string driveId, int maxItems = 10, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -957,8 +1065,9 @@ namespace SMEPilot.FunctionApp.Helpers
 
             try
             {
+                var client = GetClientForTenant(tenantId);
                 // Get root item first to get its ID
-                var rootItem = await _client!.Drives[driveId].Root.GetAsync();
+                var rootItem = await client.Drives[driveId].Root.GetAsync();
                 if (rootItem == null || string.IsNullOrWhiteSpace(rootItem.Id))
                 {
                     _logger?.LogError("Error: Could not get root item for drive {DriveId}", driveId);
@@ -966,7 +1075,7 @@ namespace SMEPilot.FunctionApp.Helpers
                 }
 
                 // Get children of root using the root item ID
-                var items = await _client!.Drives[driveId].Items[rootItem.Id].Children.GetAsync(config =>
+                var items = await client.Drives[driveId].Items[rootItem.Id].Children.GetAsync(config =>
                 {
                     config.QueryParameters.Top = maxItems * 2; // Get more items, then sort
                 });
@@ -1010,7 +1119,8 @@ namespace SMEPilot.FunctionApp.Helpers
             string driveId,
             string? sourceFolderPath,
             TimeSpan lookbackWindow,
-            int maxItems = 20)
+            int maxItems = 20,
+            string? tenantId = null)
         {
             var results = new List<DriveItem>();
 
@@ -1060,9 +1170,10 @@ namespace SMEPilot.FunctionApp.Helpers
                     lookbackWindow,
                     maxItems);
 
-                // Acquire an access token for calling Graph directly
+                // Acquire an access token for calling Graph directly (tenant-aware)
+                var effectiveTenant = string.IsNullOrWhiteSpace(tenantId) ? _cfg.GraphTenantId : tenantId;
                 var tokenCredential = new ClientSecretCredential(
-                    _cfg.GraphTenantId,
+                    effectiveTenant,
                     _cfg.GraphClientId,
                     _cfg.GraphClientSecret);
 
@@ -1216,7 +1327,7 @@ namespace SMEPilot.FunctionApp.Helpers
             }
         }
 
-        public async Task<Dictionary<string, object>?> GetListItemFieldsAsync(string driveId, string itemId)
+        public async Task<Dictionary<string, object>?> GetListItemFieldsAsync(string driveId, string itemId, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -1233,10 +1344,11 @@ namespace SMEPilot.FunctionApp.Helpers
             try
             {
                 _logger?.LogInformation("🔍 [GetListItemFieldsAsync] Retrieving metadata for ItemId: {ItemId}", itemId);
+                var client = GetClientForTenant(tenantId);
                 
                 // CRITICAL FIX: Expand listItem to ensure it is populated
                 // Note: parentReference is a complex property (not navigation) and is included by default - cannot be expanded
-                var driveItem = await _client!.Drives[driveId].Items[itemId].GetAsync(requestConfig =>
+                var driveItem = await client.Drives[driveId].Items[itemId].GetAsync(requestConfig =>
                 {
                     requestConfig.QueryParameters.Expand = new[] { "listItem" };
                 });
@@ -1261,7 +1373,7 @@ namespace SMEPilot.FunctionApp.Helpers
                 }
 
                 // CRITICAL FIX: Expand list to ensure it is populated
-                var drive = await _client!.Drives[driveId].GetAsync(requestConfig =>
+                var drive = await client.Drives[driveId].GetAsync(requestConfig =>
                 {
                     requestConfig.QueryParameters.Expand = new[] { "list" };
                 });
@@ -1287,7 +1399,7 @@ namespace SMEPilot.FunctionApp.Helpers
                 // Use retry policy for Graph API call
                 var fields = await RetryPolicyHelper.ExecuteWithRetryAsync(
                     _retryPolicy,
-                    async () => await _client.Sites[siteId].Lists[listId].Items[listItemId].Fields.GetAsync(),
+                    async () => await client.Sites[siteId].Lists[listId].Items[listItemId].Fields.GetAsync(),
                     $"GetListItemFieldsAsync for ItemId: {itemId}",
                     _logger);
                 
@@ -1322,7 +1434,7 @@ namespace SMEPilot.FunctionApp.Helpers
         /// Resolve a list item's Author / Editor display name using person fields.
         /// This is a higher-level helper used by the Function to populate document Author(s).
         /// </summary>
-        public async Task<string?> ResolveListItemAuthorDisplayNameAsync(string driveId, string itemId)
+        public async Task<string?> ResolveListItemAuthorDisplayNameAsync(string driveId, string itemId, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -1332,6 +1444,7 @@ namespace SMEPilot.FunctionApp.Helpers
             try
             {
                 _logger?.LogInformation("🔍 [AUTHOR] Resolving list item author for DriveId={DriveId}, ItemId={ItemId}", driveId, itemId);
+                var client = GetClientForTenant(tenantId);
 
                 DriveItem? driveItem = null;
 
@@ -1339,7 +1452,7 @@ namespace SMEPilot.FunctionApp.Helpers
                 //    do NOT support $expand; selecting them is enough to read uploader/editor info).
                 try
                 {
-                    driveItem = await _client!.Drives[driveId].Items[itemId].GetAsync(requestConfig =>
+                    driveItem = await client.Drives[driveId].Items[itemId].GetAsync(requestConfig =>
                     {
                         requestConfig.QueryParameters.Expand = new[] { "listItem" };
                     });
@@ -1421,7 +1534,7 @@ namespace SMEPilot.FunctionApp.Helpers
                 {
                     try
                     {
-                        driveItem = await _client!.Drives[driveId].Items[itemId].GetAsync(requestConfig =>
+                        driveItem = await client.Drives[driveId].Items[itemId].GetAsync(requestConfig =>
                         {
                             requestConfig.QueryParameters.Expand = new[] { "listItem" };
                         });
@@ -1910,7 +2023,7 @@ namespace SMEPilot.FunctionApp.Helpers
         /// Get all active subscriptions
         /// </summary>
         /// <returns>List of active subscriptions</returns>
-        public async Task<IEnumerable<Subscription>> GetSubscriptionsAsync()
+        public async Task<IEnumerable<Subscription>> GetSubscriptionsAsync(string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -1920,11 +2033,12 @@ namespace SMEPilot.FunctionApp.Helpers
 
             try
             {
-                _logger?.LogInformation("📋 [GetSubscriptionsAsync] Getting all active subscriptions");
+                _logger?.LogInformation("📋 [GetSubscriptionsAsync] Getting all active subscriptions (tenant={TenantId})", tenantId ?? _cfg.GraphTenantId);
 
+                var client = GetClientForTenant(tenantId);
                 var subscriptions = await _retryPolicy.ExecuteAsync(async () =>
                 {
-                    return await _client!.Subscriptions.GetAsync();
+                    return await client.Subscriptions.GetAsync();
                 });
 
                 var subscriptionList = subscriptions?.Value?.ToList() ?? new List<Subscription>();
@@ -1942,7 +2056,7 @@ namespace SMEPilot.FunctionApp.Helpers
         /// Delete a subscription by ID
         /// </summary>
         /// <param name="subscriptionId">Subscription ID</param>
-        public async Task DeleteSubscriptionAsync(string subscriptionId)
+        public async Task DeleteSubscriptionAsync(string subscriptionId, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -1952,14 +2066,15 @@ namespace SMEPilot.FunctionApp.Helpers
 
             try
             {
-                _logger?.LogInformation("🗑️ [DeleteSubscriptionAsync] Deleting subscription {SubscriptionId}", subscriptionId);
+                _logger?.LogInformation("🗑️ [DeleteSubscriptionAsync] Deleting subscription {SubscriptionId} for tenant {TenantId}", subscriptionId, tenantId ?? "default");
 
+                var client = GetClientForTenant(tenantId);
                 await _retryPolicy.ExecuteAsync(async () =>
                 {
-                    await _client!.Subscriptions[subscriptionId].DeleteAsync();
+                    await client.Subscriptions[subscriptionId].DeleteAsync();
                 });
 
-                _logger?.LogInformation("✅ [DeleteSubscriptionAsync] Successfully deleted subscription {SubscriptionId}", subscriptionId);
+                _logger?.LogInformation("✅ [DeleteSubscriptionAsync] Successfully deleted subscription {SubscriptionId} for tenant {TenantId}", subscriptionId, tenantId ?? "default");
             }
             catch (Exception ex)
             {
@@ -1968,7 +2083,7 @@ namespace SMEPilot.FunctionApp.Helpers
             }
         }
 
-        public async Task<Subscription> CreateSubscriptionAsync(string resource, string notificationUrl, DateTimeOffset expiration)
+        public async Task<Subscription> CreateSubscriptionAsync(string resource, string notificationUrl, DateTimeOffset expiration, string? tenantId = null, string? clientState = null)
         {
             if (!_hasCredentials) throw new InvalidOperationException("Graph credentials are not configured.");
             
@@ -1978,21 +2093,26 @@ namespace SMEPilot.FunctionApp.Helpers
                 _logger?.LogInformation("Resource: {Resource}", resource);
                 _logger?.LogInformation("Notification URL: {NotificationUrl}", notificationUrl);
                 _logger?.LogInformation("Expiration: {Expiration}", expiration);
-                _logger?.LogInformation("Tenant ID: {TenantId}", _cfg.GraphTenantId);
+                _logger?.LogInformation("Configured Tenant ID: {TenantId}", _cfg.GraphTenantId);
+                if (!string.IsNullOrWhiteSpace(tenantId))
+                {
+                    _logger?.LogInformation("Effective Tenant ID (per-call): {TenantId}", tenantId);
+                }
                 _logger?.LogInformation("Client ID: {ClientId}", _cfg.GraphClientId);
                 _logger?.LogInformation("Client Secret: {Status}", string.IsNullOrEmpty(_cfg.GraphClientSecret) ? "EMPTY" : "SET");
                 
                 // Try to get an access token first to verify authentication
                 try
                 {
+                    var effectiveTenant = string.IsNullOrWhiteSpace(tenantId) ? _cfg.GraphTenantId : tenantId;
                     var tokenCredential = new ClientSecretCredential(
-                        _cfg.GraphTenantId,
+                        effectiveTenant,
                         _cfg.GraphClientId,
                         _cfg.GraphClientSecret);
                     
                     var tokenRequestContext = new Azure.Core.TokenRequestContext(new[] { "https://graph.microsoft.com/.default" });
                     var token = await tokenCredential.GetTokenAsync(tokenRequestContext, default);
-                    _logger?.LogInformation("Access token obtained successfully (length: {Length})", token.Token.Length);
+                    _logger?.LogInformation("Access token obtained successfully for Tenant={Tenant} (length: {Length})", effectiveTenant, token.Token.Length);
                     _logger?.LogInformation("Token expires: {ExpiresOn}", token.ExpiresOn);
                 }
                 catch (Exception authEx)
@@ -2001,17 +2121,22 @@ namespace SMEPilot.FunctionApp.Helpers
                     throw new InvalidOperationException($"Authentication failed: {authEx.Message}", authEx);
                 }
                 
+                var effectiveClientState = string.IsNullOrWhiteSpace(clientState)
+                    ? "SMEPilotState"
+                    : clientState;
+
                 var subscription = new Subscription
                 {
                     ChangeType = "updated",  // Graph API only supports "updated" for drive subscriptions (not "created")
                     NotificationUrl = notificationUrl,
                     Resource = resource,
                     ExpirationDateTime = expiration,
-                    ClientState = "SMEPilotState"
+                    ClientState = effectiveClientState
                 };
                 
                 _logger?.LogInformation("Calling Graph API to create subscription...");
-                var result = await _client!.Subscriptions.PostAsync(subscription);
+                var client = GetClientForTenant(tenantId);
+                var result = await client.Subscriptions.PostAsync(subscription);
                 _logger?.LogInformation("✅ Subscription created successfully! ID: {SubscriptionId}", result.Id);
                 return result;
             }
@@ -2050,7 +2175,7 @@ namespace SMEPilot.FunctionApp.Helpers
         /// </summary>
         /// <param name="driveId">Drive ID</param>
         /// <returns>Site ID or null if not found</returns>
-        public async Task<string?> GetSiteIdFromDriveAsync(string driveId)
+        public async Task<string?> GetSiteIdFromDriveAsync(string driveId, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -2063,7 +2188,8 @@ namespace SMEPilot.FunctionApp.Helpers
                 _logger?.LogDebug("🔍 [GetSiteIdFromDriveAsync] Getting site ID for drive {DriveId}", driveId);
 
                 // Get drive root item to extract siteId from ParentReference
-                var rootItem = await _client!.Drives[driveId].Root.GetAsync();
+                var client = GetClientForTenant(tenantId);
+                var rootItem = await client.Drives[driveId].Root.GetAsync();
                 if (rootItem?.ParentReference?.SiteId != null)
                 {
                     var siteId = rootItem.ParentReference.SiteId;
@@ -2136,7 +2262,7 @@ namespace SMEPilot.FunctionApp.Helpers
             return NormalizeSiteIdForGraph(siteId, sourceFolderPath);
         }
 
-        public async Task<(string? driveId, string? itemId)> ResolveFolderPathAsync(string siteId, string folderPath)
+        public async Task<(string? driveId, string? itemId)> ResolveFolderPathAsync(string siteId, string folderPath, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -2146,7 +2272,7 @@ namespace SMEPilot.FunctionApp.Helpers
 
             try
             {
-                _logger?.LogDebug("🔍 [ResolveFolderPathAsync] Resolving folder path for site {SiteId}, path {FolderPath}", siteId, folderPath);
+                _logger?.LogDebug("🔍 [ResolveFolderPathAsync] Resolving folder path for site {SiteId}, path {FolderPath}, tenant={TenantId}", siteId, folderPath, tenantId ?? "default");
                 
                 // Try multiple siteId formats
                 var siteIdFormats = new List<string>();
@@ -2238,7 +2364,8 @@ namespace SMEPilot.FunctionApp.Helpers
                     try
                     {
                         _logger?.LogDebug("🔍 [ResolveFolderPathAsync] Trying site ID format: {SiteIdFormat}", siteIdFormat);
-                        var allDrives = await _client!.Sites[siteIdFormat].Drives.GetAsync();
+                        var client = GetClientForTenant(tenantId);
+                        var allDrives = await client.Sites[siteIdFormat].Drives.GetAsync();
                         if (allDrives?.Value != null)
                         {
                             _logger?.LogInformation("🔍 [ResolveFolderPathAsync] Found {Count} drives in site {SiteIdFormat}", allDrives.Value.Count(), siteIdFormat);
@@ -2800,7 +2927,7 @@ namespace SMEPilot.FunctionApp.Helpers
         /// <param name="siteId">Site ID</param>
         /// <param name="listName">List name (e.g., "SMEPilotConfig")</param>
         /// <returns>List ID or null if not found</returns>
-        public async Task<string?> GetListIdByNameAsync(string siteId, string listName, string? sourceFolderPath = null)
+        public async Task<string?> GetListIdByNameAsync(string siteId, string listName, string? sourceFolderPath = null, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -2842,9 +2969,11 @@ namespace SMEPilot.FunctionApp.Helpers
                     _logger?.LogInformation("🔍 [GetListIdByNameAsync] Getting list ID for list '{ListName}' in site {SiteId} (trying format: {Format})", 
                         listName, siteId, siteIdFormat);
 
+                    var client = GetClientForTenant(tenantId);
+
                     var lists = await _retryPolicy.ExecuteAsync(async () =>
                     {
-                        return await _client!.Sites[siteIdFormat].Lists.GetAsync(config =>
+                        return await client.Sites[siteIdFormat].Lists.GetAsync(config =>
                         {
                             config.QueryParameters.Filter = $"displayName eq '{listName}'";
                             config.QueryParameters.Top = 1;
@@ -2892,7 +3021,7 @@ namespace SMEPilot.FunctionApp.Helpers
         /// <param name="listName">List name (e.g., "SMEPilotConfig")</param>
         /// <param name="top">Maximum number of items to return (default: 100)</param>
         /// <returns>List of list items with their fields</returns>
-        public async Task<List<Microsoft.Graph.Models.ListItem>> GetListItemsByNameAsync(string siteId, string listName, int top = 100, string? sourceFolderPath = null)
+        public async Task<List<Microsoft.Graph.Models.ListItem>> GetListItemsByNameAsync(string siteId, string listName, int top = 100, string? sourceFolderPath = null, string? tenantId = null)
         {
             if (!_hasCredentials)
             {
@@ -2934,12 +3063,14 @@ namespace SMEPilot.FunctionApp.Helpers
                 try
                 {
                     _logger?.LogInformation("📋 [GetListItemsByNameAsync] Querying list items from list '{ListName}' in site {SiteId} (trying format: {Format})", 
-                        listName, siteId, siteIdFormat);
+                    listName, siteId, siteIdFormat);
+
+                    var client = GetClientForTenant(tenantId);
 
                     // First, get the list by name
                     var lists = await _retryPolicy.ExecuteAsync(async () =>
                     {
-                        return await _client!.Sites[siteIdFormat].Lists.GetAsync(config =>
+                        return await client.Sites[siteIdFormat].Lists.GetAsync(config =>
                         {
                             config.QueryParameters.Filter = $"displayName eq '{listName}'";
                             config.QueryParameters.Top = 1;
@@ -2961,7 +3092,7 @@ namespace SMEPilot.FunctionApp.Helpers
                     // Get list items
                     var items = await _retryPolicy.ExecuteAsync(async () =>
                     {
-                        return await _client!.Sites[siteIdFormat].Lists[listId].Items.GetAsync(config =>
+                        return await client.Sites[siteIdFormat].Lists[listId].Items.GetAsync(config =>
                         {
                             config.QueryParameters.Top = top;
                             config.QueryParameters.Expand = new[] { "fields" };

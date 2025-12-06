@@ -44,6 +44,7 @@ namespace SMEPilot.FunctionApp.Functions
                 string? notificationUrl = null;
                 string? sourceFolderPath = null;
                 string? existingSubscriptionId = null;
+                string? tenantId = null;
 
                 // Handle POST request (from SPFx) - read from body
                 string? functionAppUrl = null;
@@ -61,6 +62,7 @@ namespace SMEPilot.FunctionApp.Functions
                             sourceFolderPath = requestData?.GetValueOrDefault("sourceFolderPath");
                             functionAppUrl = requestData?.GetValueOrDefault("functionAppUrl");
                             existingSubscriptionId = requestData?.GetValueOrDefault("subscriptionId");
+                            tenantId = requestData?.GetValueOrDefault("tenantId");
                         }
                         catch (JsonException ex)
                         {
@@ -86,6 +88,7 @@ namespace SMEPilot.FunctionApp.Functions
                 notificationUrl = notificationUrl ?? queryParams.GetValueOrDefault("notificationUrl");
                 sourceFolderPath = sourceFolderPath ?? queryParams.GetValueOrDefault("sourceFolderPath");
                 functionAppUrl = functionAppUrl ?? queryParams.GetValueOrDefault("functionAppUrl");
+                tenantId = tenantId ?? queryParams.GetValueOrDefault("tenantId");
 
                 // If notificationUrl not provided, construct from Function App URL
                 if (string.IsNullOrWhiteSpace(notificationUrl))
@@ -176,7 +179,7 @@ namespace SMEPilot.FunctionApp.Functions
                 {
                     normalizedSiteId = _graph.NormalizeSiteIdForResource(siteId, sourceFolderPath);
                     _logger.LogInformation("🔍 [SetupSubscription] Resolving list ID for library '{LibraryName}' in site {SiteId}", libraryName, normalizedSiteId);
-                    listId = await _graph.GetListIdByNameAsync(siteId, libraryName, sourceFolderPath);
+                    listId = await _graph.GetListIdByNameAsync(siteId, libraryName, sourceFolderPath, tenantId);
                     if (!string.IsNullOrWhiteSpace(listId))
                     {
                         _logger.LogInformation("✅ [SetupSubscription] Resolved library '{LibraryName}' to listId {ListId} via name lookup", libraryName, listId);
@@ -194,8 +197,8 @@ namespace SMEPilot.FunctionApp.Functions
                 }
 
                 // Log received parameters for debugging
-                _logger.LogInformation("📋 [SetupSubscription] Final parameters after resolution - siteId: {SiteId}, driveId: {DriveId}, folderItemId: {FolderItemId}, libraryName: {LibraryName}, listId: {ListId}, sourceFolderPath: {SourceFolderPath}, notificationUrl: {NotificationUrl}, functionAppUrl: {FunctionAppUrl}",
-                    siteId ?? "null", driveId ?? "null", folderItemId ?? "null", libraryName ?? "null", listId ?? "null", sourceFolderPath ?? "null", notificationUrl ?? "null", functionAppUrl ?? "null");
+                _logger.LogInformation("📋 [SetupSubscription] Final parameters after resolution - tenantId: {TenantId}, siteId: {SiteId}, driveId: {DriveId}, folderItemId: {FolderItemId}, libraryName: {LibraryName}, listId: {ListId}, sourceFolderPath: {SourceFolderPath}, notificationUrl: {NotificationUrl}, functionAppUrl: {FunctionAppUrl}",
+                    tenantId ?? "null", siteId ?? "null", driveId ?? "null", folderItemId ?? "null", libraryName ?? "null", listId ?? "null", sourceFolderPath ?? "null", notificationUrl ?? "null", functionAppUrl ?? "null");
 
                 // For drive-based subscriptions we just require driveId and notificationUrl.
                 if (string.IsNullOrWhiteSpace(driveId) || string.IsNullOrWhiteSpace(notificationUrl))
@@ -213,12 +216,13 @@ namespace SMEPilot.FunctionApp.Functions
                             driveId = driveId ?? "null",
                             folderItemId = folderItemId ?? "null",
                             sourceFolderPath = sourceFolderPath ?? "null",
+                            tenantId = tenantId ?? "null",
                             notificationUrl = notificationUrl ?? "null",
                             functionAppUrl = functionAppUrl ?? "null"
                         },
                         resolutionAttempted = !string.IsNullOrWhiteSpace(siteId) && !string.IsNullOrWhiteSpace(sourceFolderPath),
                         required = new[] { "driveId (or siteId + sourceFolderPath)", "notificationUrl (or functionAppUrl)" },
-                        optional = new[] { "siteId", "sourceFolderPath" },
+                        optional = new[] { "siteId", "sourceFolderPath", "tenantId" },
                         troubleshooting = new
                         {
                             message = "If driveId is null after resolution, the folder path might be incorrect or the folder/library doesn't exist.",
@@ -243,8 +247,8 @@ namespace SMEPilot.FunctionApp.Functions
                 {
                     try
                     {
-                        _logger.LogInformation("🗑️ [SetupSubscription] Deleting existing subscription before creating a new one. SubscriptionId: {SubscriptionId}", existingSubscriptionId);
-                        await _graph.DeleteSubscriptionAsync(existingSubscriptionId);
+                        _logger.LogInformation("🗑️ [SetupSubscription] Deleting existing subscription before creating a new one. SubscriptionId: {SubscriptionId}, TenantId: {TenantId}", existingSubscriptionId, tenantId ?? "default");
+                        await _graph.DeleteSubscriptionAsync(existingSubscriptionId, tenantId);
                     }
                     catch (Exception deleteEx)
                     {
@@ -263,6 +267,10 @@ namespace SMEPilot.FunctionApp.Functions
 
                 // Subscription expires in 3 days (Graph maximum for webhooks)
                 var expiration = DateTimeOffset.UtcNow.AddDays(3);
+
+                // Generate a per-site clientState secret for webhook validation
+                // This will be stored in SMEPilotConfig so ProcessSharePointFile can validate notifications.
+                var clientStateSecret = Guid.NewGuid().ToString("N");
 
                 _logger.LogInformation("🔄 [SetupSubscription] Creating webhook subscription for drive {DriveId}, resource: {Resource}, notificationUrl: {NotificationUrl}", 
                     driveId, resource, notificationUrl);
@@ -286,7 +294,7 @@ namespace SMEPilot.FunctionApp.Functions
                     // Continue anyway - sometimes health check fails but validation works
                 }
 
-                var subscription = await _graph.CreateSubscriptionAsync(resource, notificationUrl, expiration);
+                var subscription = await _graph.CreateSubscriptionAsync(resource, notificationUrl, expiration, tenantId, clientStateSecret);
 
                 _logger.LogInformation("✅ [SetupSubscription] Subscription created successfully! ID: {SubscriptionId}, Expires: {Expiration}", 
                     subscription.Id, subscription.ExpirationDateTime);
@@ -299,24 +307,25 @@ namespace SMEPilot.FunctionApp.Functions
                         _logger.LogInformation("💾 [SetupSubscription] Storing subscription ID in SMEPilotConfig for site {SiteId}", siteId);
                         
                         // Load configuration to get ConfigService
-                        await _cfg.LoadSharePointConfigAsync(_graph, siteId, _logger);
+                        await _cfg.LoadSharePointConfigAsync(_graph, siteId, _logger, tenantId: tenantId);
                         
-                        // Get list items from SMEPilotConfig (pass sourceFolderPath to help normalize site ID)
-                        var configItems = await _graph.GetListItemsByNameAsync(siteId, "SMEPilotConfig", top: 1, sourceFolderPath);
+                        // Get list items from SMEPilotConfig (pass sourceFolderPath and tenantId to help normalize site ID)
+                        var configItems = await _graph.GetListItemsByNameAsync(siteId, "SMEPilotConfig", top: 1, sourceFolderPath, tenantId);
                         if (configItems != null && configItems.Any())
                         {
                             var configItem = configItems.First();
                             var listItemId = configItem.Id;
                             
-                            // Get the list ID for SMEPilotConfig (pass sourceFolderPath to help normalize site ID)
-                            var configListId = await _graph.GetListIdByNameAsync(siteId, "SMEPilotConfig", sourceFolderPath);
+                            // Get the list ID for SMEPilotConfig (pass sourceFolderPath and tenantId to help normalize site ID)
+                            var configListId = await _graph.GetListIdByNameAsync(siteId, "SMEPilotConfig", sourceFolderPath, tenantId);
                             if (!string.IsNullOrWhiteSpace(configListId))
                             {
                                 // Update the subscription ID in the config item
                                 var updateFields = new Dictionary<string, object>
                                 {
                                     {"SubscriptionId", subscription.Id ?? ""},
-                                    {"SubscriptionExpiration", subscription.ExpirationDateTime?.ToString("O") ?? ""}
+                                    {"SubscriptionExpiration", subscription.ExpirationDateTime?.ToString("O") ?? ""},
+                                    {"ClientStateSecret", clientStateSecret}
                                 };
                                 
                                 await _graph.UpdateListItemFieldsByListIdAsync(siteId, configListId, listItemId, updateFields, sourceFolderPath);

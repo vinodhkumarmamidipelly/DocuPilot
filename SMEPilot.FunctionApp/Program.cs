@@ -78,6 +78,13 @@ try
                 var logger = sp.GetService<ILogger<TelemetryService>>();
                 return new TelemetryService(telemetryClient, logger);
             });
+
+            // Tenant registry service (first version backed by MultiTenant_TenantIds app setting)
+            services.AddSingleton<TenantRegistryService>(sp =>
+            {
+                var logger = sp.GetService<ILogger<TenantRegistryService>>();
+                return new TenantRegistryService(logger);
+            });
             
             // Add RateLimitingService
             services.AddSingleton<RateLimitingService>(sp =>

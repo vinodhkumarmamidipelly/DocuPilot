@@ -2,6 +2,58 @@ define("12345678-1234-1234-1234-123456789014_1.0.0.0", ["react","react-dom","@mi
 /******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
 
+/***/ 1587:
+/*!******************************************************************!*\
+  !*** ./lib/webparts/adminPanel/components/AdminPanel.module.css ***!
+  \******************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _node_modules_microsoft_sp_css_loader_node_modules_microsoft_load_themed_styles_lib_es6_index_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../../../../node_modules/@microsoft/sp-css-loader/node_modules/@microsoft/load-themed-styles/lib-es6/index.js */ 6323);
+// Imports
+
+
+_node_modules_microsoft_sp_css_loader_node_modules_microsoft_load_themed_styles_lib_es6_index_js__WEBPACK_IMPORTED_MODULE_0__.loadStyles(":root{--color-primary:#0b6680;--color-primary-600:#095b72;--color-primary-400:#2b9db3;--color-accent:#f0f7fb;--color-surface:#fff;--color-muted:#6b6f76;--color-body:#222428;--color-success:#107c10;--color-success-bg:#e6f4ea;--color-border:#e6e9ed;--color-action:#065a83;--color-danger:#c72b2b;--color-focus:#2b9db3;--font-family-base:\"Segoe UI\",Roboto,\"Helvetica Neue\",Arial,sans-serif;--font-size-base:16px;--font-size-sm:13px;--font-size-lg:18px;--font-weight-regular:400;--font-weight-medium:600;--line-height-base:1.4;--radius-sm:6px;--radius-md:10px;--space-xxs:4px;--space-xs:8px;--space-sm:12px;--space-md:16px;--space-lg:24px;--space-xl:32px;--shadow-sm:0 1px 2px rgba(16,24,40,.04);--shadow-md:0 4px 16px rgba(3,10,18,.06)}.adminPanelRoot_98b39cf0{background:#f5f6f8;font-family:var(--font-family-base);padding:var(--space-md)}.mainCard_98b39cf0{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);margin:0 auto;max-width:980px;padding:var(--space-lg)}.pageHeader_98b39cf0{background:#fff;border-bottom:1px solid #e1dfdd;color:#242424;display:flex;flex-direction:column;margin-bottom:var(--space-sm);padding:20px 32px 16px}.pageHeaderText_98b39cf0{display:flex;flex-direction:column;gap:var(--space-xxs)}.pageHeaderTitle_98b39cf0{color:#242424;font-size:22px;font-weight:var(--font-weight-medium)}.pageHeaderSubtitle_98b39cf0{color:#605e5c;font-size:14px;line-height:20px;margin-bottom:24px;margin-top:4px}.pageHeaderActions_98b39cf0{align-items:center;display:flex;gap:16px}.statusBanner_98b39cf0{align-items:center;background:var(--color-success-bg);border-radius:var(--radius-sm);display:flex;gap:var(--space-sm);margin-bottom:var(--space-md);padding:10px 16px}.statusBannerIcon_98b39cf0{color:var(--color-success);font-size:18px}.statusBannerText_98b39cf0{color:var(--color-body);font-size:var(--font-size-sm)}.statusRow_98b39cf0{background-color:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);display:flex;flex-wrap:wrap;gap:var(--space-lg);margin-bottom:var(--space-md);padding:8px 16px}.statusItemTitle_98b39cf0{color:var(--color-body);font-size:var(--font-size-sm);font-weight:var(--font-weight-medium)}.statusItemValue_98b39cf0{color:var(--color-muted);font-size:var(--font-size-sm)}.section_98b39cf0{margin-top:var(--space-lg)}.sectionHeader_98b39cf0{align-items:center;display:flex;justify-content:space-between;margin-bottom:var(--space-sm)}.sectionTitle_98b39cf0{color:var(--color-body);font-size:var(--font-size-lg);font-weight:var(--font-weight-medium)}.sectionDescription_98b39cf0{color:var(--color-muted);font-size:var(--font-size-sm)}.currentConfigCard_98b39cf0{background-color:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-sm);box-shadow:var(--shadow-sm);margin-top:var(--space-sm);padding:var(--space-md)}.configRow_98b39cf0{align-items:center;display:flex;justify-content:space-between;margin-bottom:var(--space-xs)}.configLabel_98b39cf0{color:var(--color-body);font-size:var(--font-size-sm);font-weight:var(--font-weight-medium)}.configValue_98b39cf0{color:var(--color-muted);font-size:var(--font-size-sm)}.configValueMonospace_98b39cf0{color:var(--color-body);font-family:Consolas,SFMono-Regular,Menlo,Monaco,Ubuntu Mono,monospace;font-size:var(--font-size-sm)}.copilotBox_98b39cf0{background:#fbfcfd;border-left:4px solid var(--color-primary);border-radius:var(--radius-sm);margin-top:var(--space-lg);padding:var(--space-md)}.processingRow_98b39cf0{display:grid;gap:var(--space-md);grid-template-columns:repeat(3,minmax(0,1fr));margin-top:var(--space-md)}.fieldGroup_98b39cf0{display:flex;flex-direction:column;gap:var(--space-xxs)}.fieldLabel_98b39cf0{color:var(--color-muted);font-size:var(--font-size-sm)}.fieldHelper_98b39cf0{color:var(--color-muted);font-size:12px}.fieldError_98b39cf0{color:var(--color-danger);font-size:12px}.actionsRow_98b39cf0{display:flex;gap:var(--space-sm);justify-content:flex-end;margin-top:var(--space-lg)}@media (max-width:1024px){.mainCard_98b39cf0{max-width:720px;padding:var(--space-md)}.pageHeaderTitle_98b39cf0{font-size:18px}}@media (max-width:768px){.mainCard_98b39cf0{max-width:100%;padding:var(--space-md)}.pageHeader_98b39cf0{align-items:flex-start;flex-direction:column;gap:var(--space-sm)}.actionsRow_98b39cf0{align-items:stretch;flex-direction:column-reverse}}\n/*# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbImZpbGU6Ly8vRDovQ29kZUJhc2UvRG9jdVBpbG90L1NNRVBpbG90LlNQRngvc3JjL3dlYnBhcnRzL2FkbWluUGFuZWwvY29tcG9uZW50cy9BZG1pblBhbmVsLm1vZHVsZS5zY3NzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLE1BRUUsdUJBQUEsQ0FDQSwyQkFBQSxDQUNBLDJCQUFBLENBQ0Esc0JBQUEsQ0FDQSxvQkFBQSxDQUNBLHFCQUFBLENBQ0Esb0JBQUEsQ0FDQSx1QkFBQSxDQUNBLDBCQUFBLENBQ0Esc0JBQUEsQ0FDQSxzQkFBQSxDQUNBLHNCQUFBLENBQ0EscUJBQUEsQ0FHQSxzRUFBQSxDQUNBLHFCQUFBLENBQ0EsbUJBQUEsQ0FDQSxtQkFBQSxDQUNBLHlCQUFBLENBQ0Esd0JBQUEsQ0FDQSxzQkFBQSxDQUdBLGVBQUEsQ0FDQSxnQkFBQSxDQUNBLGVBQUEsQ0FDQSxjQUFBLENBQ0EsZUFBQSxDQUNBLGVBQUEsQ0FDQSxlQUFBLENBQ0EsZUFBQSxDQUdBLHdDQUFBLENBQ0Esd0NBQUEsQ0FHRix5QkFFRSxrQkFBQSxDQUNBLG1DQUFBLENBRkEsdUJBRUEsQ0FHRixtQkFHRSwrQkFBQSxDQUVBLG9DQUFBLENBREEsOEJBQUEsQ0FHQSwyQkFBQSxDQUxBLGFBQUEsQ0FEQSxlQUFBLENBS0EsdUJBQ0EsQ0FHRixxQkFHRSxlQUFBLENBR0EsK0JBQUEsQ0FGQSxhQUFBLENBSEEsWUFBQSxDQUNBLHFCQUFBLENBS0EsNkJBQUEsQ0FGQSxzQkFFQSxDQUdGLHlCQUNFLFlBQUEsQ0FDQSxxQkFBQSxDQUNBLG9CQUFBLENBR0YsMEJBR0UsYUFBQSxDQUZBLGNBQUEsQ0FDQSxxQ0FDQSxDQUdGLDZCQUVFLGFBQUEsQ0FEQSxjQUFBLENBRUEsZ0JBQUEsQ0FFQSxrQkFBQSxDQURBLGNBQ0EsQ0FHRiw0QkFHRSxrQkFBQSxDQUZBLFlBQUEsQ0FDQSxRQUNBLENBR0YsdUJBRUUsa0JBQUEsQ0FJQSxrQ0FBQSxDQUNBLDhCQUFBLENBTkEsWUFBQSxDQUVBLG1CQUFBLENBQ0EsNkJBQUEsQ0FDQSxpQkFFQSxDQUdGLDJCQUNFLDBCQUFBLENBQ0EsY0FBQSxDQUdGLDJCQUVFLHVCQUFBLENBREEsNkJBQ0EsQ0FHRixvQkFNRSxxQ0FBQSxDQUNBLG9DQUFBLENBRkEsOEJBQUEsQ0FKQSxZQUFBLENBQ0EsY0FBQSxDQUNBLG1CQUFBLENBS0EsNkJBQUEsQ0FKQSxnQkFJQSxDQUdGLDBCQUdFLHVCQUFBLENBRkEsNkJBQUEsQ0FDQSxxQ0FDQSxDQUdGLDBCQUVFLHdCQUFBLENBREEsNkJBQ0EsQ0FHRixrQkFDRSwwQkFBQSxDQUdGLHdCQUVFLGtCQUFBLENBREEsWUFBQSxDQUVBLDZCQUFBLENBQ0EsNkJBQUEsQ0FHRix1QkFHRSx1QkFBQSxDQUZBLDZCQUFBLENBQ0EscUNBQ0EsQ0FHRiw2QkFFRSx3QkFBQSxDQURBLDZCQUNBLENBR0YsNEJBS0UscUNBQUEsQ0FEQSxvQ0FBQSxDQURBLDhCQUFBLENBR0EsMkJBQUEsQ0FMQSwwQkFBQSxDQUNBLHVCQUlBLENBR0Ysb0JBR0Usa0JBQUEsQ0FGQSxZQUFBLENBQ0EsNkJBQUEsQ0FFQSw2QkFBQSxDQUdGLHNCQUdFLHVCQUFBLENBRkEsNkJBQUEsQ0FDQSxxQ0FDQSxDQUdGLHNCQUVFLHdCQUFBLENBREEsNkJBQ0EsQ0FHRiwrQkFHRSx1QkFBQSxDQUZBLHNFQUFBLENBQ0EsNkJBQ0EsQ0FHRixxQkFLRSxrQkFBQSxDQURBLDBDQUFBLENBREEsOEJBQUEsQ0FGQSwwQkFBQSxDQUNBLHVCQUdBLENBR0Ysd0JBQ0UsWUFBQSxDQUVBLG1CQUFBLENBREEsNkNBQUEsQ0FFQSwwQkFBQSxDQUdGLHFCQUNFLFlBQUEsQ0FDQSxxQkFBQSxDQUNBLG9CQUFBLENBR0YscUJBRUUsd0JBQUEsQ0FEQSw2QkFDQSxDQUdGLHNCQUVFLHdCQUFBLENBREEsY0FDQSxDQUdGLHFCQUVFLHlCQUFBLENBREEsY0FDQSxDQUdGLHFCQUNFLFlBQUEsQ0FFQSxtQkFBQSxDQURBLHdCQUFBLENBRUEsMEJBQUEsQ0FHRiwwQkFDRSxtQkFDRSxlQUFBLENBQ0EsdUJBQUEsQ0FHRiwwQkFDRSxjQUFBLENBQUEsQ0FJSix5QkFDRSxtQkFDRSxjQUFBLENBQ0EsdUJBQUEsQ0FHRixxQkFFRSxzQkFBQSxDQURBLHFCQUFBLENBRUEsbUJBQUEsQ0FHRixxQkFFRSxtQkFBQSxDQURBLDZCQUNBLENBQUEiLCJmaWxlIjoiQWRtaW5QYW5lbC5tb2R1bGUuY3NzIn0= */", true);
+
+// Exports
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ({
+  adminPanelRoot_98b39cf0: "adminPanelRoot_98b39cf0",
+  mainCard_98b39cf0: "mainCard_98b39cf0",
+  pageHeader_98b39cf0: "pageHeader_98b39cf0",
+  pageHeaderText_98b39cf0: "pageHeaderText_98b39cf0",
+  pageHeaderTitle_98b39cf0: "pageHeaderTitle_98b39cf0",
+  pageHeaderSubtitle_98b39cf0: "pageHeaderSubtitle_98b39cf0",
+  pageHeaderActions_98b39cf0: "pageHeaderActions_98b39cf0",
+  statusBanner_98b39cf0: "statusBanner_98b39cf0",
+  statusBannerIcon_98b39cf0: "statusBannerIcon_98b39cf0",
+  statusBannerText_98b39cf0: "statusBannerText_98b39cf0",
+  statusRow_98b39cf0: "statusRow_98b39cf0",
+  statusItemTitle_98b39cf0: "statusItemTitle_98b39cf0",
+  statusItemValue_98b39cf0: "statusItemValue_98b39cf0",
+  section_98b39cf0: "section_98b39cf0",
+  sectionHeader_98b39cf0: "sectionHeader_98b39cf0",
+  sectionTitle_98b39cf0: "sectionTitle_98b39cf0",
+  sectionDescription_98b39cf0: "sectionDescription_98b39cf0",
+  currentConfigCard_98b39cf0: "currentConfigCard_98b39cf0",
+  configRow_98b39cf0: "configRow_98b39cf0",
+  configLabel_98b39cf0: "configLabel_98b39cf0",
+  configValue_98b39cf0: "configValue_98b39cf0",
+  configValueMonospace_98b39cf0: "configValueMonospace_98b39cf0",
+  copilotBox_98b39cf0: "copilotBox_98b39cf0",
+  processingRow_98b39cf0: "processingRow_98b39cf0",
+  fieldGroup_98b39cf0: "fieldGroup_98b39cf0",
+  fieldLabel_98b39cf0: "fieldLabel_98b39cf0",
+  fieldHelper_98b39cf0: "fieldHelper_98b39cf0",
+  fieldError_98b39cf0: "fieldError_98b39cf0",
+  actionsRow_98b39cf0: "actionsRow_98b39cf0"
+});
+
+
+/***/ }),
+
 /***/ 8827:
 /*!********************************************!*\
   !*** ./lib/services/FunctionAppService.js ***!
@@ -111,7 +163,7 @@ var FunctionAppService = /** @class */ (function () {
      */
     FunctionAppService.prototype.createWebhookSubscription = function (request) {
         return __awaiter(this, void 0, void 0, function () {
-            var requestBody, response, errorText, result, error_2;
+            var requestBody, response, errorText, lower, isAdminConsentIssue, result, error_2;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -157,7 +209,28 @@ var FunctionAppService = /** @class */ (function () {
                         return [4 /*yield*/, response.text()];
                     case 2:
                         errorText = _a.sent();
-                        throw new Error("Failed to create webhook subscription (".concat(response.status, "): ").concat(errorText));
+                        lower = errorText.toLowerCase();
+                        isAdminConsentIssue = (response.status === 500 || response.status === 401 || response.status === 403) &&
+                            lower.includes('graph api error') &&
+                            lower.includes('extensionerror') &&
+                            (lower.includes('unauthorized') || lower.includes('general exception while processing'));
+                        if (isAdminConsentIssue) {
+                            return [2 /*return*/, {
+                                    subscriptionId: '',
+                                    expirationDateTime: '',
+                                    success: false,
+                                    needsAdminConsent: true,
+                                    message: 'Graph rejected the webhook subscription because the SMEPilot Azure AD app does not have admin consent for the required SharePoint permissions.'
+                                }];
+                        }
+                        // Fallback: generic error
+                        return [2 /*return*/, {
+                                subscriptionId: '',
+                                expirationDateTime: '',
+                                success: false,
+                                needsAdminConsent: false,
+                                message: "Failed to create webhook subscription (".concat(response.status, "): ").concat(errorText)
+                            }];
                     case 3: return [4 /*yield*/, response.json()];
                     case 4:
                         result = _a.sent();
@@ -174,6 +247,7 @@ var FunctionAppService = /** @class */ (function () {
                                 subscriptionId: '',
                                 expirationDateTime: '',
                                 success: false,
+                                needsAdminConsent: false,
                                 message: error_2.message
                             }];
                     case 6: return [2 /*return*/];
@@ -284,39 +358,62 @@ var SharePointService = /** @class */ (function () {
         this.context = context;
         this.httpClient = context.spHttpClient;
         this.webUrl = context.pageContext.web.absoluteUrl;
+        this.webServerRelativeUrl = context.pageContext.web.serverRelativeUrl || '/';
     }
     /**
      * Create SMEPilotConfig list with all required columns
      */
     SharePointService.prototype.createSMEPilotConfigList = function () {
-        var _a, _b, _c;
+        var _a, _b, _c, _d;
         return __awaiter(this, void 0, void 0, function () {
-            var listExists, digestUrl, digestResponse, errorText, digestData, digest, createListUrl, listBody, createResponse, errorText, listData, listId, error_1;
-            return __generator(this, function (_d) {
-                switch (_d.label) {
+            var listExists, listUrl, listResponse, listData_1, listId_1, e_1, digestUrl, digestResponse, errorText, digestData, digest, createListUrl, listBody, createResponse, errorText, listData, listId, error_1;
+            return __generator(this, function (_e) {
+                switch (_e.label) {
                     case 0:
-                        _d.trys.push([0, 11, , 12]);
+                        _e.trys.push([0, 19, , 20]);
                         return [4 /*yield*/, this.listExists()];
                     case 1:
-                        listExists = _d.sent();
-                        if (listExists) {
-                            return [2 /*return*/, true];
-                        }
+                        listExists = _e.sent();
+                        if (!listExists) return [3 /*break*/, 9];
+                        _e.label = 2;
+                    case 2:
+                        _e.trys.push([2, 7, , 8]);
+                        listUrl = "".concat(this.webUrl, "/_api/web/lists/getbytitle('").concat(this.listName, "')?$select=Id");
+                        return [4 /*yield*/, this.httpClient.get(listUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_0__.SPHttpClient.configurations.v1)];
+                    case 3:
+                        listResponse = _e.sent();
+                        if (!listResponse.ok) return [3 /*break*/, 6];
+                        return [4 /*yield*/, listResponse.json()];
+                    case 4:
+                        listData_1 = _e.sent();
+                        listId_1 = listData_1.Id || ((_a = listData_1.d) === null || _a === void 0 ? void 0 : _a.Id);
+                        if (!listId_1) return [3 /*break*/, 6];
+                        return [4 /*yield*/, this.addListColumns(listId_1)];
+                    case 5:
+                        _e.sent();
+                        _e.label = 6;
+                    case 6: return [3 /*break*/, 8];
+                    case 7:
+                        e_1 = _e.sent();
+                        console.warn('[createSMEPilotConfigList] Failed to ensure columns on existing list:', e_1);
+                        return [3 /*break*/, 8];
+                    case 8: return [2 /*return*/, true];
+                    case 9:
                         digestUrl = "".concat(this.webUrl, "/_api/contextinfo");
                         return [4 /*yield*/, this.httpClient.post(digestUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_0__.SPHttpClient.configurations.v1, {
                                 body: '' // Empty body for contextinfo
                             })];
-                    case 2:
-                        digestResponse = _d.sent();
-                        if (!!digestResponse.ok) return [3 /*break*/, 4];
+                    case 10:
+                        digestResponse = _e.sent();
+                        if (!!digestResponse.ok) return [3 /*break*/, 12];
                         return [4 /*yield*/, digestResponse.text()];
-                    case 3:
-                        errorText = _d.sent();
+                    case 11:
+                        errorText = _e.sent();
                         throw new Error("Failed to get request digest (".concat(digestResponse.status, "): ").concat(errorText));
-                    case 4: return [4 /*yield*/, digestResponse.json()];
-                    case 5:
-                        digestData = _d.sent();
-                        digest = ((_b = (_a = digestData.d) === null || _a === void 0 ? void 0 : _a.GetContextWebInformation) === null || _b === void 0 ? void 0 : _b.FormDigestValue) ||
+                    case 12: return [4 /*yield*/, digestResponse.json()];
+                    case 13:
+                        digestData = _e.sent();
+                        digest = ((_c = (_b = digestData.d) === null || _b === void 0 ? void 0 : _b.GetContextWebInformation) === null || _c === void 0 ? void 0 : _c.FormDigestValue) ||
                             digestData.FormDigestValue ||
                             '';
                         if (!digest) {
@@ -336,26 +433,26 @@ var SharePointService = /** @class */ (function () {
                                 },
                                 body: JSON.stringify(listBody)
                             })];
-                    case 6:
-                        createResponse = _d.sent();
-                        if (!!createResponse.ok) return [3 /*break*/, 8];
+                    case 14:
+                        createResponse = _e.sent();
+                        if (!!createResponse.ok) return [3 /*break*/, 16];
                         return [4 /*yield*/, createResponse.text()];
-                    case 7:
-                        errorText = _d.sent();
+                    case 15:
+                        errorText = _e.sent();
                         throw new Error("Failed to create list (".concat(createResponse.status, "): ").concat(errorText));
-                    case 8: return [4 /*yield*/, createResponse.json()];
-                    case 9:
-                        listData = _d.sent();
-                        listId = ((_c = listData.d) === null || _c === void 0 ? void 0 : _c.Id) || listData.Id;
+                    case 16: return [4 /*yield*/, createResponse.json()];
+                    case 17:
+                        listData = _e.sent();
+                        listId = ((_d = listData.d) === null || _d === void 0 ? void 0 : _d.Id) || listData.Id;
                         return [4 /*yield*/, this.addListColumns(listId)];
-                    case 10:
-                        _d.sent();
+                    case 18:
+                        _e.sent();
                         return [2 /*return*/, true];
-                    case 11:
-                        error_1 = _d.sent();
+                    case 19:
+                        error_1 = _e.sent();
                         console.error('Error creating SMEPilotConfig list:', error_1);
                         throw error_1;
-                    case 12: return [2 /*return*/];
+                    case 20: return [2 /*return*/];
                 }
             });
         });
@@ -476,7 +573,9 @@ var SharePointService = /** @class */ (function () {
                             "<Field Type='Text' Name='TemplateLibraryPath' StaticName='TemplateLibraryPath' DisplayName='TemplateLibraryPath' MaxLength='1024' />",
                             "<Field Type='Text' Name='TemplateFileName' StaticName='TemplateFileName' DisplayName='TemplateFileName' MaxLength='255' />",
                             "<Field Type='Text' Name='MetadataChangeHandling' StaticName='MetadataChangeHandling' DisplayName='MetadataChangeHandling' MaxLength='50' />",
-                            "<Field Type='DateTime' Name='LastUpdated' StaticName='LastUpdated' DisplayName='LastUpdated' Format='DateTime' />"
+                            "<Field Type='DateTime' Name='LastUpdated' StaticName='LastUpdated' DisplayName='LastUpdated' Format='DateTime' />",
+                            "<Field Type='Text' Name='ClientStateSecret' StaticName='ClientStateSecret' DisplayName='ClientStateSecret' MaxLength='255' />",
+                            "<Field Type='Text' Name='EnrichedOutputType' StaticName='EnrichedOutputType' DisplayName='EnrichedOutputType' MaxLength='50' />"
                         ];
                         columnNames = [
                             'SourceFolderPath',
@@ -494,7 +593,9 @@ var SharePointService = /** @class */ (function () {
                             'TemplateLibraryPath',
                             'TemplateFileName',
                             'MetadataChangeHandling',
-                            'LastUpdated'
+                            'LastUpdated',
+                            'ClientStateSecret',
+                            'EnrichedOutputType'
                         ];
                         console.log("[addListColumns] Starting to add ".concat(fieldsXml.length, " columns to list ").concat(listId));
                         successCount = 0;
@@ -924,7 +1025,7 @@ var SharePointService = /** @class */ (function () {
     SharePointService.prototype.saveConfiguration = function (config) {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var fieldMapping_1, requiredFields, missingFields, existingItem, getFieldName, normalizeLibraryName_1, normalizePathForSave, itemBody, digest, entityType, listMetaUrl, metaResponse, metaData, error_10, response, updateUrl, errorText, createUrl, errorText, error_11;
+            var fieldMapping_1, requiredFields, missingFields, existingItem, getFieldName, siteTitle, normalizeLibraryName_1, normalizePathForSave, itemBody, internal, serverRelative, parts, fileName, libraryPath, digest, entityType, listMetaUrl, metaResponse, metaData, error_10, response, updateUrl, errorText, createUrl, errorText, error_11;
             var _b;
             return __generator(this, function (_c) {
                 switch (_c.label) {
@@ -961,6 +1062,10 @@ var SharePointService = /** @class */ (function () {
                             }
                             return internalName || title;
                         };
+                        siteTitle = this.context.pageContext.web.title ||
+                            this.context.pageContext.web.serverRelativeUrl ||
+                            this.webUrl ||
+                            'SMEPilot configuration';
                         normalizeLibraryName_1 = function (path) {
                             if (!path)
                                 return '';
@@ -997,6 +1102,7 @@ var SharePointService = /** @class */ (function () {
                             return normalized;
                         };
                         itemBody = (_b = {},
+                            _b[getFieldName('Title')] = "SMEPilot configuration - ".concat(siteTitle),
                             _b[getFieldName('SourceFolderPath')] = normalizePathForSave(config.sourceFolderPath),
                             _b[getFieldName('DestinationFolderPath')] = normalizePathForSave(config.destinationFolderPath),
                             _b[getFieldName('TemplateFileUrl')] = normalizePathForSave(config.templateFileUrl),
@@ -1011,6 +1117,38 @@ var SharePointService = /** @class */ (function () {
                             _b);
                         if (config.subscriptionId) {
                             itemBody[getFieldName('SubscriptionId')] = config.subscriptionId;
+                        }
+                        if (config.clientStateSecret) {
+                            itemBody[getFieldName('ClientStateSecret')] = config.clientStateSecret;
+                        }
+                        // Optional: EnrichedOutputType (Docx / Pdf / Both). If not provided, backend will default to Both.
+                        // IMPORTANT: Only write this field if the column actually exists in the list mapping.
+                        if (config.enrichedOutputType && fieldMapping_1.has('EnrichedOutputType')) {
+                            internal = getFieldName('EnrichedOutputType');
+                            itemBody[internal] = config.enrichedOutputType;
+                        }
+                        // Derive TemplateLibraryPath and TemplateFileName from TemplateFileUrl (if present),
+                        // so the Function App has a reliable fallback even if URL parsing fails.
+                        if (config.templateFileUrl) {
+                            try {
+                                serverRelative = config.templateFileUrl.trim();
+                                if (serverRelative.toLowerCase().startsWith(this.webUrl.toLowerCase())) {
+                                    serverRelative = serverRelative.substring(this.webUrl.length);
+                                }
+                                if (!serverRelative.startsWith('/')) {
+                                    serverRelative = '/' + serverRelative;
+                                }
+                                parts = serverRelative.split('/').filter(function (p) { return p && p.trim() !== ''; });
+                                if (parts.length >= 2) {
+                                    fileName = parts[parts.length - 1];
+                                    libraryPath = '/' + parts.slice(0, parts.length - 1).join('/');
+                                    itemBody[getFieldName('TemplateLibraryPath')] = libraryPath;
+                                    itemBody[getFieldName('TemplateFileName')] = fileName;
+                                }
+                            }
+                            catch (e) {
+                                console.warn('[saveConfiguration] Failed to derive TemplateLibraryPath/TemplateFileName from TemplateFileUrl:', e);
+                            }
                         }
                         return [4 /*yield*/, this.getRequestDigest()];
                     case 4:
@@ -1183,7 +1321,10 @@ var SharePointService = /** @class */ (function () {
                             accessWeb: getFieldValue('AccessWeb') !== false,
                             accessO365: getFieldValue('AccessO365') !== false,
                             subscriptionId: getFieldValue('SubscriptionId'),
-                            lastUpdated: getFieldValue('LastUpdated') ? new Date(getFieldValue('LastUpdated')) : undefined
+                            lastUpdated: getFieldValue('LastUpdated') ? new Date(getFieldValue('LastUpdated')) : undefined,
+                            clientStateSecret: getFieldValue('ClientStateSecret') || undefined,
+                            // Default to Both when not set to preserve current behavior
+                            enrichedOutputType: getFieldValue('EnrichedOutputType') || 'Both'
                         };
                         console.log('[getConfiguration] Parsed configuration:', config);
                         return [2 /*return*/, config];
@@ -1241,7 +1382,8 @@ var SharePointService = /** @class */ (function () {
      */
     SharePointService.prototype.validateConfiguration = function (config) {
         return __awaiter(this, void 0, void 0, function () {
-            var errors, error_14;
+            var errors, normalizePath, src, dest, error_14;
+            var _this = this;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -1249,6 +1391,35 @@ var SharePointService = /** @class */ (function () {
                         _a.label = 1;
                     case 1:
                         _a.trys.push([1, 4, , 5]);
+                        normalizePath = function (path) {
+                            var p = (path || '').trim();
+                            if (!p) {
+                                return '';
+                            }
+                            if (p.toLowerCase().startsWith(_this.webUrl.toLowerCase())) {
+                                p = p.substring(_this.webUrl.length);
+                            }
+                            if (!p.startsWith('/')) {
+                                p = '/' + p;
+                            }
+                            if (p.length > 1 && p.endsWith('/')) {
+                                p = p.slice(0, -1);
+                            }
+                            return p.toLowerCase();
+                        };
+                        src = normalizePath(config.sourceFolderPath);
+                        dest = normalizePath(config.destinationFolderPath);
+                        if (src && dest) {
+                            if (src === dest) {
+                                errors.push("Destination folder must be different from Source folder to avoid processing the same documents repeatedly. Source/Destination: ".concat(config.sourceFolderPath));
+                            }
+                            else if (dest.startsWith(src + '/')) {
+                                errors.push("Destination folder cannot be inside the Source folder. Source: ".concat(config.sourceFolderPath, ", Destination: ").concat(config.destinationFolderPath));
+                            }
+                            else if (src.startsWith(dest + '/')) {
+                                errors.push("Source folder cannot be inside the Destination folder. Source: ".concat(config.sourceFolderPath, ", Destination: ").concat(config.destinationFolderPath));
+                            }
+                        }
                         return [4 /*yield*/, this.folderExists(config.sourceFolderPath)];
                     case 2:
                         // Validate source folder exists
@@ -2123,11 +2294,38 @@ var SharePointService = /** @class */ (function () {
     SharePointService.prototype.uploadTemplateFile = function (file, targetFolderPath) {
         var _a, _b, _c;
         return __awaiter(this, void 0, void 0, function () {
-            var digestUrl, digestResponse, errorText, digestData, digest, encodedPath, folderCheckUrl, folderCheck, createFolderUrl, fileBuffer, uploadUrl, uploadResponse, errorText, uploadData, fileUrl, error_30;
+            var normalizeFolder, serverRelativeFolder, digestUrl, digestResponse, errorText, digestData, digest, encodedPath, folderCheckUrl, folderCheck, createFolderUrl, fileBuffer, uploadUrl, uploadResponse, errorText, uploadData, fileUrl, error_30;
+            var _this = this;
             return __generator(this, function (_d) {
                 switch (_d.label) {
                     case 0:
                         _d.trys.push([0, 13, , 14]);
+                        normalizeFolder = function (folderPath) {
+                            var p = (folderPath || '').trim();
+                            if (!p) {
+                                p = '/Shared Documents/Templates';
+                            }
+                            // Strip absolute web URL if present
+                            if (p.toLowerCase().startsWith(_this.webUrl.toLowerCase())) {
+                                p = p.substring(_this.webUrl.length);
+                            }
+                            if (!p.startsWith('/')) {
+                                p = '/' + p;
+                            }
+                            // Ensure it starts with the web's server-relative URL (e.g. /sites/SMEPilot)
+                            var webRoot = (_this.webServerRelativeUrl || '/').replace(/\/$/, '');
+                            if (!p.toLowerCase().startsWith(webRoot.toLowerCase() + '/')
+                                && p.toLowerCase() !== webRoot.toLowerCase()) {
+                                var suffix = p.startsWith('/') ? p.substring(1) : p;
+                                p = "".concat(webRoot, "/").concat(suffix);
+                            }
+                            // Remove trailing slash
+                            if (p.length > 1 && p.endsWith('/')) {
+                                p = p.slice(0, -1);
+                            }
+                            return p;
+                        };
+                        serverRelativeFolder = normalizeFolder(targetFolderPath);
                         digestUrl = "".concat(this.webUrl, "/_api/contextinfo");
                         return [4 /*yield*/, this.httpClient.post(digestUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_0__.SPHttpClient.configurations.v1, {
                                 body: '' // Empty body for contextinfo
@@ -2148,7 +2346,7 @@ var SharePointService = /** @class */ (function () {
                         if (!digest) {
                             throw new Error('Request digest not found in response');
                         }
-                        encodedPath = encodeURIComponent(targetFolderPath);
+                        encodedPath = encodeURIComponent(serverRelativeFolder);
                         folderCheckUrl = "".concat(this.webUrl, "/_api/web/GetFolderByServerRelativeUrl('").concat(encodedPath, "')");
                         return [4 /*yield*/, this.httpClient.get(folderCheckUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_0__.SPHttpClient.configurations.v1)];
                     case 5:
@@ -2184,7 +2382,7 @@ var SharePointService = /** @class */ (function () {
                     case 11: return [4 /*yield*/, uploadResponse.json()];
                     case 12:
                         uploadData = _d.sent();
-                        fileUrl = ((_c = uploadData.d) === null || _c === void 0 ? void 0 : _c.ServerRelativeUrl) || "".concat(targetFolderPath, "/").concat(file.name);
+                        fileUrl = ((_c = uploadData.d) === null || _c === void 0 ? void 0 : _c.ServerRelativeUrl) || "".concat(serverRelativeFolder, "/").concat(file.name);
                         // Return normalized path
                         return [2 /*return*/, fileUrl.replace(this.webUrl, '') || fileUrl];
                     case 13:
@@ -2352,21 +2550,25 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ 5959);
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @fluentui/react */ 1314);
-/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @fluentui/react */ 954);
-/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! @fluentui/react */ 9885);
-/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! @fluentui/react */ 2674);
-/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! @fluentui/react */ 5613);
-/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! @fluentui/react */ 827);
-/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! @fluentui/react */ 6643);
-/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! @fluentui/react */ 8730);
-/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! @fluentui/react */ 3166);
-/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! @fluentui/react */ 3898);
-/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! @fluentui/react */ 7102);
-/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! @fluentui/react */ 8650);
-/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! @fluentui/react */ 9425);
-/* harmony import */ var _services_SharePointService__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../../services/SharePointService */ 2715);
-/* harmony import */ var _services_FunctionAppService__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../services/FunctionAppService */ 8827);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @fluentui/react */ 1314);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! @fluentui/react */ 954);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! @fluentui/react */ 9885);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! @fluentui/react */ 7006);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! @fluentui/react */ 8681);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! @fluentui/react */ 2674);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! @fluentui/react */ 5613);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! @fluentui/react */ 9425);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! @fluentui/react */ 827);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! @fluentui/react */ 6643);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! @fluentui/react */ 8730);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! @fluentui/react */ 4533);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! @fluentui/react */ 3166);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! @fluentui/react */ 3898);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! @fluentui/react */ 7102);
+/* harmony import */ var _fluentui_react__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! @fluentui/react */ 8650);
+/* harmony import */ var _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./AdminPanel.module.scss */ 1679);
+/* harmony import */ var _services_SharePointService__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../services/SharePointService */ 2715);
+/* harmony import */ var _services_FunctionAppService__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../../../services/FunctionAppService */ 8827);
 var __extends = (undefined && undefined.__extends) || (function () {
     var extendStatics = function (d, b) {
         extendStatics = Object.setPrototypeOf ||
@@ -2442,11 +2644,77 @@ var __spreadArray = (undefined && undefined.__spreadArray) || function (to, from
 
 
 
+
 var AdminPanel = /** @class */ (function (_super) {
     __extends(AdminPanel, _super);
     function AdminPanel(props) {
         var _this = _super.call(this, props) || this;
         _this.defaultCopilotPrompt = "You are SMEPilot, an AI assistant that helps users find information from enriched functional and technical documents.\n\nWhen users ask questions:\n1. Analyze the enriched documents in the configured destination folder\n2. Provide clear, concise answers based on the document content\n3. Always include citations with source document links\n4. If information is not found, politely inform the user\n5. Use the document structure (Overview, Functional Details, Technical Details, Troubleshooting) to provide comprehensive answers\n\nFormat your responses:\n- Start with a brief summary\n- Provide numbered steps or bullet points when applicable\n- Include relevant code snippets or examples from documents\n- End with source citations\n\nRemember: You can only access documents that the user has permission to view.";
+        /**
+         * Helper to copy text to clipboard and surface a small success/error message.
+         */
+        _this.copyToClipboard = function (text, label) { return __awaiter(_this, void 0, void 0, function () {
+            var e_1;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!text) {
+                            this.setState({
+                                error: "Nothing to copy for ".concat(label, ". Please configure it first."),
+                                success: null
+                            });
+                            return [2 /*return*/];
+                        }
+                        _a.label = 1;
+                    case 1:
+                        _a.trys.push([1, 3, , 4]);
+                        return [4 /*yield*/, navigator.clipboard.writeText(text)];
+                    case 2:
+                        _a.sent();
+                        this.setState({
+                            success: "".concat(label, " copied to clipboard."),
+                            error: null
+                        });
+                        return [3 /*break*/, 4];
+                    case 3:
+                        e_1 = _a.sent();
+                        this.setState({
+                            error: "Failed to copy ".concat(label, ": ").concat((e_1 === null || e_1 === void 0 ? void 0 : e_1.message) || (e_1 === null || e_1 === void 0 ? void 0 : e_1.toString()) || 'Unknown error'),
+                            success: null
+                        });
+                        return [3 /*break*/, 4];
+                    case 4: return [2 /*return*/];
+                }
+            });
+        }); };
+        /**
+         * Opens the Microsoft 365 admin consent page in a new tab so a tenant admin can
+         * grant the required SharePoint permissions for SMEPilot.
+         */
+        _this.openAdminConsent = function () {
+            try {
+                var baseUrl = (_this.props.functionAppUrl || '').trim().replace(/\/+$/, '');
+                if (!baseUrl) {
+                    _this.setState({
+                        error: 'Setup service URL is not configured. Please set it in the web part properties before granting permissions.',
+                        success: null
+                    });
+                    return;
+                }
+                var clientId = '8e05312f-ad62-4eb4-8127-28293cca6f55'; // SMEPilot multi-tenant app
+                var redirectUri = encodeURIComponent("".concat(baseUrl, "/consent-complete"));
+                var scope = encodeURIComponent('https://graph.microsoft.com/.default');
+                var adminConsentUrl = "https://login.microsoftonline.com/organizations/v2.0/adminconsent" +
+                    "?client_id=".concat(clientId, "&redirect_uri=").concat(redirectUri, "&scope=").concat(scope);
+                window.open(adminConsentUrl, '_blank', 'noopener,noreferrer');
+            }
+            catch (e) {
+                _this.setState({
+                    error: "Failed to open admin-consent page: ".concat((e === null || e === void 0 ? void 0 : e.message) || (e === null || e === void 0 ? void 0 : e.toString()) || 'Unknown error'),
+                    success: null
+                });
+            }
+        };
         _this.handleEditConfiguration = function () {
             _this.setState({
                 isViewMode: false,
@@ -2477,7 +2745,8 @@ var AdminPanel = /** @class */ (function (_super) {
                             copilotPrompt: this.defaultCopilotPrompt,
                             accessTeams: true,
                             accessWeb: true,
-                            accessO365: true
+                            accessO365: true,
+                            enrichedOutputType: 'Both'
                         },
                         isConfigured: false,
                         isViewMode: false,
@@ -2533,14 +2802,14 @@ var AdminPanel = /** @class */ (function (_super) {
                         _c.trys.push([1, 12, , 13]);
                         config = this.state.configuration;
                         steps = [];
-                        // Step 1: Create SMEPilotConfig list
-                        steps.push('Creating SMEPilotConfig list...');
+                        // Step 1: Prepare configuration storage
+                        steps.push('Preparing configuration list...');
                         return [4 /*yield*/, this.sharePointService.createSMEPilotConfigList()];
                     case 2:
                         _c.sent();
-                        steps.push('✓ SMEPilotConfig list created');
+                        steps.push('✓ Configuration list is ready');
                         // Step 2: Save configuration to list
-                        steps.push('Saving configuration...');
+                        steps.push('Saving settings...');
                         return [4 /*yield*/, this.sharePointService.saveConfiguration({
                                 sourceFolderPath: config.sourceFolderPath,
                                 destinationFolderPath: config.destinationFolderPath,
@@ -2551,33 +2820,33 @@ var AdminPanel = /** @class */ (function (_super) {
                                 copilotPrompt: config.copilotPrompt,
                                 accessTeams: config.accessTeams,
                                 accessWeb: config.accessWeb,
-                                accessO365: config.accessO365
+                                accessO365: config.accessO365,
+                                enrichedOutputType: config.enrichedOutputType
                             })];
                     case 3:
                         _c.sent();
-                        steps.push('✓ Configuration saved');
+                        steps.push('✓ Settings saved');
                         // Step 3: Create metadata columns
-                        steps.push('Creating metadata columns...');
+                        steps.push('Checking document status columns...');
                         return [4 /*yield*/, this.sharePointService.createMetadataColumns(config.sourceFolderPath)];
                     case 4:
                         _c.sent();
-                        steps.push('✓ Metadata columns created');
+                        steps.push('✓ Document status columns are ready');
                         // Step 4: Create error folders
-                        steps.push('Creating error folders...');
+                        steps.push('Creating error folders (for rejected or failed documents)...');
                         return [4 /*yield*/, this.sharePointService.createErrorFolders(config.sourceFolderPath)];
                     case 5:
                         _c.sent();
                         steps.push('✓ Error folders created');
-                        // Step 5: Create webhook subscription (Function App will delete existing one if subscriptionId is provided)
-                        steps.push('Creating webhook subscription...');
+                        // Step 5: Connect change notifications (webhook)
+                        steps.push('Connecting change notifications...');
                         tenantId = ((_b = (_a = this.props.context.pageContext.aadInfo) === null || _a === void 0 ? void 0 : _a.tenantId) === null || _b === void 0 ? void 0 : _b.toString()) || '';
                         siteId = this.sharePointService.getSiteId();
                         return [4 /*yield*/, this.sharePointService.getDriveIdFromFolderPath(config.sourceFolderPath)];
                     case 6:
                         driveId = _c.sent();
                         if (!driveId) {
-                            steps.push("\u26A0 Could not get driveId from folder path: ".concat(config.sourceFolderPath));
-                            // Continue anyway - Function App will try to resolve it
+                            steps.push("\u26A0 Could not resolve the library ID for the source folder. The service will still try to detect it automatically.");
                         }
                         return [4 /*yield*/, this.functionAppService.createWebhookSubscription({
                                 driveId: driveId || undefined,
@@ -2596,17 +2865,25 @@ var AdminPanel = /** @class */ (function (_super) {
                     case 8:
                         // Save subscription ID to configuration
                         _c.sent();
-                        steps.push("\u2713 Webhook subscription created (ID: ".concat(webhookResult.subscriptionId, ")"));
+                        steps.push("\u2713 Change notifications connected (ID: ".concat(webhookResult.subscriptionId, ")"));
                         return [3 /*break*/, 10];
                     case 9:
-                        steps.push("\u26A0 Webhook subscription failed: ".concat(webhookResult.message || 'Unknown error'));
+                        if (webhookResult.needsAdminConsent) {
+                            steps.push('⚠ Change notifications are not connected because admin consent is required. ' +
+                                'Ask a Microsoft 365 tenant administrator to click "Grant permissions (Admin only)" above, ' +
+                                'accept the requested permissions, then return here and click "Save configuration" again.');
+                            this.setState({ needsAdminConsent: true });
+                        }
+                        else {
+                            steps.push("\u26A0 Change notifications could not be connected: ".concat(webhookResult.message || 'Unknown error'));
+                        }
                         _c.label = 10;
                     case 10: return [4 /*yield*/, this.sharePointService.getConfiguration()];
                     case 11:
                         updatedConfig = _c.sent();
                         this.setState({
                             isSaving: false,
-                            success: "Installation completed successfully!\n\n".concat(steps.join('\n'), "\n\nNext: Configure Copilot Agent in Copilot Studio."),
+                            success: "Configuration saved.\n\n".concat(steps.join('\n'), "\n\nNext: You can run \"Test configuration\" or proceed to configure the Copilot agent in Copilot Studio."),
                             isConfigured: true,
                             isViewMode: true,
                             lastUpdated: (updatedConfig === null || updatedConfig === void 0 ? void 0 : updatedConfig.lastUpdated) || new Date(),
@@ -2617,7 +2894,7 @@ var AdminPanel = /** @class */ (function (_super) {
                         error_1 = _c.sent();
                         this.setState({
                             isSaving: false,
-                            error: "Failed to save configuration: ".concat(error_1.message, "\n\nPlease check:\n1. You have Site Collection Admin permissions\n2. Function App is accessible\n3. All folder paths are correct")
+                            error: "We couldn't save these settings.\n\nPlease check:\n1. You have sufficient permissions on this site\n2. This page can reach the SMEPilot service\n3. The selected folders and template file exist and are accessible."
                         });
                         return [3 /*break*/, 13];
                     case 13: return [2 /*return*/];
@@ -2655,7 +2932,8 @@ var AdminPanel = /** @class */ (function (_super) {
                                 copilotPrompt: config.copilotPrompt,
                                 accessTeams: config.accessTeams,
                                 accessWeb: config.accessWeb,
-                                accessO365: config.accessO365
+                                accessO365: config.accessO365,
+                                enrichedOutputType: config.enrichedOutputType
                             })];
                     case 2:
                         validationResult = _a.sent();
@@ -2683,8 +2961,11 @@ var AdminPanel = /** @class */ (function (_super) {
                 }
             });
         }); };
-        _this.sharePointService = new _services_SharePointService__WEBPACK_IMPORTED_MODULE_1__.SharePointService(props.context);
-        _this.functionAppService = new _services_FunctionAppService__WEBPACK_IMPORTED_MODULE_2__.FunctionAppService(props.functionAppUrl);
+        _this.sharePointService = new _services_SharePointService__WEBPACK_IMPORTED_MODULE_2__.SharePointService(props.context);
+        _this.functionAppService = new _services_FunctionAppService__WEBPACK_IMPORTED_MODULE_3__.FunctionAppService(props.functionAppUrl);
+        var webServerRelativeUrl = props.context.pageContext.web.serverRelativeUrl || '/';
+        var normalizedWebRoot = webServerRelativeUrl.replace(/\/$/, '');
+        var defaultTemplateFolder = "".concat(normalizedWebRoot, "/Shared Documents/Templates");
         _this.state = {
             configuration: {
                 sourceFolderPath: '',
@@ -2696,7 +2977,8 @@ var AdminPanel = /** @class */ (function (_super) {
                 copilotPrompt: _this.defaultCopilotPrompt,
                 accessTeams: true,
                 accessWeb: true,
-                accessO365: true
+                accessO365: true,
+                enrichedOutputType: 'Both'
             },
             isLoading: true,
             isSaving: false,
@@ -2713,7 +2995,12 @@ var AdminPanel = /** @class */ (function (_super) {
             isLoadingFolders: false,
             isLoadingTemplates: false,
             isUploadingTemplate: false,
-            templateUploadFolder: '/Shared Documents/Templates'
+            templateUploadFolder: defaultTemplateFolder,
+            isHelpPanelOpen: false,
+            needsAdminConsent: false,
+            showPart1: true,
+            showPart2: false,
+            showPart3: false
         };
         return _this;
     }
@@ -2894,7 +3181,8 @@ var AdminPanel = /** @class */ (function (_super) {
                                     copilotPrompt: config_1.copilotPrompt || this.defaultCopilotPrompt,
                                     accessTeams: config_1.accessTeams !== false,
                                     accessWeb: config_1.accessWeb !== false,
-                                    accessO365: config_1.accessO365 !== false
+                                    accessO365: config_1.accessO365 !== false,
+                                    enrichedOutputType: config_1.enrichedOutputType || 'Both'
                                 },
                                 folderOptions: updatedFolderOptions_1,
                                 templateFileOptions: updatedTemplateOptions,
@@ -2931,6 +3219,7 @@ var AdminPanel = /** @class */ (function (_super) {
         });
     };
     AdminPanel.prototype.validateConfiguration = function () {
+        var _this = this;
         var errors = {};
         var config = this.state.configuration;
         // Source Folder validation
@@ -2940,6 +3229,44 @@ var AdminPanel = /** @class */ (function (_super) {
         // Destination Folder validation
         if (!config.destinationFolderPath || config.destinationFolderPath.trim() === '') {
             errors.destinationFolderPath = 'Destination Folder is required';
+        }
+        // Cross-folder validation: prevent destination inside source or same as source
+        if (!errors.sourceFolderPath && !errors.destinationFolderPath) {
+            var normalizePath = function (path) {
+                var p = (path || '').trim();
+                if (!p) {
+                    return '';
+                }
+                // Strip absolute web URL if present
+                var webUrl = _this.props.context.pageContext.web.absoluteUrl;
+                if (p.toLowerCase().startsWith(webUrl.toLowerCase())) {
+                    p = p.substring(webUrl.length);
+                }
+                if (!p.startsWith('/')) {
+                    p = '/' + p;
+                }
+                // Remove trailing slash
+                if (p.length > 1 && p.endsWith('/')) {
+                    p = p.slice(0, -1);
+                }
+                return p.toLowerCase();
+            };
+            var src = normalizePath(config.sourceFolderPath);
+            var dest = normalizePath(config.destinationFolderPath);
+            if (src && dest) {
+                if (src === dest) {
+                    errors.destinationFolderPath =
+                        'Destination folder must be different from Source folder to avoid processing the same documents repeatedly.';
+                }
+                else if (dest.startsWith(src + '/')) {
+                    errors.destinationFolderPath =
+                        'Destination folder cannot be inside the Source folder. Choose a folder outside the monitored source path.';
+                }
+                else if (src.startsWith(dest + '/')) {
+                    errors.sourceFolderPath =
+                        'Source folder cannot be inside the Destination folder. Choose a folder outside the destination path.';
+                }
+            }
         }
         // Template File validation
         if (!config.templateFileUrl || config.templateFileUrl.trim() === '') {
@@ -2972,211 +3299,421 @@ var AdminPanel = /** @class */ (function (_super) {
     AdminPanel.prototype.render = function () {
         var _this = this;
         if (this.state.isLoading && !this.state.isSaving) {
-            return (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 15 }, style: { padding: '20px' } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Spinner, { size: _fluentui_react__WEBPACK_IMPORTED_MODULE_5__.SpinnerSize.large, label: "Loading configuration..." })));
+            return (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].adminPanelRoot },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].mainCard },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_5__.Spinner, { size: _fluentui_react__WEBPACK_IMPORTED_MODULE_6__.SpinnerSize.large, label: "Loading configuration..." }))));
         }
-        var _a = this.state, configuration = _a.configuration, validationErrors = _a.validationErrors, error = _a.error, success = _a.success, isSaving = _a.isSaving, isConfigured = _a.isConfigured, isViewMode = _a.isViewMode, lastUpdated = _a.lastUpdated, subscriptionId = _a.subscriptionId;
-        return (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 20 }, style: { padding: '20px', maxWidth: '800px' } },
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { horizontal: true, horizontalAlign: "space-between", verticalAlign: "center" },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, null,
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "xLarge", style: { fontWeight: 600 } }, "SMEPilot Installation Configuration"),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "medium", style: { color: '#666' } }, isConfigured
-                        ? 'View and manage your SMEPilot configuration.'
-                        : 'Configure all settings during installation. Both functionalities (Document Enrichment & Copilot Agent) will work immediately after configuration.')),
-                isConfigured && isViewMode && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { horizontal: true, tokens: { childrenGap: 10 } },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_7__.DefaultButton, { text: "Edit Configuration", onClick: this.handleEditConfiguration, iconProps: { iconName: 'Edit' } }),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_7__.DefaultButton, { text: "Reset", onClick: this.handleResetConfiguration, iconProps: { iconName: 'Refresh' }, styles: { root: { borderColor: '#d13438', color: '#d13438' } } })))),
-            error && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_8__.MessageBar, { messageBarType: _fluentui_react__WEBPACK_IMPORTED_MODULE_9__.MessageBarType.error, onDismiss: function () { return _this.setState({ error: null }); } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { whiteSpace: 'pre-line' } }, error))),
-            success && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_8__.MessageBar, { messageBarType: _fluentui_react__WEBPACK_IMPORTED_MODULE_9__.MessageBarType.success, onDismiss: function () { return _this.setState({ success: null }); } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { whiteSpace: 'pre-line' } }, success))),
-            isConfigured && isViewMode && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_8__.MessageBar, { messageBarType: _fluentui_react__WEBPACK_IMPORTED_MODULE_9__.MessageBarType.success }, "Configuration is active and working. Click \"Edit Configuration\" to make changes.")),
-            isConfigured && isViewMode && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, null,
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.Separator, null),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 15 } },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "large", style: { fontWeight: 600 } }, "\uD83D\uDCCB Current Configuration"),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 10 }, style: { backgroundColor: '#f3f2f1', padding: '15px', borderRadius: '4px' } },
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { horizontal: true, horizontalAlign: "space-between" },
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "medium", style: { fontWeight: 600 } }, "Last Updated:"),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "medium" }, lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Not available')),
-                        subscriptionId && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { horizontal: true, horizontalAlign: "space-between" },
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "medium", style: { fontWeight: 600 } }, "Webhook Subscription:"),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "medium", style: { color: '#107c10' } },
-                                "\u2713 Active (ID: ",
-                                subscriptionId.substring(0, 20),
-                                "...)"))),
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.Separator, null),
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 8 } },
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "medium", style: { fontWeight: 600 } }, "Source Folder:"),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small", style: { marginLeft: '15px' } }, configuration.sourceFolderPath || 'Not set'),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "medium", style: { fontWeight: 600 } }, "Destination Folder:"),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small", style: { marginLeft: '15px' } }, configuration.destinationFolderPath || 'Not set'),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "medium", style: { fontWeight: 600 } }, "Template File:"),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small", style: { marginLeft: '15px' } }, configuration.templateFileUrl || 'Not set'),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "medium", style: { fontWeight: 600 } }, "Processing Settings:"),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small", style: { marginLeft: '15px' } },
-                                "Max Size: ",
-                                configuration.maxFileSizeMB,
-                                "MB | Timeout: ",
-                                configuration.processingTimeoutSeconds,
-                                "s | Retries: ",
-                                configuration.maxRetries),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "medium", style: { fontWeight: 600 } }, "Access Points:"),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small", style: { marginLeft: '15px' } }, [
-                                configuration.accessTeams && 'Teams',
-                                configuration.accessWeb && 'Web',
-                                configuration.accessO365 && 'O365'
-                            ].filter(Boolean).join(', ') || 'None')))),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.Separator, null))),
-            !isViewMode && react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.Separator, null),
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 15 } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "large", style: { fontWeight: 600, color: '#0078d4' } }, "\uD83D\uDCC4 Part 1: Document Enrichment Configuration"),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 4 } },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_11__.Label, { required: true }, "Source Folder (User Selected) *"),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small", style: { color: '#666', marginBottom: '4px' } }, "Where users upload raw documents (.docx files). Folder must exist and be accessible."),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_12__.ComboBox, { options: this.state.folderOptions, selectedKey: configuration.sourceFolderPath, text: configuration.sourceFolderPath || undefined, onChange: function (e, option) {
-                            if (option) {
-                                _this.handleInputChange('sourceFolderPath', option.key);
-                            }
-                        }, onInputValueChange: function (newValue) {
-                            // Allow free text input as well
-                            _this.handleInputChange('sourceFolderPath', newValue);
-                        }, allowFreeform: true, autoComplete: "on", errorMessage: validationErrors.sourceFolderPath, placeholder: "Select or type folder path...", disabled: isSaving || isViewMode, onRenderOption: function (option) {
-                            return react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: '4px 0' } }, option === null || option === void 0 ? void 0 : option.text);
-                        } })),
-                this.state.isLoadingFolders && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { horizontal: true, tokens: { childrenGap: 8 }, verticalAlign: "center" },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Spinner, { size: _fluentui_react__WEBPACK_IMPORTED_MODULE_5__.SpinnerSize.small }),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small" }, "Loading folders..."))),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 4 } },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_11__.Label, { required: true }, "Destination Folder (User Selected) *"),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small", style: { color: '#666', marginBottom: '4px' } }, "Where enriched documents are stored. Folder will be created if it doesn't exist."),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_12__.ComboBox, { options: this.state.folderOptions, selectedKey: configuration.destinationFolderPath, text: configuration.destinationFolderPath || undefined, onChange: function (e, option) {
-                            if (option) {
-                                _this.handleInputChange('destinationFolderPath', option.key);
-                            }
-                        }, onInputValueChange: function (newValue) {
-                            // Allow free text input as well
-                            _this.handleInputChange('destinationFolderPath', newValue);
-                        }, allowFreeform: true, autoComplete: "on", errorMessage: validationErrors.destinationFolderPath, placeholder: "Select or type folder path...", disabled: isSaving || isViewMode, onRenderOption: function (option) {
-                            return react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: '4px 0' } }, option === null || option === void 0 ? void 0 : option.text);
-                        } })),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 8 } },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 4 } },
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_11__.Label, { required: true }, "Template File *"),
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small", style: { color: '#666', marginBottom: '4px' } }, "Company template file (.dotx) for document formatting. File must exist and be accessible."),
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { horizontal: true, tokens: { childrenGap: 10 }, verticalAlign: "end" },
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack.Item, { grow: true },
-                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_12__.ComboBox, { options: this.state.templateFileOptions, selectedKey: configuration.templateFileUrl, text: configuration.templateFileUrl || undefined, onChange: function (e, option) {
-                                        if (option) {
-                                            _this.handleInputChange('templateFileUrl', option.key);
-                                        }
-                                        else {
-                                            // Clear selection
-                                            _this.handleInputChange('templateFileUrl', '');
-                                        }
-                                    }, onInputValueChange: function (newValue) {
-                                        // Allow free text input as well
-                                        _this.handleInputChange('templateFileUrl', newValue);
-                                    }, allowFreeform: true, autoComplete: "on", errorMessage: validationErrors.templateFileUrl, placeholder: "Select or type template file path...", disabled: isSaving || isViewMode || this.state.isUploadingTemplate, onRenderOption: function (option) {
-                                        return react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: '4px 0' } }, option === null || option === void 0 ? void 0 : option.text);
-                                    } })),
-                            !isViewMode && !configuration.templateFileUrl && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_7__.DefaultButton, { text: "Upload Template", iconProps: { iconName: 'Upload' }, onClick: function () {
-                                    var input = document.createElement('input');
-                                    input.type = 'file';
-                                    input.accept = '.dotx';
-                                    input.onchange = function (e) { return __awaiter(_this, void 0, void 0, function () {
-                                        var file;
-                                        var _a;
-                                        return __generator(this, function (_b) {
-                                            switch (_b.label) {
-                                                case 0:
-                                                    file = (_a = e.target.files) === null || _a === void 0 ? void 0 : _a[0];
-                                                    if (!file) return [3 /*break*/, 2];
-                                                    return [4 /*yield*/, this.handleTemplateUpload(file)];
-                                                case 1:
-                                                    _b.sent();
-                                                    _b.label = 2;
-                                                case 2: return [2 /*return*/];
+        var _a = this.state, configuration = _a.configuration, validationErrors = _a.validationErrors, error = _a.error, success = _a.success, isSaving = _a.isSaving, isConfigured = _a.isConfigured, isViewMode = _a.isViewMode, lastUpdated = _a.lastUpdated, subscriptionId = _a.subscriptionId, isHelpPanelOpen = _a.isHelpPanelOpen, needsAdminConsent = _a.needsAdminConsent;
+        var siteUrl = this.props.context.pageContext.web.absoluteUrl;
+        return (react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, null,
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_7__.Panel, { isOpen: isHelpPanelOpen, onDismiss: function () { return _this.setState({ isHelpPanelOpen: false }); }, headerText: "SMEPilot help & setup guide", type: _fluentui_react__WEBPACK_IMPORTED_MODULE_8__.PanelType.medium, closeButtonAriaLabel: "Close" },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 12 } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "mediumPlus", style: { fontWeight: 600 } }, "1. Before you start"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small" }, "A Microsoft 365 tenant administrator must grant SMEPilot permission to work with SharePoint for this tenant. Ask an admin to use the \"Grant permissions (Admin only)\" button on this page. Once they accept the request, you can complete the configuration here."),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "mediumPlus", style: { fontWeight: 600 } }, "2. Document enrichment"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small" }, "Pick the library where users upload raw Word documents (Source folder), the library/folder where enriched documents should be stored (Destination folder), and your company's .dotx template file. Then click \"Save configuration\"."),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "mediumPlus", style: { fontWeight: 600 } }, "3. Troubleshooting"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small" }, "If you see messages about change notifications or admin consent, first ask a tenant admin to grant permissions using the button on this page, then click \"Save configuration\" again. For other issues, check that the folders and template file you selected actually exist and that you can open them."),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "mediumPlus", style: { fontWeight: 600 } }, "4. Configure the Copilot agent"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small" }, "In Copilot Studio, create a new copilot. Add a SharePoint data source using the Site URL and enriched library shown in the \"Copilot Studio configuration\" section, then paste the Copilot prompt from this page. Publish and test the copilot with a few sample questions."),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small" }, "For more detailed technical information or logs, please contact your IT or support team."))),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].adminPanelRoot },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].mainCard, tokens: { childrenGap: 16 } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].pageHeader },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, horizontalAlign: "space-between", verticalAlign: "center" },
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].pageHeaderText },
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].pageHeaderTitle }, "SMEPilot Installation")),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, tokens: { childrenGap: 8 }, className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].pageHeaderActions },
+                                isConfigured && isViewMode && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, null,
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.DefaultButton, { text: "Edit", onClick: this.handleEditConfiguration, iconProps: { iconName: 'Edit' }, styles: {
+                                            root: {
+                                                background: '#0078D4',
+                                                borderColor: '#0078D4',
+                                                color: '#ffffff',
+                                                borderRadius: 6,
+                                                padding: '10px 16px',
+                                                fontSize: 14,
+                                                fontWeight: 500
+                                            },
+                                            rootHovered: {
+                                                background: '#005a9e',
+                                                borderColor: '#005a9e'
+                                            },
+                                            icon: {
+                                                color: '#ffffff',
+                                                fontSize: 16
                                             }
-                                        });
-                                    }); };
-                                    input.click();
-                                }, disabled: isSaving || this.state.isUploadingTemplate, styles: {
-                                    root: {
-                                        minWidth: '140px'
-                                    }
-                                } })),
-                            !isViewMode && configuration.templateFileUrl && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_7__.DefaultButton, { text: "Change Template", iconProps: { iconName: 'Edit' }, onClick: function () {
-                                    _this.handleInputChange('templateFileUrl', '');
-                                }, disabled: isSaving || this.state.isUploadingTemplate, styles: {
-                                    root: {
-                                        minWidth: '140px'
-                                    }
-                                } }))),
-                        this.state.isUploadingTemplate && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { horizontal: true, tokens: { childrenGap: 8 }, verticalAlign: "center" },
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Spinner, { size: _fluentui_react__WEBPACK_IMPORTED_MODULE_5__.SpinnerSize.small }),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small" }, "Uploading template file...")))),
-                    !isViewMode && !configuration.templateFileUrl && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 4 }, style: { padding: '12px', backgroundColor: '#f3f2f1', borderRadius: '4px', border: '1px solid #edebe9' } },
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small", style: { fontWeight: 600, marginBottom: '4px' } }, "\uD83D\uDCC1 Upload to folder:"),
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_12__.ComboBox, { options: this.state.folderOptions, selectedKey: this.state.templateUploadFolder, onChange: function (e, option) {
-                                if (option) {
-                                    _this.setState({ templateUploadFolder: option.key });
-                                }
-                            }, onInputValueChange: function (newValue) {
-                                _this.setState({ templateUploadFolder: newValue });
-                            }, allowFreeform: true, placeholder: "Select folder for upload...", disabled: isSaving || this.state.isUploadingTemplate, styles: { root: { maxWidth: '400px' } } }),
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small", style: { color: '#666', marginTop: '4px' } }, "Select the folder where you want to upload the template file. Default: /Shared Documents/Templates")))),
-                this.state.isLoadingTemplates && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { horizontal: true, tokens: { childrenGap: 8 }, verticalAlign: "center" },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Spinner, { size: _fluentui_react__WEBPACK_IMPORTED_MODULE_5__.SpinnerSize.small }),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small" }, "Loading template files...")))),
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.Separator, null),
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 15 } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "large", style: { fontWeight: 600, color: '#c2185b' } }, "\uD83E\uDD16 Part 2: Copilot Agent Configuration"),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_8__.MessageBar, { messageBarType: _fluentui_react__WEBPACK_IMPORTED_MODULE_9__.MessageBarType.info }, "Copilot Agent is always enabled. Users can access it via the selected access points below."),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_13__.TextField, { label: "Copilot Agent Prompt", description: "Custom instructions for the Copilot Agent. This prompt will be used to analyze enriched documents and provide answers.", value: configuration.copilotPrompt, onChange: function (e, value) { return _this.handleInputChange('copilotPrompt', value || ''); }, errorMessage: validationErrors.copilotPrompt, multiline: true, rows: 10, required: true, disabled: isSaving || isViewMode, readOnly: isViewMode }),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 10 } },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_11__.Label, { required: true }, "Access Points (Where Users Can Access Copilot Agent)"),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small", style: { color: '#666', marginBottom: '8px' } }, "Select where users can access the Copilot Agent. At least one must be selected."),
-                    validationErrors.accessPoints && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "small", style: { color: '#a80000' } }, validationErrors.accessPoints)),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_14__.Checkbox, { label: "Microsoft Teams", checked: configuration.accessTeams, onChange: function (e, checked) { return _this.handleInputChange('accessTeams', checked || false); }, disabled: isSaving || isViewMode }),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_14__.Checkbox, { label: "Web Interface (SharePoint Portal)", checked: configuration.accessWeb, onChange: function (e, checked) { return _this.handleInputChange('accessWeb', checked || false); }, disabled: isSaving || isViewMode }),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_14__.Checkbox, { label: "O365 Copilot (Word, Excel, PPT, Office Apps)", checked: configuration.accessO365, onChange: function (e, checked) { return _this.handleInputChange('accessO365', checked || false); }, disabled: isSaving || isViewMode }))),
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.Separator, null),
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { tokens: { childrenGap: 15 } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, { variant: "large", style: { fontWeight: 600, color: '#e65100' } }, "\u2699\uFE0F Part 3: Processing Settings"),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { horizontal: true, tokens: { childrenGap: 20 } },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_13__.TextField, { label: "Max File Size (MB)", description: "Files larger than this will be rejected", value: configuration.maxFileSizeMB.toString(), onChange: function (e, value) {
-                            var numValue = parseInt(value || '50', 10);
-                            if (!isNaN(numValue)) {
-                                _this.handleInputChange('maxFileSizeMB', numValue);
-                            }
-                        }, errorMessage: validationErrors.maxFileSizeMB, type: "number", required: true, disabled: isSaving || isViewMode, readOnly: isViewMode, styles: { root: { width: '200px' } } }),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_13__.TextField, { label: "Processing Timeout (seconds)", description: "Maximum time to process a file", value: configuration.processingTimeoutSeconds.toString(), onChange: function (e, value) {
-                            var numValue = parseInt(value || '60', 10);
-                            if (!isNaN(numValue)) {
-                                _this.handleInputChange('processingTimeoutSeconds', numValue);
-                            }
-                        }, errorMessage: validationErrors.processingTimeoutSeconds, type: "number", required: true, disabled: isSaving || isViewMode, readOnly: isViewMode, styles: { root: { width: '200px' } } }),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_13__.TextField, { label: "Max Retries", description: "Number of retry attempts for failed processing", value: configuration.maxRetries.toString(), onChange: function (e, value) {
-                            var numValue = parseInt(value || '3', 10);
-                            if (!isNaN(numValue)) {
-                                _this.handleInputChange('maxRetries', numValue);
-                            }
-                        }, errorMessage: validationErrors.maxRetries, type: "number", required: true, disabled: isSaving || isViewMode, readOnly: isViewMode, styles: { root: { width: '200px' } } }))),
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.Separator, null),
-            !isViewMode && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { horizontal: true, tokens: { childrenGap: 10 } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_15__.PrimaryButton, { text: "Save Configuration", onClick: this.handleSaveConfiguration, disabled: isSaving, iconProps: isSaving ? undefined : { iconName: 'Save' } }),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_7__.DefaultButton, { text: "Test Configuration", onClick: this.handleTestConfiguration, disabled: isSaving || this.state.isLoading, iconProps: { iconName: 'CheckMark' } }),
-                isConfigured && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_7__.DefaultButton, { text: "Cancel", onClick: function () {
-                        _this.loadConfiguration(); // Reload to reset to view mode
-                    }, disabled: isSaving })))),
-            isSaving && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_3__.Stack, { horizontal: true, tokens: { childrenGap: 10 }, verticalAlign: "center" },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Spinner, { size: _fluentui_react__WEBPACK_IMPORTED_MODULE_5__.SpinnerSize.small }),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_6__.Text, null, "Saving configuration...")))));
+                                        } }),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.DefaultButton, { text: "Reset", onClick: this.handleResetConfiguration, iconProps: { iconName: 'Refresh' }, styles: {
+                                            root: {
+                                                background: '#ffffff',
+                                                borderColor: '#0078D4',
+                                                color: '#0078D4',
+                                                borderRadius: 6,
+                                                padding: '10px 16px',
+                                                fontSize: 14,
+                                                fontWeight: 500
+                                            },
+                                            rootHovered: {
+                                                background: 'rgba(0,120,212,0.06)',
+                                                borderColor: '#005a9e'
+                                            },
+                                            icon: {
+                                                color: '#0078D4',
+                                                fontSize: 16
+                                            }
+                                        } }))),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.DefaultButton, { text: "Help", onClick: function () { return _this.setState({ isHelpPanelOpen: true }); }, iconProps: { iconName: 'Help' }, styles: {
+                                        root: {
+                                            background: '#ffffff',
+                                            borderColor: '#0078D4',
+                                            color: '#0078D4',
+                                            borderRadius: 6,
+                                            padding: '10px 16px',
+                                            fontSize: 14,
+                                            fontWeight: 500
+                                        },
+                                        rootHovered: {
+                                            background: 'rgba(0,120,212,0.06)',
+                                            borderColor: '#005a9e'
+                                        },
+                                        icon: {
+                                            color: '#0078D4',
+                                            fontSize: 16
+                                        }
+                                    } }))),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].pageHeaderSubtitle }, "Configure where documents are enriched and how Copilot can use them for this site.")),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].statusRow },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null,
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].statusItemTitle }, "Configuration"),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].statusItemValue }, isConfigured ? 'Completed' : 'Not configured yet')),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null,
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].statusItemTitle }, "Change notifications"),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].statusItemValue }, subscriptionId ? "Active (ID: ".concat(subscriptionId.substring(0, 8), "...)") : 'Not connected')),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null,
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].statusItemTitle }, "Admin consent"),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].statusItemValue }, needsAdminConsent ? 'Required' : 'Granted'))),
+                    !isConfigured && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 8 }, style: {
+                            padding: '10px 14px',
+                            borderRadius: 4,
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #edebe9'
+                        } },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small", style: { color: '#323130' } }, "Step 0 (Admin only): A Microsoft 365 tenant administrator must grant SMEPilot permission to access SharePoint via Microsoft Graph. Click the button below, sign in as an admin, accept the permissions, then return here and click \"Save Configuration\"."),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, tokens: { childrenGap: 8 } },
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_11__.PrimaryButton, { text: "Grant permissions (Admin only)", onClick: this.openAdminConsent, disabled: isSaving, iconProps: { iconName: 'Permissions' } })))),
+                    error && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_12__.MessageBar, { messageBarType: _fluentui_react__WEBPACK_IMPORTED_MODULE_13__.MessageBarType.error, onDismiss: function () { return _this.setState({ error: null }); } },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { whiteSpace: 'pre-line' } }, error))),
+                    success && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_12__.MessageBar, { messageBarType: _fluentui_react__WEBPACK_IMPORTED_MODULE_13__.MessageBarType.success, onDismiss: function () { return _this.setState({ success: null }); } },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { whiteSpace: 'pre-line' } }, success))),
+                    isConfigured && isViewMode && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].statusBanner, role: "status" },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].statusBannerIcon }, "\u2713"),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].statusBannerText }, "Configuration is active and working. Click \"Edit\" to make changes."))),
+                    isConfigured && isViewMode && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, null,
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].section },
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].sectionHeader },
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].sectionTitle }, "Current configuration")),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].currentConfigCard },
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configRow },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configLabel }, "Last updated"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configValue }, lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Not available')),
+                                subscriptionId && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configRow },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configLabel }, "Webhook subscription"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configValueMonospace },
+                                        "\u2713 Active (ID: ",
+                                        subscriptionId.substring(0, 20),
+                                        "...)"))),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_14__.Separator, null),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configRow },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configLabel }, "Source folder"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, verticalAlign: "center", tokens: { childrenGap: 8 } },
+                                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configValueMonospace }, configuration.sourceFolderPath || 'Not set'),
+                                        configuration.sourceFolderPath && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_15__.IconButton, { iconProps: { iconName: 'Copy' }, title: "Copy source folder path", ariaLabel: "Copy source folder path", onClick: function () { return _this.copyToClipboard(configuration.sourceFolderPath, 'Source folder path'); } })))),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configRow },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configLabel }, "Destination folder"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, verticalAlign: "center", tokens: { childrenGap: 8 } },
+                                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configValueMonospace }, configuration.destinationFolderPath || 'Not set'),
+                                        configuration.destinationFolderPath && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_15__.IconButton, { iconProps: { iconName: 'Copy' }, title: "Copy destination folder path", ariaLabel: "Copy destination folder path", onClick: function () { return _this.copyToClipboard(configuration.destinationFolderPath, 'Destination folder path'); } })))),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configRow },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configLabel }, "Template file"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, verticalAlign: "center", tokens: { childrenGap: 8 } },
+                                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configValueMonospace }, configuration.templateFileUrl || 'Not set'),
+                                        configuration.templateFileUrl && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_15__.IconButton, { iconProps: { iconName: 'Copy' }, title: "Copy template file path", ariaLabel: "Copy template file path", onClick: function () { return _this.copyToClipboard(configuration.templateFileUrl, 'Template file path'); } })))),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configRow },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configLabel }, "Processing settings"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configValue },
+                                        "Max size: ",
+                                        configuration.maxFileSizeMB,
+                                        "MB \u00B7 Timeout: ",
+                                        configuration.processingTimeoutSeconds,
+                                        "s \u00B7 Retries: ",
+                                        configuration.maxRetries)),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configRow },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configLabel }, "Access points"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].configValue }, [
+                                        configuration.accessTeams && 'Teams',
+                                        configuration.accessWeb && 'Web',
+                                        configuration.accessO365 && 'O365'
+                                    ].filter(Boolean).join(', ') || 'None')))),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].copilotBox },
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "medium", style: { fontWeight: 600 } }, "\uD83E\uDD16 Copilot Studio configuration (for admin)"),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small", className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].sectionDescription }, "Use the values below when creating the Copilot Agent in Copilot Studio. You can copy them directly."),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 6 }, style: { marginTop: '8px' } },
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, horizontalAlign: "space-between", verticalAlign: "center" },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small" },
+                                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("strong", null, "SharePoint Site URL:"),
+                                        " ",
+                                        siteUrl),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_15__.IconButton, { iconProps: { iconName: 'Copy' }, title: "Copy site URL", ariaLabel: "Copy site URL", onClick: function () { return _this.copyToClipboard(siteUrl, 'Site URL'); } })),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, horizontalAlign: "space-between", verticalAlign: "center" },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small" },
+                                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("strong", null, "Enriched library/folder:"),
+                                        " ",
+                                        configuration.destinationFolderPath || 'Not set'),
+                                    configuration.destinationFolderPath && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_15__.IconButton, { iconProps: { iconName: 'Copy' }, title: "Copy enriched folder path", ariaLabel: "Copy enriched folder path", onClick: function () { return _this.copyToClipboard(configuration.destinationFolderPath, 'Enriched folder path'); } }))),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, horizontalAlign: "space-between", verticalAlign: "center" },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small" },
+                                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("strong", null, "Copilot Agent Prompt:"),
+                                        " ",
+                                        configuration.copilotPrompt ? 'Configured' : 'Not set'),
+                                    configuration.copilotPrompt && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_15__.IconButton, { iconProps: { iconName: 'Copy' }, title: "Copy Copilot prompt", ariaLabel: "Copy Copilot prompt", onClick: function () { return _this.copyToClipboard(configuration.copilotPrompt, 'Copilot prompt'); } }))))),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_14__.Separator, null))),
+                    !isViewMode && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, null,
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_14__.Separator, null),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 10 }, className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].section },
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, horizontalAlign: "space-between", verticalAlign: "center", className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].sectionHeader },
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].sectionTitle }, "Document enrichment"),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_15__.IconButton, { iconProps: { iconName: this.state.showPart1 ? 'ChevronUp' : 'ChevronDown' }, title: this.state.showPart1 ? 'Collapse' : 'Expand', ariaLabel: this.state.showPart1 ? 'Collapse document enrichment section' : 'Expand document enrichment section', onClick: function () { return _this.setState(function (prev) { return ({ showPart1: !prev.showPart1 }); }); } })),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].sectionDescription }, "Choose where raw documents are uploaded, where enriched versions are stored, and which template to apply."),
+                            this.state.showPart1 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, null,
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 4 }, className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].fieldGroup },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_16__.Label, { required: true }, "Source Folder (User Selected) *"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small", className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].fieldHelper }, "Where users upload raw documents (.docx files). Folder must exist and be accessible."),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_17__.ComboBox, { options: this.state.folderOptions, selectedKey: configuration.sourceFolderPath, text: configuration.sourceFolderPath || undefined, onChange: function (e, option) {
+                                            if (option) {
+                                                _this.handleInputChange('sourceFolderPath', option.key);
+                                            }
+                                        }, onInputValueChange: function (newValue) {
+                                            // Allow free text input as well
+                                            _this.handleInputChange('sourceFolderPath', newValue);
+                                        }, allowFreeform: true, autoComplete: "on", errorMessage: validationErrors.sourceFolderPath, placeholder: "Select or type folder path...", disabled: isSaving || isViewMode, onRenderOption: function (option) {
+                                            return react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: '4px 0' } }, option === null || option === void 0 ? void 0 : option.text);
+                                        } })),
+                                this.state.isLoadingFolders && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, tokens: { childrenGap: 8 }, verticalAlign: "center" },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_5__.Spinner, { size: _fluentui_react__WEBPACK_IMPORTED_MODULE_6__.SpinnerSize.small }),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small" }, "Loading folders..."))),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 4 }, className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].fieldGroup },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_16__.Label, { required: true }, "Destination Folder (User Selected) *"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small", className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].fieldHelper }, "Where enriched documents are stored. Folder will be created if it doesn't exist."),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_17__.ComboBox, { options: this.state.folderOptions, selectedKey: configuration.destinationFolderPath, text: configuration.destinationFolderPath || undefined, onChange: function (e, option) {
+                                            if (option) {
+                                                _this.handleInputChange('destinationFolderPath', option.key);
+                                            }
+                                        }, onInputValueChange: function (newValue) {
+                                            // Allow free text input as well
+                                            _this.handleInputChange('destinationFolderPath', newValue);
+                                        }, allowFreeform: true, autoComplete: "on", errorMessage: validationErrors.destinationFolderPath, placeholder: "Select or type folder path...", disabled: isSaving || isViewMode, onRenderOption: function (option) {
+                                            return react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: '4px 0' } }, option === null || option === void 0 ? void 0 : option.text);
+                                        } })),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 8 }, className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].fieldGroup },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 4 } },
+                                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_16__.Label, { required: true }, "Template File *"),
+                                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small", style: { color: '#323130', marginBottom: '4px' } }, "Company template file (.dotx) for document formatting. File must exist and be accessible."),
+                                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, tokens: { childrenGap: 10 }, verticalAlign: "end" },
+                                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack.Item, { grow: true },
+                                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_17__.ComboBox, { options: this.state.templateFileOptions, selectedKey: configuration.templateFileUrl, text: configuration.templateFileUrl || undefined, onChange: function (e, option) {
+                                                        if (option) {
+                                                            _this.handleInputChange('templateFileUrl', option.key);
+                                                        }
+                                                        else {
+                                                            // Clear selection
+                                                            _this.handleInputChange('templateFileUrl', '');
+                                                        }
+                                                    }, onInputValueChange: function (newValue) {
+                                                        // Allow free text input as well
+                                                        _this.handleInputChange('templateFileUrl', newValue);
+                                                    }, allowFreeform: true, autoComplete: "on", errorMessage: validationErrors.templateFileUrl, placeholder: "Select or type template file path...", disabled: isSaving || isViewMode || this.state.isUploadingTemplate, onRenderOption: function (option) {
+                                                        return react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: '4px 0' } }, option === null || option === void 0 ? void 0 : option.text);
+                                                    } })),
+                                            !isViewMode && !configuration.templateFileUrl && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.DefaultButton, { text: "Upload Template", iconProps: { iconName: 'Upload' }, onClick: function () {
+                                                    var input = document.createElement('input');
+                                                    input.type = 'file';
+                                                    input.accept = '.dotx';
+                                                    input.onchange = function (e) { return __awaiter(_this, void 0, void 0, function () {
+                                                        var file;
+                                                        var _a;
+                                                        return __generator(this, function (_b) {
+                                                            switch (_b.label) {
+                                                                case 0:
+                                                                    file = (_a = e.target.files) === null || _a === void 0 ? void 0 : _a[0];
+                                                                    if (!file) return [3 /*break*/, 2];
+                                                                    return [4 /*yield*/, this.handleTemplateUpload(file)];
+                                                                case 1:
+                                                                    _b.sent();
+                                                                    _b.label = 2;
+                                                                case 2: return [2 /*return*/];
+                                                            }
+                                                        });
+                                                    }); };
+                                                    input.click();
+                                                }, disabled: isSaving || this.state.isUploadingTemplate, styles: {
+                                                    root: {
+                                                        minWidth: '140px'
+                                                    }
+                                                } })),
+                                            !isViewMode && configuration.templateFileUrl && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.DefaultButton, { text: "Change Template", iconProps: { iconName: 'Edit' }, onClick: function () {
+                                                    _this.handleInputChange('templateFileUrl', '');
+                                                }, disabled: isSaving || this.state.isUploadingTemplate, styles: {
+                                                    root: {
+                                                        minWidth: '140px'
+                                                    }
+                                                } }))),
+                                        this.state.isUploadingTemplate && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, tokens: { childrenGap: 8 }, verticalAlign: "center" },
+                                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_5__.Spinner, { size: _fluentui_react__WEBPACK_IMPORTED_MODULE_6__.SpinnerSize.small }),
+                                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small" }, "Uploading template file...")))),
+                                    !isViewMode && !configuration.templateFileUrl && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 4 }, style: { padding: '12px', backgroundColor: '#ffffff', borderRadius: '4px', border: '1px solid #edebe9' } },
+                                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small", style: { fontWeight: 600, marginBottom: '4px', color: '#323130' } }, "\uD83D\uDCC1 Upload to folder:"),
+                                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_17__.ComboBox, { options: this.state.folderOptions, selectedKey: this.state.templateUploadFolder, onChange: function (e, option) {
+                                                if (option) {
+                                                    _this.setState({ templateUploadFolder: option.key });
+                                                }
+                                            }, onInputValueChange: function (newValue) {
+                                                _this.setState({ templateUploadFolder: newValue });
+                                            }, allowFreeform: true, placeholder: "Select folder for upload...", disabled: isSaving || this.state.isUploadingTemplate, styles: { root: { maxWidth: '400px' } } }),
+                                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small", style: { color: '#323130', marginTop: '4px' } }, "Select the folder where you want to upload the template file. Default: /Shared Documents/Templates")))),
+                                this.state.isLoadingTemplates && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, tokens: { childrenGap: 8 }, verticalAlign: "center" },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_5__.Spinner, { size: _fluentui_react__WEBPACK_IMPORTED_MODULE_6__.SpinnerSize.small }),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small" }, "Loading template files...")))))),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_14__.Separator, null),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 10 }, className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].section },
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, horizontalAlign: "space-between", verticalAlign: "center", className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].sectionHeader },
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].sectionTitle }, "Copilot configuration"),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_15__.IconButton, { iconProps: { iconName: this.state.showPart2 ? 'ChevronUp' : 'ChevronDown' }, title: this.state.showPart2 ? 'Collapse' : 'Expand', ariaLabel: this.state.showPart2 ? 'Collapse Copilot section' : 'Expand Copilot section', onClick: function () { return _this.setState(function (prev) { return ({ showPart2: !prev.showPart2 }); }); } })),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].sectionDescription }, "Provide guidance for the Copilot agent and choose where users will be able to access it."),
+                            this.state.showPart2 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, null,
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_12__.MessageBar, { messageBarType: _fluentui_react__WEBPACK_IMPORTED_MODULE_13__.MessageBarType.info }, "Copilot Agent is always enabled. Users can access it via the selected access points below."),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_18__.TextField, { label: "Copilot Agent Prompt", description: "Custom instructions for the Copilot Agent. This prompt will be used to analyze enriched documents and provide answers.", value: configuration.copilotPrompt, onChange: function (e, value) { return _this.handleInputChange('copilotPrompt', value || ''); }, errorMessage: validationErrors.copilotPrompt, multiline: true, rows: 10, required: true, disabled: isSaving || isViewMode, readOnly: isViewMode }),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 10 } },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_16__.Label, { required: true }, "Access Points (Where Users Can Access Copilot Agent)"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small", style: { color: '#666', marginBottom: '8px' } }, "Select where users can access the Copilot Agent. At least one must be selected."),
+                                    validationErrors.accessPoints && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small", style: { color: '#a80000' } }, validationErrors.accessPoints)),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_19__.Checkbox, { label: "Microsoft Teams", checked: configuration.accessTeams, onChange: function (e, checked) { return _this.handleInputChange('accessTeams', checked || false); }, disabled: isSaving || isViewMode }),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_19__.Checkbox, { label: "Web Interface (SharePoint Portal)", checked: configuration.accessWeb, onChange: function (e, checked) { return _this.handleInputChange('accessWeb', checked || false); }, disabled: isSaving || isViewMode }),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_19__.Checkbox, { label: "O365 Copilot (Word, Excel, PPT, Office Apps)", checked: configuration.accessO365, onChange: function (e, checked) { return _this.handleInputChange('accessO365', checked || false); }, disabled: isSaving || isViewMode }))))),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_14__.Separator, null),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 10 }, className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].section },
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, horizontalAlign: "space-between", verticalAlign: "center", className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].sectionHeader },
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].sectionTitle }, "Processing settings"),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_15__.IconButton, { iconProps: { iconName: this.state.showPart3 ? 'ChevronUp' : 'ChevronDown' }, title: this.state.showPart3 ? 'Collapse' : 'Expand', ariaLabel: this.state.showPart3 ? 'Collapse processing settings section' : 'Expand processing settings section', onClick: function () { return _this.setState(function (prev) { return ({ showPart3: !prev.showPart3 }); }); } })),
+                            this.state.showPart3 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].processingRow },
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 4 }, className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].fieldGroup },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_16__.Label, { required: true }, "Max File Size (MB)"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_18__.TextField, { value: configuration.maxFileSizeMB.toString(), onChange: function (e, value) {
+                                            var numValue = parseInt(value || '50', 10);
+                                            if (!isNaN(numValue)) {
+                                                _this.handleInputChange('maxFileSizeMB', numValue);
+                                            }
+                                        }, errorMessage: validationErrors.maxFileSizeMB, type: "number", required: true, disabled: isSaving || isViewMode, readOnly: isViewMode, styles: { root: { width: '90%' } } }),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small", className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].fieldHelper }, "Files larger than this will be rejected.")),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 4 }, className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].fieldGroup },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_16__.Label, { required: true }, "Timeout (seconds)"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_18__.TextField, { value: configuration.processingTimeoutSeconds.toString(), onChange: function (e, value) {
+                                            var numValue = parseInt(value || '60', 10);
+                                            if (!isNaN(numValue)) {
+                                                _this.handleInputChange('processingTimeoutSeconds', numValue);
+                                            }
+                                        }, errorMessage: validationErrors.processingTimeoutSeconds, type: "number", required: true, disabled: isSaving || isViewMode, readOnly: isViewMode, styles: { root: { width: '90%' } } }),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small", className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].fieldHelper }, "Max time per document before timeout.")),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 4 }, className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].fieldGroup },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_16__.Label, { required: true }, "Max Retries"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_18__.TextField, { value: configuration.maxRetries.toString(), onChange: function (e, value) {
+                                            var numValue = parseInt(value || '3', 10);
+                                            if (!isNaN(numValue)) {
+                                                _this.handleInputChange('maxRetries', numValue);
+                                            }
+                                        }, errorMessage: validationErrors.maxRetries, type: "number", required: true, disabled: isSaving || isViewMode, readOnly: isViewMode, styles: { root: { width: '90%' } } }),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small", className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].fieldHelper }, "Number of times the system will retry processing a document after a failure.")),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { tokens: { childrenGap: 4 }, className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].fieldGroup },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_16__.Label, null, "Enriched Output Type"),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_17__.ComboBox, { selectedKey: (configuration.enrichedOutputType || 'Both').toLowerCase(), options: [
+                                            { key: 'both', text: 'Both (DOCX + PDF)' },
+                                            { key: 'docx', text: 'DOCX only' },
+                                            { key: 'pdf', text: 'PDF only' }
+                                        ], onChange: function (e, option) {
+                                            if (option) {
+                                                var value = option.key.toString().toLowerCase() === 'pdf'
+                                                    ? 'Pdf'
+                                                    : option.key.toString().toLowerCase() === 'docx'
+                                                        ? 'Docx'
+                                                        : 'Both';
+                                                _this.handleInputChange('enrichedOutputType', value);
+                                            }
+                                        }, disabled: isSaving || isViewMode, styles: { root: { width: '90%' } } }),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, { variant: "small", className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].fieldHelper }, "Choose whether SMEPilot should keep only the enriched DOCX, only a rendered PDF, or both. Default is Both."))))))),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_14__.Separator, null),
+                    !isViewMode && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, horizontalAlign: "end", tokens: { childrenGap: 10 }, className: _AdminPanel_module_scss__WEBPACK_IMPORTED_MODULE_1__["default"].actionsRow },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_11__.PrimaryButton, { text: "Save configuration", onClick: this.handleSaveConfiguration, disabled: isSaving, iconProps: isSaving ? undefined : { iconName: 'Save' }, styles: {
+                                root: { background: '#0B78A8', borderColor: '#0B78A8' },
+                                rootHovered: { background: '#0A6894', borderColor: '#0A6894' }
+                            } }),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.DefaultButton, { text: "Test configuration", onClick: this.handleTestConfiguration, disabled: isSaving || this.state.isLoading, iconProps: { iconName: 'TestCase' } }),
+                        isConfigured && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_10__.DefaultButton, { text: "Cancel", onClick: function () {
+                                _this.loadConfiguration(); // Reload to reset to view mode
+                            }, disabled: isSaving })))),
+                    isSaving && (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_4__.Stack, { horizontal: true, tokens: { childrenGap: 10 }, verticalAlign: "center" },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_5__.Spinner, { size: _fluentui_react__WEBPACK_IMPORTED_MODULE_6__.SpinnerSize.small }),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement(_fluentui_react__WEBPACK_IMPORTED_MODULE_9__.Text, null, "Saving configuration...")))))));
     };
     return AdminPanel;
 }(react__WEBPACK_IMPORTED_MODULE_0__.Component));
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (AdminPanel);
+
+
+/***/ }),
+
+/***/ 1679:
+/*!**********************************************************************!*\
+  !*** ./lib/webparts/adminPanel/components/AdminPanel.module.scss.js ***!
+  \**********************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+__webpack_require__(/*! ./AdminPanel.module.css */ 1587);
+var styles = {
+    adminPanelRoot: 'adminPanelRoot_98b39cf0',
+    mainCard: 'mainCard_98b39cf0',
+    pageHeader: 'pageHeader_98b39cf0',
+    pageHeaderText: 'pageHeaderText_98b39cf0',
+    pageHeaderTitle: 'pageHeaderTitle_98b39cf0',
+    pageHeaderSubtitle: 'pageHeaderSubtitle_98b39cf0',
+    pageHeaderActions: 'pageHeaderActions_98b39cf0',
+    statusBanner: 'statusBanner_98b39cf0',
+    statusBannerIcon: 'statusBannerIcon_98b39cf0',
+    statusBannerText: 'statusBannerText_98b39cf0',
+    statusRow: 'statusRow_98b39cf0',
+    statusItemTitle: 'statusItemTitle_98b39cf0',
+    statusItemValue: 'statusItemValue_98b39cf0',
+    section: 'section_98b39cf0',
+    sectionHeader: 'sectionHeader_98b39cf0',
+    sectionTitle: 'sectionTitle_98b39cf0',
+    sectionDescription: 'sectionDescription_98b39cf0',
+    currentConfigCard: 'currentConfigCard_98b39cf0',
+    configRow: 'configRow_98b39cf0',
+    configLabel: 'configLabel_98b39cf0',
+    configValue: 'configValue_98b39cf0',
+    configValueMonospace: 'configValueMonospace_98b39cf0',
+    copilotBox: 'copilotBox_98b39cf0',
+    processingRow: 'processingRow_98b39cf0',
+    fieldGroup: 'fieldGroup_98b39cf0',
+    fieldLabel: 'fieldLabel_98b39cf0',
+    fieldHelper: 'fieldHelper_98b39cf0',
+    fieldError: 'fieldError_98b39cf0',
+    actionsRow: 'actionsRow_98b39cf0'
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (styles);
 
 
 /***/ }),
@@ -3286,6 +3823,27 @@ function findElementRecursive(element, matchFunction, doc) {
 
 /***/ }),
 
+/***/ 9118:
+/*!**********************************************************************!*\
+  !*** ./node_modules/@fluentui/dom-utilities/lib/getActiveElement.js ***!
+  \**********************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   getActiveElement: () => (/* binding */ getActiveElement)
+/* harmony export */ });
+var getActiveElement = function (doc) {
+    var ae = doc.activeElement;
+    while (ae === null || ae === void 0 ? void 0 : ae.shadowRoot) {
+        ae = ae.shadowRoot.activeElement;
+    }
+    return ae;
+};
+
+
+/***/ }),
+
 /***/ 8377:
 /*!*****************************************************************!*\
   !*** ./node_modules/@fluentui/dom-utilities/lib/getChildren.js ***!
@@ -3318,6 +3876,27 @@ function getChildren(parent, allowVirtualChildren) {
     }
     return children;
 }
+
+
+/***/ }),
+
+/***/ 3673:
+/*!********************************************************************!*\
+  !*** ./node_modules/@fluentui/dom-utilities/lib/getEventTarget.js ***!
+  \********************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   getEventTarget: () => (/* binding */ getEventTarget)
+/* harmony export */ });
+var getEventTarget = function (event) {
+    var target = event.target;
+    if (target && target.shadowRoot) {
+        target = event.composedPath()[0];
+    }
+    return target;
+};
 
 
 /***/ }),
@@ -6679,6 +7258,60 @@ function useControllableValue(controlledValue, defaultUncontrolledValue, onChang
 
 /***/ }),
 
+/***/ 1747:
+/*!********************************************************************!*\
+  !*** ./node_modules/@fluentui/react-hooks/lib/useEventCallback.js ***!
+  \********************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   useEventCallback: () => (/* binding */ useEventCallback)
+/* harmony export */ });
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ 5959);
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _useConst__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./useConst */ 5559);
+/* harmony import */ var _fluentui_utilities__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fluentui/utilities */ 8670);
+
+
+
+/**
+ * Modified `useCallback` that returns the same function reference every time, but internally calls
+ * the most-recently passed callback implementation. Can be useful in situations such as:
+ * - Event handler dependencies change too frequently, such as user props which might change on
+ *   every render, or volatile values such as useState/useDispatch
+ * - Callback must be referenced in a captured context (such as a window event handler or unmount
+ *   handler that's registered once) but needs access to the latest props
+ *
+ * In general, prefer `useCallback` unless you've encountered one of the problems above.
+ *
+ * https://reactjs.org/docs/hooks-faq.html#how-to-read-an-often-changing-value-from-usecallback
+ *
+ * @param fn - The callback function that will be used
+ * @returns A function which is referentially stable but internally calls the most recently passed callback
+ */
+function useEventCallback(fn) {
+    var callbackRef = react__WEBPACK_IMPORTED_MODULE_0__.useRef(function () {
+        throw new Error('Cannot call an event handler while rendering');
+    });
+    (0,_fluentui_utilities__WEBPACK_IMPORTED_MODULE_1__.useIsomorphicLayoutEffect)(function () {
+        callbackRef.current = fn;
+    }, [fn]);
+    // useConst rather than useCallback to ensure the reference is always stable
+    // (useCallback's deps list is an optimization, not a guarantee)
+    return (0,_useConst__WEBPACK_IMPORTED_MODULE_2__.useConst)(function () { return function () {
+        var args = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+            args[_i] = arguments[_i];
+        }
+        var callback = callbackRef.current;
+        return callback.apply(void 0, args);
+    }; });
+}
+
+
+/***/ }),
+
 /***/ 8555:
 /*!*********************************************************!*\
   !*** ./node_modules/@fluentui/react-hooks/lib/useId.js ***!
@@ -6895,6 +7528,36 @@ function useTarget(target, hostElement) {
     }
     return [targetRef, targetWindow];
 }
+
+
+/***/ }),
+
+/***/ 732:
+/*!**************************************************************!*\
+  !*** ./node_modules/@fluentui/react-hooks/lib/useUnmount.js ***!
+  \**************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   useUnmount: () => (/* binding */ useUnmount)
+/* harmony export */ });
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ 5959);
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
+
+/**
+ * Hook which synchronously executes a callback when the component is about to unmount.
+ *
+ * @param callback - Function to call during unmount.
+ */
+var useUnmount = function (callback) {
+    var unmountRef = react__WEBPACK_IMPORTED_MODULE_0__.useRef(callback);
+    unmountRef.current = callback;
+    react__WEBPACK_IMPORTED_MODULE_0__.useEffect(function () { return function () {
+        var _a;
+        (_a = unmountRef.current) === null || _a === void 0 ? void 0 : _a.call(unmountRef);
+    }; }, []);
+};
 
 
 /***/ }),
@@ -15379,6 +16042,286 @@ var getStyles = function (props) {
 
 /***/ }),
 
+/***/ 3634:
+/*!************************************************************************************!*\
+  !*** ./node_modules/@fluentui/react/lib/components/FocusTrapZone/FocusTrapZone.js ***!
+  \************************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   FocusTrapZone: () => (/* binding */ FocusTrapZone)
+/* harmony export */ });
+/* harmony import */ var tslib__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! tslib */ 1635);
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ 5959);
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../../Utilities */ 4968);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../../Utilities */ 4751);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../../Utilities */ 3703);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../../Utilities */ 2419);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ../../Utilities */ 9118);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../../Utilities */ 3673);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ../../Utilities */ 5947);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ../../Utilities */ 9378);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ../../Utilities */ 7974);
+/* harmony import */ var _fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fluentui/react-hooks */ 544);
+/* harmony import */ var _fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! @fluentui/react-hooks */ 2515);
+/* harmony import */ var _fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! @fluentui/react-hooks */ 5559);
+/* harmony import */ var _fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! @fluentui/react-hooks */ 8555);
+/* harmony import */ var _fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! @fluentui/react-hooks */ 1747);
+/* harmony import */ var _fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! @fluentui/react-hooks */ 732);
+/* harmony import */ var _WindowProvider__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../WindowProvider */ 6130);
+/* harmony import */ var _utilities_dom__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../../utilities/dom */ 4707);
+
+
+
+
+
+
+var COMPONENT_NAME = 'FocusTrapZone';
+var DEFAULT_PROPS = {
+    disabled: false,
+    disableFirstFocus: false,
+    forceFocusInsideTrap: true,
+    isClickableOutsideFocusTrap: false,
+    // Hardcoding completely uncontrolled flag for proper interop with FluentUI V9.
+    'data-tabster': '{"uncontrolled": {"completely": true}}',
+};
+var useComponentRef = function (componentRef, previouslyFocusedElement, focusFTZ) {
+    react__WEBPACK_IMPORTED_MODULE_0__.useImperativeHandle(componentRef, function () { return ({
+        get previouslyFocusedElement() {
+            return previouslyFocusedElement;
+        },
+        focus: focusFTZ,
+    }); }, [focusFTZ, previouslyFocusedElement]);
+};
+var FocusTrapZone = react__WEBPACK_IMPORTED_MODULE_0__.forwardRef(function (propsWithoutDefaults, ref) {
+    var _a;
+    var root = react__WEBPACK_IMPORTED_MODULE_0__.useRef(null);
+    var firstBumper = react__WEBPACK_IMPORTED_MODULE_0__.useRef(null);
+    var lastBumper = react__WEBPACK_IMPORTED_MODULE_0__.useRef(null);
+    var mergedRootRef = (0,_fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_1__.useMergedRefs)(root, ref);
+    var doc = (0,_WindowProvider__WEBPACK_IMPORTED_MODULE_2__.useDocument)();
+    var win = (0,_utilities_dom__WEBPACK_IMPORTED_MODULE_3__.useWindowEx)();
+    var inShadow = (0,_Utilities__WEBPACK_IMPORTED_MODULE_4__.useHasMergeStylesShadowRootContext)();
+    var isFirstRender = (_a = (0,_fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_5__.usePrevious)(false)) !== null && _a !== void 0 ? _a : true;
+    var props = (0,_Utilities__WEBPACK_IMPORTED_MODULE_6__.getPropsWithDefaults)(DEFAULT_PROPS, propsWithoutDefaults);
+    var internalState = (0,_fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_7__.useConst)({
+        hasFocus: false,
+        focusStackId: (0,_fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_8__.useId)('ftz-', props.id),
+    });
+    var children = props.children, componentRef = props.componentRef, disabled = props.disabled, disableFirstFocus = props.disableFirstFocus, forceFocusInsideTrap = props.forceFocusInsideTrap, focusPreviouslyFocusedInnerElement = props.focusPreviouslyFocusedInnerElement, 
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    firstFocusableSelector = props.firstFocusableSelector, firstFocusableTarget = props.firstFocusableTarget, 
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    _b = props.disableRestoreFocus, 
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    disableRestoreFocus = _b === void 0 ? props.ignoreExternalFocusing : _b, isClickableOutsideFocusTrap = props.isClickableOutsideFocusTrap, enableAriaHiddenSiblings = props.enableAriaHiddenSiblings;
+    var bumperProps = {
+        'aria-hidden': true,
+        style: {
+            pointerEvents: 'none',
+            position: 'fixed', // 'fixed' prevents browsers from scrolling to bumpers when viewport does not contain them
+        },
+        tabIndex: disabled ? -1 : 0, // make bumpers tabbable only when enabled
+        'data-is-visible': true,
+        'data-is-focus-trap-zone-bumper': true,
+    };
+    var focusElementAsync = react__WEBPACK_IMPORTED_MODULE_0__.useCallback(function (element) {
+        if (element !== firstBumper.current && element !== lastBumper.current) {
+            (0,_Utilities__WEBPACK_IMPORTED_MODULE_9__.focusAsync)(element);
+        }
+    }, []);
+    /**
+     * Callback to force focus into FTZ (named to avoid overlap with global focus() callback).
+     * useEventCallback always returns the same callback reference but updates the implementation
+     * every render to avoid stale captured values.
+     */
+    var focusFTZ = (0,_fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_10__.useEventCallback)(function () {
+        if (!root.current) {
+            return; // not done mounting
+        }
+        var previouslyFocusedElementInTrapZone = internalState.previouslyFocusedElementInTrapZone;
+        if (focusPreviouslyFocusedInnerElement &&
+            previouslyFocusedElementInTrapZone &&
+            (0,_Utilities__WEBPACK_IMPORTED_MODULE_11__.elementContains)(root.current, previouslyFocusedElementInTrapZone)) {
+            // focus on the last item that had focus in the zone before we left the zone
+            focusElementAsync(previouslyFocusedElementInTrapZone);
+            return;
+        }
+        var firstFocusableChild = null;
+        if (typeof firstFocusableTarget === 'string') {
+            firstFocusableChild = root.current.querySelector(firstFocusableTarget);
+        }
+        else if (firstFocusableTarget) {
+            firstFocusableChild = firstFocusableTarget(root.current);
+        }
+        else if (firstFocusableSelector) {
+            var focusSelector = typeof firstFocusableSelector === 'string' ? firstFocusableSelector : firstFocusableSelector();
+            firstFocusableChild = root.current.querySelector('.' + focusSelector);
+        }
+        // Fall back to first element if query selector did not match any elements.
+        if (!firstFocusableChild) {
+            firstFocusableChild = (0,_Utilities__WEBPACK_IMPORTED_MODULE_9__.getNextElement)(root.current, root.current.firstChild, false, false, false, true, undefined, undefined, undefined, inShadow);
+        }
+        if (firstFocusableChild) {
+            focusElementAsync(firstFocusableChild);
+        }
+    });
+    /** Used in root div focus/blur handlers */
+    var focusBumper = function (isFirstBumper) {
+        if (disabled || !root.current) {
+            return;
+        }
+        var nextFocusable = isFirstBumper === internalState.hasFocus
+            ? (0,_Utilities__WEBPACK_IMPORTED_MODULE_9__.getLastTabbable)(root.current, lastBumper.current, true, false, inShadow)
+            : (0,_Utilities__WEBPACK_IMPORTED_MODULE_9__.getFirstTabbable)(root.current, firstBumper.current, true, false, inShadow);
+        if (nextFocusable) {
+            if (nextFocusable === firstBumper.current || nextFocusable === lastBumper.current) {
+                // This can happen when FTZ contains no tabbable elements.
+                // focusFTZ() will take care of finding a focusable element in FTZ.
+                focusFTZ();
+            }
+            else {
+                nextFocusable.focus();
+            }
+        }
+    };
+    /** Root div blur handler (doesn't need useCallback since it's for a native element) */
+    var onRootBlurCapture = function (ev) {
+        var _a;
+        (_a = props.onBlurCapture) === null || _a === void 0 ? void 0 : _a.call(props, ev);
+        var relatedTarget = ev.relatedTarget;
+        if (ev.relatedTarget === null) {
+            // In IE11, due to lack of support, event.relatedTarget is always
+            // null making every onBlur call to be "outside" of the root
+            // even when it's not. Using document.activeElement is another way
+            // for us to be able to get what the relatedTarget without relying
+            // on the event
+            relatedTarget = (0,_Utilities__WEBPACK_IMPORTED_MODULE_12__.getActiveElement)(doc);
+        }
+        if (!(0,_Utilities__WEBPACK_IMPORTED_MODULE_11__.elementContains)(root.current, relatedTarget)) {
+            internalState.hasFocus = false;
+        }
+    };
+    /** Root div focus handler (doesn't need useCallback since it's for a native element) */
+    var onRootFocusCapture = function (ev) {
+        var _a;
+        (_a = props.onFocusCapture) === null || _a === void 0 ? void 0 : _a.call(props, ev);
+        if (ev.target === firstBumper.current) {
+            focusBumper(true);
+        }
+        else if (ev.target === lastBumper.current) {
+            focusBumper(false);
+        }
+        internalState.hasFocus = true;
+        if (ev.target !== ev.currentTarget && !(ev.target === firstBumper.current || ev.target === lastBumper.current)) {
+            // every time focus changes within the trap zone, remember the focused element so that
+            // it can be restored if focus leaves the pane and returns via keystroke (i.e. via a call to this.focus(true))
+            internalState.previouslyFocusedElementInTrapZone = (0,_Utilities__WEBPACK_IMPORTED_MODULE_13__.getEventTarget)(ev.nativeEvent);
+        }
+    };
+    /** Called to restore focus on unmount or props change. (useEventCallback ensures latest prop values are used.) */
+    var returnFocusToInitiator = (0,_fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_10__.useEventCallback)(function (elementToFocusOnDismiss) {
+        FocusTrapZone.focusStack = FocusTrapZone.focusStack.filter(function (value) { return internalState.focusStackId !== value; });
+        if (!doc) {
+            return;
+        }
+        // Do not use getActiveElement() here.
+        // When the FTZ is in shadow DOM focus returns to the
+        // shadow host rather than body so we need to be
+        // able to inspect that
+        var activeElement = doc.activeElement;
+        if (!disableRestoreFocus &&
+            typeof (elementToFocusOnDismiss === null || elementToFocusOnDismiss === void 0 ? void 0 : elementToFocusOnDismiss.focus) === 'function' &&
+            // only restore focus if the current focused element is within the FTZ, or if nothing is focused
+            ((0,_Utilities__WEBPACK_IMPORTED_MODULE_11__.elementContains)(root.current, activeElement) || activeElement === doc.body || activeElement.shadowRoot)) {
+            focusElementAsync(elementToFocusOnDismiss);
+        }
+    });
+    /** Called in window event handlers. (useEventCallback ensures latest prop values are used.) */
+    var forceFocusOrClickInTrap = (0,_fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_10__.useEventCallback)(function (ev) {
+        // be sure to use the latest values here
+        if (disabled) {
+            return;
+        }
+        if (internalState.focusStackId === FocusTrapZone.focusStack.slice(-1)[0]) {
+            var targetElement = (0,_Utilities__WEBPACK_IMPORTED_MODULE_13__.getEventTarget)(ev);
+            if (targetElement && !(0,_Utilities__WEBPACK_IMPORTED_MODULE_11__.elementContains)(root.current, targetElement)) {
+                if (doc && (0,_Utilities__WEBPACK_IMPORTED_MODULE_12__.getActiveElement)(doc) === doc.body) {
+                    setTimeout(function () {
+                        if (doc && (0,_Utilities__WEBPACK_IMPORTED_MODULE_12__.getActiveElement)(doc) === doc.body) {
+                            focusFTZ();
+                            internalState.hasFocus = true; // set focus here since we stop event propagation
+                        }
+                    }, 0);
+                }
+                else {
+                    focusFTZ();
+                    internalState.hasFocus = true; // set focus here since we stop event propagation
+                }
+                ev.preventDefault();
+                ev.stopPropagation();
+            }
+        }
+    });
+    // Update window event handlers when relevant props change
+    react__WEBPACK_IMPORTED_MODULE_0__.useEffect(function () {
+        var disposables = [];
+        if (forceFocusInsideTrap) {
+            disposables.push((0,_Utilities__WEBPACK_IMPORTED_MODULE_14__.on)(win, 'focus', forceFocusOrClickInTrap, true));
+        }
+        if (!isClickableOutsideFocusTrap) {
+            disposables.push((0,_Utilities__WEBPACK_IMPORTED_MODULE_14__.on)(win, 'click', forceFocusOrClickInTrap, true));
+        }
+        return function () {
+            disposables.forEach(function (dispose) { return dispose(); });
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- should only run when these two props change
+    }, [forceFocusInsideTrap, isClickableOutsideFocusTrap, win]);
+    // On prop change or first render, focus the FTZ and update focusStack if appropriate
+    react__WEBPACK_IMPORTED_MODULE_0__.useEffect(function () {
+        // Do nothing if disabled, or if it's a re-render and forceFocusInsideTrap is false
+        // (to match existing behavior, the FTZ handles first focus even if forceFocusInsideTrap
+        // is false, though it's debatable whether it should do this)
+        if (disabled || (!isFirstRender && !forceFocusInsideTrap) || !root.current) {
+            return;
+        }
+        // Transition from forceFocusInsideTrap / FTZ disabled to enabled (or initial mount)
+        FocusTrapZone.focusStack.push(internalState.focusStackId);
+        var elementToFocusOnDismiss = props.elementToFocusOnDismiss || (0,_Utilities__WEBPACK_IMPORTED_MODULE_12__.getActiveElement)(doc);
+        if (!disableFirstFocus && !(0,_Utilities__WEBPACK_IMPORTED_MODULE_11__.elementContains)(root.current, elementToFocusOnDismiss)) {
+            focusFTZ();
+        }
+        // To match existing behavior, always return focus on cleanup (even if we didn't handle
+        // initial focus), but it's debatable whether that's correct
+        return function () { return returnFocusToInitiator(elementToFocusOnDismiss); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- should only run when these two props change
+    }, [forceFocusInsideTrap, disabled]);
+    // Handle modalization separately from first focus
+    react__WEBPACK_IMPORTED_MODULE_0__.useEffect(function () {
+        if (!disabled && enableAriaHiddenSiblings) {
+            var unmodalize = (0,_Utilities__WEBPACK_IMPORTED_MODULE_15__.modalize)(root.current);
+            return unmodalize;
+        }
+    }, [disabled, enableAriaHiddenSiblings, root]);
+    // Cleanup lifecyle method for internalState.
+    (0,_fluentui_react_hooks__WEBPACK_IMPORTED_MODULE_16__.useUnmount)(function () {
+        // Dispose of element references so the DOM Nodes can be garbage-collected
+        delete internalState.previouslyFocusedElementInTrapZone;
+    });
+    useComponentRef(componentRef, internalState.previouslyFocusedElementInTrapZone, focusFTZ);
+    return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", (0,tslib__WEBPACK_IMPORTED_MODULE_17__.__assign)({ "aria-labelledby": props.ariaLabelledBy }, (0,_Utilities__WEBPACK_IMPORTED_MODULE_18__.getNativeProps)(props, _Utilities__WEBPACK_IMPORTED_MODULE_18__.divProperties), { ref: mergedRootRef, onFocusCapture: onRootFocusCapture, onBlurCapture: onRootBlurCapture }),
+        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", (0,tslib__WEBPACK_IMPORTED_MODULE_17__.__assign)({}, bumperProps, { ref: firstBumper })),
+        children,
+        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", (0,tslib__WEBPACK_IMPORTED_MODULE_17__.__assign)({}, bumperProps, { ref: lastBumper }))));
+});
+FocusTrapZone.displayName = COMPONENT_NAME;
+FocusTrapZone.focusStack = [];
+
+
+/***/ }),
+
 /***/ 2087:
 /*!**********************************************************************!*\
   !*** ./node_modules/@fluentui/react/lib/components/Icon/FontIcon.js ***!
@@ -17362,6 +18305,965 @@ var MessageBarType;
     /** Warning styled MessageBar */
     MessageBarType[MessageBarType["warning"] = 5] = "warning";
 })(MessageBarType || (MessageBarType = {}));
+
+
+/***/ }),
+
+/***/ 6131:
+/*!*****************************************************************************!*\
+  !*** ./node_modules/@fluentui/react/lib/components/Overlay/Overlay.base.js ***!
+  \*****************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   OverlayBase: () => (/* binding */ OverlayBase)
+/* harmony export */ });
+/* harmony import */ var tslib__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! tslib */ 1635);
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ 5959);
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../Utilities */ 3583);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../../Utilities */ 2477);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../../Utilities */ 2594);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../../Utilities */ 7974);
+
+
+
+var getClassNames = (0,_Utilities__WEBPACK_IMPORTED_MODULE_1__.classNamesFunction)();
+var OverlayBase = /** @class */ (function (_super) {
+    (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__extends)(OverlayBase, _super);
+    function OverlayBase(props) {
+        var _this = _super.call(this, props) || this;
+        (0,_Utilities__WEBPACK_IMPORTED_MODULE_3__.initializeComponentRef)(_this);
+        var _a = _this.props.allowTouchBodyScroll, allowTouchBodyScroll = _a === void 0 ? false : _a;
+        _this._allowTouchBodyScroll = allowTouchBodyScroll;
+        return _this;
+    }
+    OverlayBase.prototype.componentDidMount = function () {
+        !this._allowTouchBodyScroll && (0,_Utilities__WEBPACK_IMPORTED_MODULE_4__.disableBodyScroll)();
+    };
+    OverlayBase.prototype.componentWillUnmount = function () {
+        !this._allowTouchBodyScroll && (0,_Utilities__WEBPACK_IMPORTED_MODULE_4__.enableBodyScroll)();
+    };
+    OverlayBase.prototype.render = function () {
+        var _a = this.props, isDark = _a.isDarkThemed, className = _a.className, theme = _a.theme, styles = _a.styles;
+        var divProps = (0,_Utilities__WEBPACK_IMPORTED_MODULE_5__.getNativeProps)(this.props, _Utilities__WEBPACK_IMPORTED_MODULE_5__.divProperties);
+        var classNames = getClassNames(styles, {
+            theme: theme,
+            className: className,
+            isDark: isDark,
+        });
+        return react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)({}, divProps, { className: classNames.root }));
+    };
+    return OverlayBase;
+}(react__WEBPACK_IMPORTED_MODULE_0__.Component));
+
+
+
+/***/ }),
+
+/***/ 1518:
+/*!************************************************************************!*\
+  !*** ./node_modules/@fluentui/react/lib/components/Overlay/Overlay.js ***!
+  \************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   Overlay: () => (/* binding */ Overlay)
+/* harmony export */ });
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../../Utilities */ 5336);
+/* harmony import */ var _Overlay_base__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Overlay.base */ 6131);
+/* harmony import */ var _Overlay_styles__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./Overlay.styles */ 2955);
+
+
+
+var Overlay = (0,_Utilities__WEBPACK_IMPORTED_MODULE_0__.styled)(_Overlay_base__WEBPACK_IMPORTED_MODULE_1__.OverlayBase, _Overlay_styles__WEBPACK_IMPORTED_MODULE_2__.getStyles, undefined, {
+    scope: 'Overlay',
+});
+
+
+/***/ }),
+
+/***/ 2955:
+/*!*******************************************************************************!*\
+  !*** ./node_modules/@fluentui/react/lib/components/Overlay/Overlay.styles.js ***!
+  \*******************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   getStyles: () => (/* binding */ getStyles)
+/* harmony export */ });
+/* harmony import */ var _Styling__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../../Styling */ 8455);
+
+var GlobalClassNames = {
+    root: 'ms-Overlay',
+    rootDark: 'ms-Overlay--dark',
+};
+var getStyles = function (props) {
+    var _a;
+    var className = props.className, theme = props.theme, isNone = props.isNone, isDark = props.isDark;
+    var palette = theme.palette;
+    var classNames = (0,_Styling__WEBPACK_IMPORTED_MODULE_0__.getGlobalClassNames)(GlobalClassNames, theme);
+    return {
+        root: [
+            classNames.root,
+            theme.fonts.medium,
+            {
+                backgroundColor: palette.whiteTranslucent40,
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+                position: 'absolute',
+                selectors: (_a = {},
+                    _a[_Styling__WEBPACK_IMPORTED_MODULE_0__.HighContrastSelector] = {
+                        border: '1px solid WindowText',
+                        opacity: 0,
+                    },
+                    _a),
+            },
+            isNone && {
+                visibility: 'hidden',
+            },
+            isDark && [
+                classNames.rootDark,
+                {
+                    backgroundColor: palette.blackTranslucent40,
+                },
+            ],
+            className,
+        ],
+    };
+};
+
+
+/***/ }),
+
+/***/ 2387:
+/*!*************************************************************************!*\
+  !*** ./node_modules/@fluentui/react/lib/components/Panel/Panel.base.js ***!
+  \*************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   PanelBase: () => (/* binding */ PanelBase)
+/* harmony export */ });
+/* harmony import */ var tslib__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! tslib */ 1635);
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ 5959);
+/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _Button__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../../Button */ 4533);
+/* harmony import */ var _Layer__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ../../Layer */ 9686);
+/* harmony import */ var _Overlay__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ../../Overlay */ 1518);
+/* harmony import */ var _Popup__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ../../Popup */ 4218);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../../Utilities */ 3583);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../../Utilities */ 2594);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../../Utilities */ 8972);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ../../Utilities */ 2477);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ../../Utilities */ 6549);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ../../Utilities */ 8370);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ../../Utilities */ 3211);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ../../Utilities */ 1424);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ../../Utilities */ 6657);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ../../Utilities */ 7974);
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! ../../Utilities */ 2419);
+/* harmony import */ var _FocusTrapZone_index__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ../FocusTrapZone/index */ 3634);
+/* harmony import */ var _Panel_types__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./Panel.types */ 8681);
+/* harmony import */ var _fluentui_react_window_provider__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(/*! @fluentui/react-window-provider */ 6130);
+/* harmony import */ var _utilities_dom__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ../../utilities/dom */ 4707);
+
+
+
+
+
+
+
+
+
+
+
+var getClassNames = (0,_Utilities__WEBPACK_IMPORTED_MODULE_1__.classNamesFunction)();
+var COMPONENT_NAME = 'Panel';
+var PanelVisibilityState;
+(function (PanelVisibilityState) {
+    PanelVisibilityState[PanelVisibilityState["closed"] = 0] = "closed";
+    PanelVisibilityState[PanelVisibilityState["animatingOpen"] = 1] = "animatingOpen";
+    PanelVisibilityState[PanelVisibilityState["open"] = 2] = "open";
+    PanelVisibilityState[PanelVisibilityState["animatingClosed"] = 3] = "animatingClosed";
+})(PanelVisibilityState || (PanelVisibilityState = {}));
+var PanelBase = /** @class */ (function (_super) {
+    (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__extends)(PanelBase, _super);
+    function PanelBase(props) {
+        var _this = _super.call(this, props) || this;
+        _this._panel = react__WEBPACK_IMPORTED_MODULE_0__.createRef();
+        _this._animationCallback = null;
+        _this._hasCustomNavigation = !!(_this.props.onRenderNavigation || _this.props.onRenderNavigationContent);
+        _this.dismiss = function (ev) {
+            if (_this.props.onDismiss && _this.isActive) {
+                _this.props.onDismiss(ev);
+            }
+            if (!ev || (ev && !ev.defaultPrevented)) {
+                _this.close();
+            }
+        };
+        // Allow the user to scroll within the panel but not on the body
+        _this._allowScrollOnPanel = function (elt) {
+            var _a;
+            _this._resizeObserver = _this._createResizeObserver(function (entries) {
+                if (entries.length > 0 && entries[0].target === elt) {
+                    _this._updateFooterPosition();
+                }
+            });
+            if (elt) {
+                (_a = _this._resizeObserver) === null || _a === void 0 ? void 0 : _a.observe(elt);
+                if (_this._allowTouchBodyScroll) {
+                    (0,_Utilities__WEBPACK_IMPORTED_MODULE_3__.allowOverscrollOnElement)(elt, _this._events);
+                }
+                else {
+                    (0,_Utilities__WEBPACK_IMPORTED_MODULE_3__.allowScrollOnElement)(elt, _this._events);
+                }
+            }
+            else {
+                _this._events.off(_this._scrollableContent);
+            }
+            _this._scrollableContent = elt;
+        };
+        _this._onRenderNavigation = function (props) {
+            if (!_this.props.onRenderNavigationContent && !_this.props.onRenderNavigation && !_this.props.hasCloseButton) {
+                return null;
+            }
+            var _a = _this.props.onRenderNavigationContent, onRenderNavigationContent = _a === void 0 ? _this._onRenderNavigationContent : _a;
+            return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _this._classNames.navigation }, onRenderNavigationContent(props, _this._onRenderNavigationContent)));
+        };
+        _this._onRenderNavigationContent = function (props) {
+            var _a;
+            var closeButtonAriaLabel = props.closeButtonAriaLabel, hasCloseButton = props.hasCloseButton, _b = props.onRenderHeader, onRenderHeader = _b === void 0 ? _this._onRenderHeader : _b;
+            if (hasCloseButton) {
+                var iconButtonStyles = (_a = _this._classNames.subComponentStyles) === null || _a === void 0 ? void 0 : _a.closeButton();
+                return (react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, null,
+                    !_this._hasCustomNavigation && onRenderHeader(_this.props, _this._onRenderHeader, _this._headerTextId),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_Button__WEBPACK_IMPORTED_MODULE_4__.IconButton, { styles: iconButtonStyles, className: _this._classNames.closeButton, onClick: _this._onPanelClick, ariaLabel: closeButtonAriaLabel, title: closeButtonAriaLabel, "data-is-visible": true, iconProps: { iconName: 'Cancel' } })));
+            }
+            return null;
+        };
+        _this._onRenderHeader = function (props, defaultRender, headerTextId) {
+            var headerText = props.headerText, _a = props.headerTextProps, headerTextProps = _a === void 0 ? {} : _a;
+            if (headerText) {
+                return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _this._classNames.header },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)({ id: headerTextId, role: "heading", "aria-level": 1 }, headerTextProps, { className: (0,_Utilities__WEBPACK_IMPORTED_MODULE_5__.css)(_this._classNames.headerText, headerTextProps.className) }), headerText)));
+            }
+            return null;
+        };
+        _this._onRenderBody = function (props) {
+            return react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _this._classNames.content }, props.children);
+        };
+        _this._onRenderFooter = function (props) {
+            var _a = _this.props.onRenderFooterContent, onRenderFooterContent = _a === void 0 ? null : _a;
+            if (onRenderFooterContent) {
+                return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _this._classNames.footer },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _this._classNames.footerInner }, onRenderFooterContent())));
+            }
+            return null;
+        };
+        _this._animateTo = function (newVisibilityState) {
+            if (newVisibilityState === PanelVisibilityState.open && _this.props.onOpen) {
+                _this.props.onOpen();
+            }
+            _this._animationCallback = _this._async.setTimeout(function () {
+                _this.setState({ visibility: newVisibilityState });
+                _this._onTransitionComplete(newVisibilityState);
+            }, 200);
+        };
+        _this._clearExistingAnimationTimer = function () {
+            if (_this._animationCallback !== null) {
+                _this._async.clearTimeout(_this._animationCallback);
+            }
+        };
+        _this._onPanelClick = function (ev) {
+            _this.dismiss(ev);
+        };
+        _this._onTransitionComplete = function (newVisibilityState) {
+            _this._updateFooterPosition();
+            if (newVisibilityState === PanelVisibilityState.open && _this.props.onOpened) {
+                _this.props.onOpened();
+            }
+            if (newVisibilityState === PanelVisibilityState.closed && _this.props.onDismissed) {
+                _this.props.onDismissed();
+            }
+        };
+        var _a = _this.props.allowTouchBodyScroll, allowTouchBodyScroll = _a === void 0 ? false : _a;
+        _this._allowTouchBodyScroll = allowTouchBodyScroll;
+        (0,_Utilities__WEBPACK_IMPORTED_MODULE_6__.initializeComponentRef)(_this);
+        (0,_Utilities__WEBPACK_IMPORTED_MODULE_7__.warnDeprecations)(COMPONENT_NAME, props, {
+            ignoreExternalFocusing: 'focusTrapZoneProps',
+            forceFocusInsideTrap: 'focusTrapZoneProps',
+            firstFocusableSelector: 'focusTrapZoneProps',
+        });
+        _this.state = {
+            isFooterSticky: false,
+            // intentionally ignore props so animation takes place during componentDidMount
+            visibility: PanelVisibilityState.closed,
+            id: (0,_Utilities__WEBPACK_IMPORTED_MODULE_8__.getId)('Panel'),
+        };
+        return _this;
+    }
+    PanelBase.getDerivedStateFromProps = function (nextProps, prevState) {
+        if (nextProps.isOpen === undefined) {
+            return null; // no state update
+        }
+        if (nextProps.isOpen &&
+            (prevState.visibility === PanelVisibilityState.closed ||
+                prevState.visibility === PanelVisibilityState.animatingClosed)) {
+            return { visibility: PanelVisibilityState.animatingOpen };
+        }
+        if (!nextProps.isOpen &&
+            (prevState.visibility === PanelVisibilityState.open ||
+                prevState.visibility === PanelVisibilityState.animatingOpen)) {
+            return { visibility: PanelVisibilityState.animatingClosed };
+        }
+        return null;
+    };
+    PanelBase.prototype.componentDidMount = function () {
+        this._async = new _Utilities__WEBPACK_IMPORTED_MODULE_9__.Async(this);
+        this._events = new _Utilities__WEBPACK_IMPORTED_MODULE_10__.EventGroup(this);
+        var win = (0,_utilities_dom__WEBPACK_IMPORTED_MODULE_11__.getWindowEx)(this.context);
+        var doc = (0,_utilities_dom__WEBPACK_IMPORTED_MODULE_11__.getDocumentEx)(this.context);
+        this._events.on(win, 'resize', this._updateFooterPosition);
+        if (this._shouldListenForOuterClick(this.props)) {
+            this._events.on(doc === null || doc === void 0 ? void 0 : doc.body, 'mousedown', this._dismissOnOuterClick, true);
+        }
+        if (this.props.isOpen) {
+            this.setState({ visibility: PanelVisibilityState.animatingOpen });
+        }
+    };
+    PanelBase.prototype.componentDidUpdate = function (previousProps, previousState) {
+        var shouldListenOnOuterClick = this._shouldListenForOuterClick(this.props);
+        var previousShouldListenOnOuterClick = this._shouldListenForOuterClick(previousProps);
+        if (this.state.visibility !== previousState.visibility) {
+            this._clearExistingAnimationTimer();
+            if (this.state.visibility === PanelVisibilityState.animatingOpen) {
+                this._animateTo(PanelVisibilityState.open);
+            }
+            else if (this.state.visibility === PanelVisibilityState.animatingClosed) {
+                this._animateTo(PanelVisibilityState.closed);
+            }
+        }
+        var doc = (0,_utilities_dom__WEBPACK_IMPORTED_MODULE_11__.getDocumentEx)(this.context);
+        if (shouldListenOnOuterClick && !previousShouldListenOnOuterClick) {
+            this._events.on(doc === null || doc === void 0 ? void 0 : doc.body, 'mousedown', this._dismissOnOuterClick, true);
+        }
+        else if (!shouldListenOnOuterClick && previousShouldListenOnOuterClick) {
+            this._events.off(doc === null || doc === void 0 ? void 0 : doc.body, 'mousedown', this._dismissOnOuterClick, true);
+        }
+    };
+    PanelBase.prototype.componentWillUnmount = function () {
+        var _a;
+        this._async.dispose();
+        this._events.dispose();
+        (_a = this._resizeObserver) === null || _a === void 0 ? void 0 : _a.disconnect();
+    };
+    PanelBase.prototype.render = function () {
+        var _a = this.props, _b = _a.className, className = _b === void 0 ? '' : _b, elementToFocusOnDismiss = _a.elementToFocusOnDismiss, 
+        /* eslint-disable @typescript-eslint/no-deprecated */
+        firstFocusableSelector = _a.firstFocusableSelector, focusTrapZoneProps = _a.focusTrapZoneProps, forceFocusInsideTrap = _a.forceFocusInsideTrap, hasCloseButton = _a.hasCloseButton, headerText = _a.headerText, _c = _a.headerClassName, headerClassName = _c === void 0 ? '' : _c, ignoreExternalFocusing = _a.ignoreExternalFocusing, isBlocking = _a.isBlocking, isFooterAtBottom = _a.isFooterAtBottom, isLightDismiss = _a.isLightDismiss, isHiddenOnDismiss = _a.isHiddenOnDismiss, layerProps = _a.layerProps, overlayProps = _a.overlayProps, popupProps = _a.popupProps, type = _a.type, styles = _a.styles, theme = _a.theme, customWidth = _a.customWidth, _d = _a.onLightDismissClick, onLightDismissClick = _d === void 0 ? this._onPanelClick : _d, _e = _a.onRenderNavigation, onRenderNavigation = _e === void 0 ? this._onRenderNavigation : _e, _f = _a.onRenderHeader, onRenderHeader = _f === void 0 ? this._onRenderHeader : _f, _g = _a.onRenderBody, onRenderBody = _g === void 0 ? this._onRenderBody : _g, _h = _a.onRenderFooter, onRenderFooter = _h === void 0 ? this._onRenderFooter : _h;
+        var _j = this.state, isFooterSticky = _j.isFooterSticky, visibility = _j.visibility, id = _j.id;
+        var isLeft = type === _Panel_types__WEBPACK_IMPORTED_MODULE_12__.PanelType.smallFixedNear || type === _Panel_types__WEBPACK_IMPORTED_MODULE_12__.PanelType.customNear ? true : false;
+        var isRTL = (0,_Utilities__WEBPACK_IMPORTED_MODULE_13__.getRTL)(theme);
+        var isOnRightSide = isRTL ? isLeft : !isLeft;
+        var customWidthStyles = type === _Panel_types__WEBPACK_IMPORTED_MODULE_12__.PanelType.custom || type === _Panel_types__WEBPACK_IMPORTED_MODULE_12__.PanelType.customNear ? { width: customWidth } : {};
+        var nativeProps = (0,_Utilities__WEBPACK_IMPORTED_MODULE_14__.getNativeProps)(this.props, _Utilities__WEBPACK_IMPORTED_MODULE_14__.divProperties);
+        var isOpen = this.isActive;
+        var isAnimating = visibility === PanelVisibilityState.animatingClosed || visibility === PanelVisibilityState.animatingOpen;
+        this._headerTextId = headerText && id + '-headerText';
+        if (!isOpen && !isAnimating && !isHiddenOnDismiss) {
+            return null;
+        }
+        this._classNames = getClassNames(styles, {
+            theme: theme,
+            className: className,
+            focusTrapZoneClassName: focusTrapZoneProps ? focusTrapZoneProps.className : undefined,
+            hasCloseButton: hasCloseButton,
+            headerClassName: headerClassName,
+            isAnimating: isAnimating,
+            isFooterSticky: isFooterSticky,
+            isFooterAtBottom: isFooterAtBottom,
+            isOnRightSide: isOnRightSide,
+            isOpen: isOpen,
+            isHiddenOnDismiss: isHiddenOnDismiss,
+            type: type,
+            hasCustomNavigation: this._hasCustomNavigation,
+        });
+        var _k = this, _classNames = _k._classNames, _allowTouchBodyScroll = _k._allowTouchBodyScroll;
+        var overlay;
+        if (isBlocking && isOpen) {
+            overlay = (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_Overlay__WEBPACK_IMPORTED_MODULE_15__.Overlay, (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)({ className: _classNames.overlay, isDarkThemed: false, onClick: isLightDismiss ? onLightDismissClick : undefined, allowTouchBodyScroll: _allowTouchBodyScroll }, overlayProps)));
+        }
+        return (react__WEBPACK_IMPORTED_MODULE_0__.createElement(_Layer__WEBPACK_IMPORTED_MODULE_16__.Layer, (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)({}, layerProps),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement(_Popup__WEBPACK_IMPORTED_MODULE_17__.Popup, (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)({ role: "dialog", "aria-modal": isBlocking ? 'true' : undefined, ariaLabelledBy: this._headerTextId ? this._headerTextId : undefined, onDismiss: this.dismiss, className: _classNames.hiddenPanel, enableAriaHiddenSiblings: isOpen ? true : false }, popupProps),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)({ "aria-hidden": !isOpen && isAnimating }, nativeProps, { ref: this._panel, className: _classNames.root }),
+                    overlay,
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement(_FocusTrapZone_index__WEBPACK_IMPORTED_MODULE_18__.FocusTrapZone, (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)({ ignoreExternalFocusing: ignoreExternalFocusing, forceFocusInsideTrap: !isBlocking || (isHiddenOnDismiss && !isOpen) ? false : forceFocusInsideTrap, firstFocusableSelector: firstFocusableSelector, isClickableOutsideFocusTrap: true }, focusTrapZoneProps, { className: _classNames.main, style: customWidthStyles, elementToFocusOnDismiss: elementToFocusOnDismiss }),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _classNames.contentInner },
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { ref: this._allowScrollOnPanel, className: _classNames.scrollableContent, "data-is-scrollable": true },
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: _classNames.commands, "data-is-visible": true }, onRenderNavigation(this.props, this._onRenderNavigation)),
+                                (this._hasCustomNavigation || !hasCloseButton) &&
+                                    onRenderHeader(this.props, this._onRenderHeader, this._headerTextId),
+                                onRenderBody(this.props, this._onRenderBody),
+                                onRenderFooter(this.props, this._onRenderFooter))))))));
+    };
+    PanelBase.prototype.open = function () {
+        if (this.props.isOpen !== undefined) {
+            return;
+        }
+        if (this.isActive) {
+            return;
+        }
+        this.setState({ visibility: PanelVisibilityState.animatingOpen });
+    };
+    PanelBase.prototype.close = function () {
+        if (this.props.isOpen !== undefined) {
+            return;
+        }
+        if (!this.isActive) {
+            return;
+        }
+        this.setState({ visibility: PanelVisibilityState.animatingClosed });
+    };
+    Object.defineProperty(PanelBase.prototype, "isActive", {
+        /** isActive is true when panel is open or opening. */
+        get: function () {
+            return (this.state.visibility === PanelVisibilityState.open ||
+                this.state.visibility === PanelVisibilityState.animatingOpen);
+        },
+        enumerable: false,
+        configurable: true
+    });
+    PanelBase.prototype._createResizeObserver = function (callback) {
+        var _a;
+        var doc = (0,_utilities_dom__WEBPACK_IMPORTED_MODULE_11__.getDocumentEx)(this.context);
+        var resizeObserver = null;
+        if ((_a = doc === null || doc === void 0 ? void 0 : doc.defaultView) === null || _a === void 0 ? void 0 : _a.ResizeObserver) {
+            resizeObserver = new doc.defaultView.ResizeObserver(callback);
+        }
+        return resizeObserver;
+    };
+    PanelBase.prototype._shouldListenForOuterClick = function (props) {
+        return !!props.isBlocking && !!props.isOpen;
+    };
+    PanelBase.prototype._updateFooterPosition = function () {
+        var scrollableContent = this._scrollableContent;
+        if (scrollableContent) {
+            var height = scrollableContent.clientHeight;
+            var innerHeight_1 = scrollableContent.scrollHeight;
+            this.setState({
+                isFooterSticky: height < innerHeight_1 ? true : false,
+            });
+        }
+    };
+    PanelBase.prototype._dismissOnOuterClick = function (ev) {
+        var panel = this._panel.current;
+        if (this.isActive && panel && !ev.defaultPrevented) {
+            if (!(0,_Utilities__WEBPACK_IMPORTED_MODULE_19__.elementContains)(panel, ev.target)) {
+                if (this.props.onOuterClick) {
+                    this.props.onOuterClick(ev);
+                }
+                else {
+                    this.dismiss(ev);
+                }
+            }
+        }
+    };
+    PanelBase.defaultProps = {
+        isHiddenOnDismiss: false,
+        isOpen: undefined,
+        isBlocking: true,
+        hasCloseButton: true,
+        type: _Panel_types__WEBPACK_IMPORTED_MODULE_12__.PanelType.smallFixedFar,
+    };
+    PanelBase.contextType = _fluentui_react_window_provider__WEBPACK_IMPORTED_MODULE_20__.WindowContext;
+    return PanelBase;
+}(react__WEBPACK_IMPORTED_MODULE_0__.Component));
+
+
+
+/***/ }),
+
+/***/ 7006:
+/*!********************************************************************!*\
+  !*** ./node_modules/@fluentui/react/lib/components/Panel/Panel.js ***!
+  \********************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   Panel: () => (/* binding */ Panel)
+/* harmony export */ });
+/* harmony import */ var _Utilities__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../../Utilities */ 5336);
+/* harmony import */ var _Panel_base__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Panel.base */ 2387);
+/* harmony import */ var _Panel_styles__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./Panel.styles */ 1624);
+
+
+
+/**
+ * Panel description
+ */
+var Panel = (0,_Utilities__WEBPACK_IMPORTED_MODULE_0__.styled)(_Panel_base__WEBPACK_IMPORTED_MODULE_1__.PanelBase, _Panel_styles__WEBPACK_IMPORTED_MODULE_2__.getStyles, undefined, {
+    scope: 'Panel',
+});
+
+
+/***/ }),
+
+/***/ 1624:
+/*!***************************************************************************!*\
+  !*** ./node_modules/@fluentui/react/lib/components/Panel/Panel.styles.js ***!
+  \***************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   getStyles: () => (/* binding */ getStyles)
+/* harmony export */ });
+/* harmony import */ var tslib__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! tslib */ 1635);
+/* harmony import */ var _Panel_types__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Panel.types */ 8681);
+/* harmony import */ var _Styling__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../../Styling */ 8455);
+var _a, _b, _c, _d, _e;
+
+
+
+var GlobalClassNames = {
+    root: 'ms-Panel',
+    main: 'ms-Panel-main',
+    commands: 'ms-Panel-commands',
+    contentInner: 'ms-Panel-contentInner',
+    scrollableContent: 'ms-Panel-scrollableContent',
+    navigation: 'ms-Panel-navigation',
+    closeButton: 'ms-Panel-closeButton ms-PanelAction-close',
+    header: 'ms-Panel-header',
+    headerText: 'ms-Panel-headerText',
+    content: 'ms-Panel-content',
+    footer: 'ms-Panel-footer',
+    footerInner: 'ms-Panel-footerInner',
+    isOpen: 'is-open',
+    hasCloseButton: 'ms-Panel--hasCloseButton',
+    smallFluid: 'ms-Panel--smFluid',
+    smallFixedNear: 'ms-Panel--smLeft',
+    smallFixedFar: 'ms-Panel--sm',
+    medium: 'ms-Panel--md',
+    large: 'ms-Panel--lg',
+    largeFixed: 'ms-Panel--fixed',
+    extraLarge: 'ms-Panel--xl',
+    custom: 'ms-Panel--custom',
+    customNear: 'ms-Panel--customLeft',
+};
+var panelWidth = {
+    full: '100%',
+    auto: 'auto',
+    xs: 272,
+    sm: 340,
+    md1: 592,
+    md2: 644,
+    lg: 940,
+};
+var panelMargin = {
+    auto: 'auto',
+    none: 0,
+    md: 48,
+    lg: 428,
+    xl: 176,
+};
+// Following consts are used below in `getPanelBreakpoints()` function to provide
+// necessary fallbacks for different types of Panel in different breakpoints.
+var smallPanelSelectors = (_a = {},
+    _a["@media (min-width: ".concat(_Styling__WEBPACK_IMPORTED_MODULE_0__.ScreenWidthMinMedium, "px)")] = {
+        width: panelWidth.sm,
+    },
+    _a);
+var mediumPanelSelectors = (_b = {},
+    _b["@media (min-width: ".concat(_Styling__WEBPACK_IMPORTED_MODULE_0__.ScreenWidthMinLarge, "px)")] = {
+        width: panelWidth.md1,
+    },
+    _b["@media (min-width: ".concat(_Styling__WEBPACK_IMPORTED_MODULE_0__.ScreenWidthMinXLarge, "px)")] = {
+        width: panelWidth.md2,
+    },
+    _b);
+var largePanelSelectors = (_c = {},
+    _c["@media (min-width: ".concat(_Styling__WEBPACK_IMPORTED_MODULE_0__.ScreenWidthMinUhfMobile, "px)")] = {
+        left: panelMargin.md,
+        width: panelWidth.auto,
+    },
+    _c["@media (min-width: ".concat(_Styling__WEBPACK_IMPORTED_MODULE_0__.ScreenWidthMinXXLarge, "px)")] = {
+        left: panelMargin.lg,
+    },
+    _c);
+var largeFixedPanelSelectors = (_d = {},
+    _d["@media (min-width: ".concat(_Styling__WEBPACK_IMPORTED_MODULE_0__.ScreenWidthMinXXLarge, "px)")] = {
+        left: panelMargin.auto,
+        width: panelWidth.lg,
+    },
+    _d);
+var extraLargePanelSelectors = (_e = {},
+    _e["@media (min-width: ".concat(_Styling__WEBPACK_IMPORTED_MODULE_0__.ScreenWidthMinXXLarge, "px)")] = {
+        left: panelMargin.xl,
+    },
+    _e);
+// Make sure Panels have fallbacks to different breakpoints by reusing same selectors.
+// This is done in the effort to follow design redlines.
+var getPanelBreakpoints = function (type) {
+    var selectors;
+    // Panel types `smallFluid`, `smallFixedNear`, `custom` and `customNear`
+    // are not checked in here because they render the same in all the breakpoints
+    // and have the checks done separately in the `getStyles` function below.
+    switch (type) {
+        case _Panel_types__WEBPACK_IMPORTED_MODULE_1__.PanelType.smallFixedFar:
+            selectors = (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)({}, smallPanelSelectors);
+            break;
+        case _Panel_types__WEBPACK_IMPORTED_MODULE_1__.PanelType.medium:
+            selectors = (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)((0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)({}, smallPanelSelectors), mediumPanelSelectors);
+            break;
+        case _Panel_types__WEBPACK_IMPORTED_MODULE_1__.PanelType.large:
+            selectors = (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)((0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)((0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)({}, smallPanelSelectors), mediumPanelSelectors), largePanelSelectors);
+            break;
+        case _Panel_types__WEBPACK_IMPORTED_MODULE_1__.PanelType.largeFixed:
+            selectors = (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)((0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)((0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)((0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)({}, smallPanelSelectors), mediumPanelSelectors), largePanelSelectors), largeFixedPanelSelectors);
+            break;
+        case _Panel_types__WEBPACK_IMPORTED_MODULE_1__.PanelType.extraLarge:
+            selectors = (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)((0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)((0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)((0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)({}, smallPanelSelectors), mediumPanelSelectors), largePanelSelectors), extraLargePanelSelectors);
+            break;
+        default:
+            break;
+    }
+    return selectors;
+};
+var commandBarHeight = '44px';
+var sharedPaddingStyles = {
+    paddingLeft: '24px',
+    paddingRight: '24px',
+};
+var getStyles = function (props) {
+    var _a, _b, _c, _d;
+    var className = props.className, focusTrapZoneClassName = props.focusTrapZoneClassName, hasCloseButton = props.hasCloseButton, headerClassName = props.headerClassName, isAnimating = props.isAnimating, isFooterSticky = props.isFooterSticky, isFooterAtBottom = props.isFooterAtBottom, isOnRightSide = props.isOnRightSide, isOpen = props.isOpen, isHiddenOnDismiss = props.isHiddenOnDismiss, hasCustomNavigation = props.hasCustomNavigation, theme = props.theme, _e = props.type, type = _e === void 0 ? _Panel_types__WEBPACK_IMPORTED_MODULE_1__.PanelType.smallFixedFar : _e;
+    var effects = theme.effects, fonts = theme.fonts, semanticColors = theme.semanticColors;
+    var classNames = (0,_Styling__WEBPACK_IMPORTED_MODULE_0__.getGlobalClassNames)(GlobalClassNames, theme);
+    var isCustomPanel = type === _Panel_types__WEBPACK_IMPORTED_MODULE_1__.PanelType.custom || type === _Panel_types__WEBPACK_IMPORTED_MODULE_1__.PanelType.customNear;
+    return {
+        root: [
+            classNames.root,
+            theme.fonts.medium,
+            isOpen && classNames.isOpen,
+            hasCloseButton && classNames.hasCloseButton,
+            {
+                pointerEvents: 'none',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+            },
+            isCustomPanel && isOnRightSide && classNames.custom,
+            isCustomPanel && !isOnRightSide && classNames.customNear,
+            className,
+        ],
+        overlay: [
+            {
+                pointerEvents: 'auto',
+                cursor: 'pointer',
+            },
+            isOpen && isAnimating && _Styling__WEBPACK_IMPORTED_MODULE_0__.AnimationClassNames.fadeIn100,
+            !isOpen && isAnimating && _Styling__WEBPACK_IMPORTED_MODULE_0__.AnimationClassNames.fadeOut100,
+        ],
+        hiddenPanel: [
+            !isOpen &&
+                !isAnimating &&
+                isHiddenOnDismiss && {
+                visibility: 'hidden',
+            },
+        ],
+        main: [
+            classNames.main,
+            {
+                backgroundColor: semanticColors.bodyBackground,
+                boxShadow: effects.elevation64,
+                pointerEvents: 'auto',
+                position: 'absolute',
+                display: 'flex',
+                flexDirection: 'column',
+                overflowX: 'hidden',
+                overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                bottom: 0,
+                top: 0,
+                // left, right, width are overridden depending on the type of the Panel and the screen breakpoint.
+                left: panelMargin.auto,
+                right: panelMargin.none,
+                width: panelWidth.full,
+                selectors: (0,tslib__WEBPACK_IMPORTED_MODULE_2__.__assign)((_a = {}, _a[_Styling__WEBPACK_IMPORTED_MODULE_0__.HighContrastSelector] = {
+                    borderLeft: "3px solid ".concat(semanticColors.variantBorder),
+                    borderRight: "3px solid ".concat(semanticColors.variantBorder),
+                }, _a), getPanelBreakpoints(type)),
+            },
+            type === _Panel_types__WEBPACK_IMPORTED_MODULE_1__.PanelType.smallFluid && {
+                left: panelMargin.none,
+            },
+            type === _Panel_types__WEBPACK_IMPORTED_MODULE_1__.PanelType.smallFixedNear && {
+                left: panelMargin.none,
+                right: panelMargin.auto,
+                width: panelWidth.xs,
+            },
+            type === _Panel_types__WEBPACK_IMPORTED_MODULE_1__.PanelType.customNear && {
+                right: 'auto',
+                left: 0,
+            },
+            isCustomPanel && {
+                maxWidth: '100vw',
+            },
+            isOpen && isAnimating && !isOnRightSide && _Styling__WEBPACK_IMPORTED_MODULE_0__.AnimationClassNames.slideRightIn40,
+            isOpen && isAnimating && isOnRightSide && _Styling__WEBPACK_IMPORTED_MODULE_0__.AnimationClassNames.slideLeftIn40,
+            !isOpen && isAnimating && !isOnRightSide && _Styling__WEBPACK_IMPORTED_MODULE_0__.AnimationClassNames.slideLeftOut40,
+            !isOpen && isAnimating && isOnRightSide && _Styling__WEBPACK_IMPORTED_MODULE_0__.AnimationClassNames.slideRightOut40,
+            focusTrapZoneClassName,
+        ],
+        commands: [
+            classNames.commands,
+            {
+                // Ensures that the sticky header always has a background to prevent overlaps on scroll.
+                backgroundColor: semanticColors.bodyBackground,
+                paddingTop: 18,
+                selectors: (_b = {},
+                    _b["@media (min-height: ".concat(_Styling__WEBPACK_IMPORTED_MODULE_0__.ScreenWidthMinMedium, "px)")] = {
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 1,
+                    },
+                    _b),
+            },
+            hasCustomNavigation && {
+                paddingTop: 'inherit',
+            },
+        ],
+        navigation: [
+            classNames.navigation,
+            {
+                display: 'flex',
+                justifyContent: 'flex-end',
+            },
+            hasCustomNavigation && {
+                height: commandBarHeight,
+            },
+        ],
+        contentInner: [
+            classNames.contentInner,
+            {
+                display: 'flex',
+                flexDirection: 'column',
+                flexGrow: 1,
+                overflowY: 'hidden',
+            },
+        ],
+        header: [
+            classNames.header,
+            sharedPaddingStyles,
+            {
+                alignSelf: 'flex-start',
+            },
+            hasCloseButton &&
+                !hasCustomNavigation && {
+                flexGrow: 1,
+            },
+            hasCustomNavigation && {
+                // Ensure that title doesn't shrink if screen is too small
+                flexShrink: 0,
+            },
+        ],
+        headerText: [
+            classNames.headerText,
+            fonts.xLarge,
+            {
+                color: semanticColors.bodyText,
+                lineHeight: '27px',
+                overflowWrap: 'break-word',
+                wordWrap: 'break-word',
+                wordBreak: 'break-word',
+                hyphens: 'auto',
+            },
+            headerClassName,
+        ],
+        scrollableContent: [
+            classNames.scrollableContent,
+            {
+                overflowY: 'auto',
+            },
+            isFooterAtBottom && {
+                flexGrow: 1,
+                display: 'inherit',
+                flexDirection: 'inherit',
+            },
+        ],
+        content: [
+            classNames.content,
+            sharedPaddingStyles,
+            {
+                paddingBottom: 20,
+            },
+            isFooterAtBottom && {
+                selectors: (_c = {},
+                    _c["@media (min-height: ".concat(_Styling__WEBPACK_IMPORTED_MODULE_0__.ScreenWidthMinMedium, "px)")] = {
+                        flexGrow: 1,
+                    },
+                    _c),
+            },
+        ],
+        footer: [
+            classNames.footer,
+            {
+                // Ensure that footer doesn't shrink if screen is too small
+                flexShrink: 0,
+                borderTop: '1px solid transparent',
+                transition: "opacity ".concat(_Styling__WEBPACK_IMPORTED_MODULE_0__.AnimationVariables.durationValue3, " ").concat(_Styling__WEBPACK_IMPORTED_MODULE_0__.AnimationVariables.easeFunction2),
+                selectors: (_d = {},
+                    _d["@media (min-height: ".concat(_Styling__WEBPACK_IMPORTED_MODULE_0__.ScreenWidthMinMedium, "px)")] = {
+                        position: 'sticky',
+                        bottom: 0,
+                    },
+                    _d),
+            },
+            isFooterSticky && {
+                backgroundColor: semanticColors.bodyBackground,
+                borderTopColor: semanticColors.variantBorder,
+            },
+        ],
+        footerInner: [
+            classNames.footerInner,
+            sharedPaddingStyles,
+            {
+                paddingBottom: 16,
+                paddingTop: 16,
+            },
+        ],
+        subComponentStyles: {
+            closeButton: {
+                root: [
+                    classNames.closeButton,
+                    {
+                        marginRight: 14,
+                        color: theme.palette.neutralSecondary,
+                        fontSize: _Styling__WEBPACK_IMPORTED_MODULE_0__.IconFontSizes.large,
+                    },
+                    hasCustomNavigation && {
+                        marginRight: 0,
+                        height: 'auto',
+                        width: '44px',
+                    },
+                ],
+                rootHovered: {
+                    color: theme.palette.neutralPrimary,
+                },
+            },
+        },
+    };
+};
+
+
+/***/ }),
+
+/***/ 8681:
+/*!**************************************************************************!*\
+  !*** ./node_modules/@fluentui/react/lib/components/Panel/Panel.types.js ***!
+  \**************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   PanelType: () => (/* binding */ PanelType)
+/* harmony export */ });
+/**
+ * {@docCategory Panel}
+ */
+var PanelType;
+(function (PanelType) {
+    /**
+     * Renders the Panel with a `fluid` (full screen) width.
+     * Recommended for use on small screen breakpoints.
+     * - Small (320-479): full screen width, 16px left/right padding
+     * - Medium (480-639): full screen width, 16px left/right padding
+     * - Large (640-1023): full screen width, 32px left/right padding
+     * - XLarge (1024-1365): full screen width, 32px left/right padding
+     * - XXLarge (1366-up): full screen width, 40px left/right padding
+     */
+    PanelType[PanelType["smallFluid"] = 0] = "smallFluid";
+    /**
+     * Renders the Panel in fixed-width `small` size, anchored to the far side (right in LTR mode).
+     * - Small (320-479): adapts to `PanelType.smallFluid` at this breakpoint
+     * - Medium (480-639): 340px width, 16px left/right padding
+     * - Large (640-1023): 340px width, 32px left/right padding
+     * - XLarge (1024-1365): 340px width, 32px left/right padding
+     * - XXLarge (1366-up): 340px width, 40px left/right padding
+     */
+    PanelType[PanelType["smallFixedFar"] = 1] = "smallFixedFar";
+    /**
+     * Renders the Panel in fixed-width `small` size, anchored to the near side (left in LTR mode).
+     * - Small (320-479): 272px width, 16px left/right padding
+     * - Medium (480-639): 272px width, 16px left/right padding
+     * - Large (640-1023): 272px width, 32px left/right padding
+     * - XLarge (1024-1365): 272px width, 32px left/right padding
+     * - XXLarge (1366-up): 272px width, 40px left/right padding
+     */
+    PanelType[PanelType["smallFixedNear"] = 2] = "smallFixedNear";
+    /**
+     * Renders the Panel in `medium` size, anchored to the far side (right in LTR mode).
+     * - Small (320-479): adapts to `PanelType.smallFluid` at this breakpoint
+     * - Medium (480-639): adapts to `PanelType.smallFixedFar` at this breakpoint
+     * - Large (640-1023): 592px width, 32px left/right padding
+     * - XLarge (1024-1365): 644px width, 32px left/right padding
+     * - XXLarge (1366-up): 644px width, 40px left/right padding
+     */
+    PanelType[PanelType["medium"] = 3] = "medium";
+    /**
+     * Renders the Panel in `large` size, anchored to the far side (right in LTR mode).
+     * - Small (320-479): adapts to `PanelType.smallFluid` at this breakpoint
+     * - Medium (480-639):  adapts to `PanelType.smallFixedFar` at this breakpoint
+     * - Large (640-1023): adapts to `PanelType.medium` at this breakpoint
+     * - XLarge (1024-1365): 48px fixed left margin, fluid width, 32px left/right padding
+     * - XXLarge (1366-up): 428px fixed left margin, fluid width, 40px left/right padding
+     */
+    PanelType[PanelType["large"] = 4] = "large";
+    /**
+     * Renders the Panel in `large` size, anchored to the far side (right in LTR mode), with a fixed width at
+     * XX-Large breakpoint.
+     * - Small (320-479): adapts to `PanelType.smallFluid` at this breakpoint
+     * - Medium (480-639): adapts to `PanelType.smallFixedFar` at this breakpoint
+     * - Large (640-1023): adapts to `PanelType.medium` at this breakpoint
+     * - XLarge (1024-1365): 48px fixed left margin, fluid width, 32px left/right padding
+     * - XXLarge (1366-up): 940px width, 40px left/right padding
+     */
+    PanelType[PanelType["largeFixed"] = 5] = "largeFixed";
+    /**
+     * Renders the Panel in `extra large` size, anchored to the far side (right in LTR mode).
+     * - Small (320-479): adapts to `PanelType.smallFluid` at this breakpoint
+     * - Medium (480-639): adapts to `PanelType.smallFixedFar` at this breakpoint
+     * - Large (640-1023): adapts to `PanelType.medium` at this breakpoint
+     * - XLarge (1024-1365): adapts to `PanelType.large` at this breakpoint
+     * - XXLarge (1366-1919): 176px fixed left margin, fluid width, 40px left/right padding
+     * - XXXLarge (1920-up): 176px fixed left margin, fluid width, 40px left/right padding
+     */
+    PanelType[PanelType["extraLarge"] = 6] = "extraLarge";
+    /**
+     * Renders the Panel in `custom` size using `customWidth`, anchored to the far side (right in LTR mode).
+     * - Has a fixed width provided by the `customWidth` prop
+     * - When screen width reaches the `customWidth` value it will behave like a fluid width Panel
+     * taking up 100% of the viewport width
+     */
+    PanelType[PanelType["custom"] = 7] = "custom";
+    /**
+     * Renders the Panel in `custom` size using `customWidth`, anchored to the near side (left in LTR mode).
+     * - Has a fixed width provided by the `customWidth` prop
+     * - When screen width reaches the `customWidth` value it will behave like a fluid width Panel
+     * taking up 100% of the viewport width
+     */
+    PanelType[PanelType["customNear"] = 8] = "customNear";
+})(PanelType || (PanelType = {}));
 
 
 /***/ }),
@@ -28958,6 +30860,349 @@ function resolveThemableArray(splitStyleArray) {
                 !(themeSlot in theme) &&
                 "boolean" !== 'undefined' &&
                 true) {
+                console.warn("Theming value not provided for \"".concat(themeSlot, "\". Falling back to \"").concat(defaultValue, "\"."));
+            }
+            return themedValue || defaultValue;
+        }
+        else {
+            // A non-themable string. Preserve it.
+            return currentValue.rawString;
+        }
+    });
+    return {
+        styleString: resolvedArray.join(''),
+        themable: themable
+    };
+}
+/**
+ * Split tokenized CSS into an array of strings and theme specification objects
+ * @param {string} styles Tokenized styles to split.
+ */
+function splitStyles(styles) {
+    var result = [];
+    if (styles) {
+        var pos = 0; // Current position in styles.
+        var tokenMatch = void 0;
+        while ((tokenMatch = _themeTokenRegex.exec(styles))) {
+            var matchIndex = tokenMatch.index;
+            if (matchIndex > pos) {
+                result.push({
+                    rawString: styles.substring(pos, matchIndex)
+                });
+            }
+            result.push({
+                theme: tokenMatch[1],
+                defaultValue: tokenMatch[2] // May be undefined
+            });
+            // index of the first character after the current match
+            pos = _themeTokenRegex.lastIndex;
+        }
+        // Push the rest of the string after the last match.
+        result.push({
+            rawString: styles.substring(pos)
+        });
+    }
+    return result;
+}
+/**
+ * Registers a set of style text. If it is registered too early, we will register it when the
+ * window.load event is fired.
+ * @param {ThemableArray} styleArray Array of IThemingInstruction objects to register.
+ * @param {IStyleRecord} styleRecord May specify a style Element to update.
+ */
+function registerStyles(styleArray) {
+    if (typeof document === 'undefined') {
+        return;
+    }
+    var head = document.getElementsByTagName('head')[0];
+    var styleElement = document.createElement('style');
+    var _a = resolveThemableArray(styleArray), styleString = _a.styleString, themable = _a.themable;
+    styleElement.setAttribute('data-load-themed-styles', 'true');
+    if (_styleNonce) {
+        styleElement.setAttribute('nonce', _styleNonce);
+    }
+    styleElement.appendChild(document.createTextNode(styleString));
+    _themeState.perf.count++;
+    head.appendChild(styleElement);
+    var ev = document.createEvent('HTMLEvents');
+    ev.initEvent('styleinsert', true /* bubbleEvent */, false /* cancelable */);
+    ev.args = {
+        newStyle: styleElement
+    };
+    document.dispatchEvent(ev);
+    var record = {
+        styleElement: styleElement,
+        themableStyle: styleArray
+    };
+    if (themable) {
+        _themeState.registeredThemableStyles.push(record);
+    }
+    else {
+        _themeState.registeredStyles.push(record);
+    }
+}
+
+
+/***/ }),
+
+/***/ 6323:
+/*!***********************************************************************************************************!*\
+  !*** ./node_modules/@microsoft/sp-css-loader/node_modules/@microsoft/load-themed-styles/lib-es6/index.js ***!
+  \***********************************************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   ClearStyleOptions: () => (/* binding */ ClearStyleOptions),
+/* harmony export */   Mode: () => (/* binding */ Mode),
+/* harmony export */   clearStyles: () => (/* binding */ clearStyles),
+/* harmony export */   configureLoadStyles: () => (/* binding */ configureLoadStyles),
+/* harmony export */   configureRunMode: () => (/* binding */ configureRunMode),
+/* harmony export */   detokenize: () => (/* binding */ detokenize),
+/* harmony export */   flush: () => (/* binding */ flush),
+/* harmony export */   loadStyles: () => (/* binding */ loadStyles),
+/* harmony export */   loadTheme: () => (/* binding */ loadTheme),
+/* harmony export */   splitStyles: () => (/* binding */ splitStyles)
+/* harmony export */ });
+// Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT license.
+// See LICENSE in the project root for license information.
+var __assign = (undefined && undefined.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
+/**
+ * In sync mode, styles are registered as style elements synchronously with loadStyles() call.
+ * In async mode, styles are buffered and registered as batch in async timer for performance purpose.
+ */
+var Mode;
+(function (Mode) {
+    Mode[Mode["sync"] = 0] = "sync";
+    Mode[Mode["async"] = 1] = "async";
+})(Mode || (Mode = {}));
+/**
+ * Themable styles and non-themable styles are tracked separately
+ * Specify ClearStyleOptions when calling clearStyles API to specify which group of registered styles should be cleared.
+ */
+var ClearStyleOptions;
+(function (ClearStyleOptions) {
+    /** only themable styles will be cleared */
+    ClearStyleOptions[ClearStyleOptions["onlyThemable"] = 1] = "onlyThemable";
+    /** only non-themable styles will be cleared */
+    ClearStyleOptions[ClearStyleOptions["onlyNonThemable"] = 2] = "onlyNonThemable";
+    /** both themable and non-themable styles will be cleared */
+    ClearStyleOptions[ClearStyleOptions["all"] = 3] = "all";
+})(ClearStyleOptions || (ClearStyleOptions = {}));
+// Store the theming state in __themeState__ global scope for reuse in the case of duplicate
+// load-themed-styles hosted on the page.
+var _root = typeof window === 'undefined' ? __webpack_require__.g : window; // eslint-disable-line @typescript-eslint/no-explicit-any
+// Nonce string to inject into script tag if one provided. This is used in CSP (Content Security Policy).
+var _styleNonce = _root && _root.CSPSettings && _root.CSPSettings.nonce;
+var _themeState = initializeThemeState();
+/**
+ * Matches theming tokens. For example, "[theme: themeSlotName, default: #FFF]" (including the quotes).
+ */
+var _themeTokenRegex = /[\'\"]\[theme:\s*(\w+)\s*(?:\,\s*default:\s*([\\"\']?[\.\,\(\)\#\-\s\w]*[\.\,\(\)\#\-\w][\"\']?))?\s*\][\'\"]/g;
+var now = function () {
+    return typeof performance !== 'undefined' && !!performance.now ? performance.now() : Date.now();
+};
+function measure(func) {
+    var start = now();
+    func();
+    var end = now();
+    _themeState.perf.duration += end - start;
+}
+/**
+ * initialize global state object
+ */
+function initializeThemeState() {
+    var state = _root.__themeState__ || {
+        theme: undefined,
+        lastStyleElement: undefined,
+        registeredStyles: []
+    };
+    if (!state.runState) {
+        state = __assign(__assign({}, state), { perf: {
+                count: 0,
+                duration: 0
+            }, runState: {
+                flushTimer: 0,
+                mode: Mode.sync,
+                buffer: []
+            } });
+    }
+    if (!state.registeredThemableStyles) {
+        state = __assign(__assign({}, state), { registeredThemableStyles: [] });
+    }
+    _root.__themeState__ = state;
+    return state;
+}
+/**
+ * Loads a set of style text. If it is registered too early, we will register it when the window.load
+ * event is fired.
+ * @param {string | ThemableArray} styles Themable style text to register.
+ * @param {boolean} loadAsync When true, always load styles in async mode, irrespective of current sync mode.
+ */
+function loadStyles(styles, loadAsync) {
+    if (loadAsync === void 0) { loadAsync = false; }
+    measure(function () {
+        var styleParts = Array.isArray(styles) ? styles : splitStyles(styles);
+        var _a = _themeState.runState, mode = _a.mode, buffer = _a.buffer, flushTimer = _a.flushTimer;
+        if (loadAsync || mode === Mode.async) {
+            buffer.push(styleParts);
+            if (!flushTimer) {
+                _themeState.runState.flushTimer = asyncLoadStyles();
+            }
+        }
+        else {
+            applyThemableStyles(styleParts);
+        }
+    });
+}
+/**
+ * Allows for customizable loadStyles logic. e.g. for server side rendering application
+ * @param {(processedStyles: string, rawStyles?: string | ThemableArray) => void}
+ * a loadStyles callback that gets called when styles are loaded or reloaded
+ */
+function configureLoadStyles(loadStylesFn) {
+    _themeState.loadStyles = loadStylesFn;
+}
+/**
+ * Configure run mode of load-themable-styles
+ * @param mode load-themable-styles run mode, async or sync
+ */
+function configureRunMode(mode) {
+    _themeState.runState.mode = mode;
+}
+/**
+ * external code can call flush to synchronously force processing of currently buffered styles
+ */
+function flush() {
+    measure(function () {
+        var styleArrays = _themeState.runState.buffer.slice();
+        _themeState.runState.buffer = [];
+        var mergedStyleArray = [].concat.apply([], styleArrays);
+        if (mergedStyleArray.length > 0) {
+            applyThemableStyles(mergedStyleArray);
+        }
+    });
+}
+/**
+ * register async loadStyles
+ */
+function asyncLoadStyles() {
+    // Use "self" to distinguish conflicting global typings for setTimeout() from lib.dom.d.ts vs Jest's @types/node
+    // https://github.com/jestjs/jest/issues/14418
+    return self.setTimeout(function () {
+        _themeState.runState.flushTimer = 0;
+        flush();
+    }, 0);
+}
+/**
+ * Loads a set of style text. If it is registered too early, we will register it when the window.load event
+ * is fired.
+ * @param {string} styleText Style to register.
+ * @param {IStyleRecord} styleRecord Existing style record to re-apply.
+ */
+function applyThemableStyles(stylesArray, styleRecord) {
+    if (_themeState.loadStyles) {
+        _themeState.loadStyles(resolveThemableArray(stylesArray).styleString, stylesArray);
+    }
+    else {
+        registerStyles(stylesArray);
+    }
+}
+/**
+ * Registers a set theme tokens to find and replace. If styles were already registered, they will be
+ * replaced.
+ * @param {theme} theme JSON object of theme tokens to values.
+ */
+function loadTheme(theme) {
+    _themeState.theme = theme;
+    // reload styles.
+    reloadStyles();
+}
+/**
+ * Clear already registered style elements and style records in theme_State object
+ * @param option - specify which group of registered styles should be cleared.
+ * Default to be both themable and non-themable styles will be cleared
+ */
+function clearStyles(option) {
+    if (option === void 0) { option = ClearStyleOptions.all; }
+    if (option === ClearStyleOptions.all || option === ClearStyleOptions.onlyNonThemable) {
+        clearStylesInternal(_themeState.registeredStyles);
+        _themeState.registeredStyles = [];
+    }
+    if (option === ClearStyleOptions.all || option === ClearStyleOptions.onlyThemable) {
+        clearStylesInternal(_themeState.registeredThemableStyles);
+        _themeState.registeredThemableStyles = [];
+    }
+}
+function clearStylesInternal(records) {
+    records.forEach(function (styleRecord) {
+        var styleElement = styleRecord && styleRecord.styleElement;
+        if (styleElement && styleElement.parentElement) {
+            styleElement.parentElement.removeChild(styleElement);
+        }
+    });
+}
+/**
+ * Reloads styles.
+ */
+function reloadStyles() {
+    if (_themeState.theme) {
+        var themableStyles = [];
+        for (var _i = 0, _a = _themeState.registeredThemableStyles; _i < _a.length; _i++) {
+            var styleRecord = _a[_i];
+            themableStyles.push(styleRecord.themableStyle);
+        }
+        if (themableStyles.length > 0) {
+            clearStyles(ClearStyleOptions.onlyThemable);
+            applyThemableStyles([].concat.apply([], themableStyles));
+        }
+    }
+}
+/**
+ * Find theme tokens and replaces them with provided theme values.
+ * @param {string} styles Tokenized styles to fix.
+ */
+function detokenize(styles) {
+    if (styles) {
+        styles = resolveThemableArray(splitStyles(styles)).styleString;
+    }
+    return styles;
+}
+/**
+ * Resolves ThemingInstruction objects in an array and joins the result into a string.
+ * @param {ThemableArray} splitStyleArray ThemableArray to resolve and join.
+ */
+function resolveThemableArray(splitStyleArray) {
+    var theme = _themeState.theme;
+    var themable = false;
+    // Resolve the array of theming instructions to an array of strings.
+    // Then join the array to produce the final CSS string.
+    var resolvedArray = (splitStyleArray || []).map(function (currentValue) {
+        var themeSlot = currentValue.theme;
+        if (themeSlot) {
+            themable = true;
+            // A theming annotation. Resolve it.
+            var themedValue = theme ? theme[themeSlot] : undefined;
+            var defaultValue = currentValue.defaultValue || 'inherit';
+            // Warn to console if we hit an unthemed value even when themes are provided, but only if "DEBUG" is true.
+            // Allow the themedValue to be undefined to explicitly request the default value.
+            if (theme &&
+                !themedValue &&
+                console &&
+                !(themeSlot in theme) &&
+                "boolean" !== 'undefined' &&
+                true) {
+                // eslint-disable-next-line no-console
                 console.warn("Theming value not provided for \"".concat(themeSlot, "\". Falling back to \"").concat(defaultValue, "\"."));
             }
             return themedValue || defaultValue;

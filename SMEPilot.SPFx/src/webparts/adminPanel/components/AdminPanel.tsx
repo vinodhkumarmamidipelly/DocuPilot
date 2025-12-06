@@ -20,6 +20,7 @@ import {
   PanelType,
   IconButton
 } from '@fluentui/react';
+import styles from './AdminPanel.module.scss';
 import { SharePointService, IConfiguration as ISharePointConfiguration } from '../../../services/SharePointService';
 import { FunctionAppService } from '../../../services/FunctionAppService';
 
@@ -40,7 +41,10 @@ export interface IConfiguration {
   accessTeams: boolean;
   accessWeb: boolean;
   accessO365: boolean;
-   subscriptionId?: string;
+  subscriptionId?: string;
+  clientStateSecret?: string;
+  // New: Controls enriched document output type (Docx / Pdf / Both)
+  enrichedOutputType?: string;
 }
 
 export interface IAdminPanelState {
@@ -68,6 +72,14 @@ export interface IAdminPanelState {
   isLoadingTemplates: boolean;
   isUploadingTemplate: boolean;
   templateUploadFolder: string;
+  // UI helpers
+  isHelpPanelOpen: boolean;
+  // Last-known admin-consent issue indicator (from webhook result)
+  needsAdminConsent: boolean;
+  // Collapse state for wizard sections
+  showPart1: boolean;
+  showPart2: boolean;
+  showPart3: boolean;
 }
 
 export default class AdminPanel extends React.Component<IAdminPanelProps, IAdminPanelState> {
@@ -94,6 +106,9 @@ Remember: You can only access documents that the user has permission to view.`;
     super(props);
     this.sharePointService = new SharePointService(props.context);
     this.functionAppService = new FunctionAppService(props.functionAppUrl);
+    const webServerRelativeUrl = props.context.pageContext.web.serverRelativeUrl || '/';
+    const normalizedWebRoot = webServerRelativeUrl.replace(/\/$/, '');
+    const defaultTemplateFolder = `${normalizedWebRoot}/Shared Documents/Templates`;
     this.state = {
       configuration: {
         sourceFolderPath: '',
@@ -105,7 +120,8 @@ Remember: You can only access documents that the user has permission to view.`;
         copilotPrompt: this.defaultCopilotPrompt,
         accessTeams: true,
         accessWeb: true,
-        accessO365: true
+        accessO365: true,
+        enrichedOutputType: 'Both'
       },
       isLoading: true,
       isSaving: false,
@@ -122,8 +138,71 @@ Remember: You can only access documents that the user has permission to view.`;
       isLoadingFolders: false,
       isLoadingTemplates: false,
       isUploadingTemplate: false,
-      templateUploadFolder: '/Shared Documents/Templates'
+      templateUploadFolder: defaultTemplateFolder
+      ,
+      isHelpPanelOpen: false,
+      needsAdminConsent: false,
+      showPart1: true,
+      showPart2: false,
+      showPart3: false
     };
+  }
+
+  /**
+   * Helper to copy text to clipboard and surface a small success/error message.
+   */
+  private copyToClipboard = async (text: string, label: string): Promise<void> => {
+    if (!text) {
+      this.setState({
+        error: `Nothing to copy for ${label}. Please configure it first.`,
+        success: null
+      });
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      this.setState({
+        success: `${label} copied to clipboard.`,
+        error: null
+      });
+    } catch (e: any) {
+      this.setState({
+        error: `Failed to copy ${label}: ${e?.message || e?.toString() || 'Unknown error'}`,
+        success: null
+      });
+    }
+  }
+
+  /**
+   * Opens the Microsoft 365 admin consent page in a new tab so a tenant admin can
+   * grant the required SharePoint permissions for SMEPilot.
+   */
+  private openAdminConsent = (): void => {
+    try {
+      const baseUrl = (this.props.functionAppUrl || '').trim().replace(/\/+$/, '');
+      if (!baseUrl) {
+        this.setState({
+          error: 'Setup service URL is not configured. Please set it in the web part properties before granting permissions.',
+          success: null
+        });
+        return;
+      }
+
+      const clientId = '8e05312f-ad62-4eb4-8127-28293cca6f55'; // SMEPilot multi-tenant app
+      const redirectUri = encodeURIComponent(`${baseUrl}/consent-complete`);
+      const scope = encodeURIComponent('https://graph.microsoft.com/.default');
+      const adminConsentUrl =
+        `https://login.microsoftonline.com/organizations/v2.0/adminconsent` +
+        `?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}`;
+
+      window.open(adminConsentUrl, '_blank', 'noopener,noreferrer');
+    } catch (e: any) {
+      this.setState({
+        error: `Failed to open admin-consent page: ${e?.message || e?.toString() || 'Unknown error'}`,
+        success: null
+      });
+    }
   }
 
   public async componentDidMount(): Promise<void> {
@@ -262,7 +341,8 @@ Remember: You can only access documents that the user has permission to view.`;
             copilotPrompt: config.copilotPrompt || this.defaultCopilotPrompt,
             accessTeams: config.accessTeams !== false,
             accessWeb: config.accessWeb !== false,
-            accessO365: config.accessO365 !== false
+            accessO365: config.accessO365 !== false,
+            enrichedOutputType: config.enrichedOutputType || 'Both'
           },
           folderOptions: updatedFolderOptions,
           templateFileOptions: updatedTemplateOptions,
@@ -324,7 +404,8 @@ Remember: You can only access documents that the user has permission to view.`;
           copilotPrompt: this.defaultCopilotPrompt,
           accessTeams: true,
           accessWeb: true,
-          accessO365: true
+          accessO365: true,
+          enrichedOutputType: 'Both'
         },
         isConfigured: false,
         isViewMode: false,
@@ -354,6 +435,49 @@ Remember: You can only access documents that the user has permission to view.`;
     // Destination Folder validation
     if (!config.destinationFolderPath || config.destinationFolderPath.trim() === '') {
       errors.destinationFolderPath = 'Destination Folder is required';
+    }
+
+    // Cross-folder validation: prevent destination inside source or same as source
+    if (!errors.sourceFolderPath && !errors.destinationFolderPath) {
+      const normalizePath = (path: string): string => {
+        let p = (path || '').trim();
+        if (!p) {
+          return '';
+        }
+
+        // Strip absolute web URL if present
+        const webUrl = this.props.context.pageContext.web.absoluteUrl;
+        if (p.toLowerCase().startsWith(webUrl.toLowerCase())) {
+          p = p.substring(webUrl.length);
+        }
+
+        if (!p.startsWith('/')) {
+          p = '/' + p;
+        }
+
+        // Remove trailing slash
+        if (p.length > 1 && p.endsWith('/')) {
+          p = p.slice(0, -1);
+        }
+
+        return p.toLowerCase();
+      };
+
+      const src = normalizePath(config.sourceFolderPath);
+      const dest = normalizePath(config.destinationFolderPath);
+
+      if (src && dest) {
+        if (src === dest) {
+          errors.destinationFolderPath =
+            'Destination folder must be different from Source folder to avoid processing the same documents repeatedly.';
+        } else if (dest.startsWith(src + '/')) {
+          errors.destinationFolderPath =
+            'Destination folder cannot be inside the Source folder. Choose a folder outside the monitored source path.';
+        } else if (src.startsWith(dest + '/')) {
+          errors.sourceFolderPath =
+            'Source folder cannot be inside the Destination folder. Choose a folder outside the destination path.';
+        }
+      }
     }
 
     // Template File validation
@@ -425,13 +549,13 @@ Remember: You can only access documents that the user has permission to view.`;
       const config = this.state.configuration;
       const steps: string[] = [];
 
-      // Step 1: Create SMEPilotConfig list
-      steps.push('Creating SMEPilotConfig list...');
+      // Step 1: Prepare configuration storage
+      steps.push('Preparing configuration list...');
       await this.sharePointService.createSMEPilotConfigList();
-      steps.push('✓ SMEPilotConfig list created');
+      steps.push('✓ Configuration list is ready');
 
       // Step 2: Save configuration to list
-      steps.push('Saving configuration...');
+      steps.push('Saving settings...');
       await this.sharePointService.saveConfiguration({
         sourceFolderPath: config.sourceFolderPath,
         destinationFolderPath: config.destinationFolderPath,
@@ -442,22 +566,23 @@ Remember: You can only access documents that the user has permission to view.`;
         copilotPrompt: config.copilotPrompt,
         accessTeams: config.accessTeams,
         accessWeb: config.accessWeb,
-        accessO365: config.accessO365
+        accessO365: config.accessO365,
+        enrichedOutputType: config.enrichedOutputType
       });
-      steps.push('✓ Configuration saved');
+      steps.push('✓ Settings saved');
 
       // Step 3: Create metadata columns
-      steps.push('Creating metadata columns...');
+      steps.push('Checking document status columns...');
       await this.sharePointService.createMetadataColumns(config.sourceFolderPath);
-      steps.push('✓ Metadata columns created');
+      steps.push('✓ Document status columns are ready');
 
       // Step 4: Create error folders
-      steps.push('Creating error folders...');
+      steps.push('Creating error folders (for rejected or failed documents)...');
       await this.sharePointService.createErrorFolders(config.sourceFolderPath);
       steps.push('✓ Error folders created');
 
-      // Step 5: Create webhook subscription (Function App will delete existing one if subscriptionId is provided)
-      steps.push('Creating webhook subscription...');
+      // Step 5: Connect change notifications (webhook)
+      steps.push('Connecting change notifications...');
       const tenantId = this.props.context.pageContext.aadInfo?.tenantId?.toString() || '';
       
       // Get siteId and driveId for webhook subscription
@@ -466,12 +591,11 @@ Remember: You can only access documents that the user has permission to view.`;
       const driveId = await this.sharePointService.getDriveIdFromFolderPath(config.sourceFolderPath);
       
       if (!driveId) {
-        steps.push(`⚠ Could not get driveId from folder path: ${config.sourceFolderPath}`);
-        // Continue anyway - Function App will try to resolve it
+        steps.push(`⚠ Could not resolve the library ID for the source folder. The service will still try to detect it automatically.`);
       }
       
       const webhookResult = await this.functionAppService.createWebhookSubscription({
-        driveId: driveId || undefined, // Pass driveId if we got it, otherwise let Function App resolve it
+        driveId: driveId || undefined,
         siteId: siteId || undefined,
         sourceFolderPath: config.sourceFolderPath,
         tenantId: tenantId,
@@ -486,9 +610,18 @@ Remember: You can only access documents that the user has permission to view.`;
           ...config,
           subscriptionId: webhookResult.subscriptionId
         });
-        steps.push(`✓ Webhook subscription created (ID: ${webhookResult.subscriptionId})`);
+        steps.push(`✓ Change notifications connected (ID: ${webhookResult.subscriptionId})`);
       } else {
-        steps.push(`⚠ Webhook subscription failed: ${webhookResult.message || 'Unknown error'}`);
+        if (webhookResult.needsAdminConsent) {
+          steps.push(
+            '⚠ Change notifications are not connected because admin consent is required. ' +
+            'Ask a Microsoft 365 tenant administrator to click "Grant permissions (Admin only)" above, ' +
+            'accept the requested permissions, then return here and click "Save configuration" again.'
+          );
+          this.setState({ needsAdminConsent: true });
+        } else {
+          steps.push(`⚠ Change notifications could not be connected: ${webhookResult.message || 'Unknown error'}`);
+        }
       }
 
       // Reload configuration to get updated metadata
@@ -496,7 +629,7 @@ Remember: You can only access documents that the user has permission to view.`;
       
       this.setState({
         isSaving: false,
-        success: `Installation completed successfully!\n\n${steps.join('\n')}\n\nNext: Configure Copilot Agent in Copilot Studio.`,
+        success: `Configuration saved.\n\n${steps.join('\n')}\n\nNext: You can run "Test configuration" or proceed to configure the Copilot agent in Copilot Studio.`,
         isConfigured: true,
         isViewMode: true, // Switch to view mode after saving
         lastUpdated: updatedConfig?.lastUpdated || new Date(),
@@ -505,7 +638,7 @@ Remember: You can only access documents that the user has permission to view.`;
     } catch (error: any) {
       this.setState({
         isSaving: false,
-        error: `Failed to save configuration: ${error.message}\n\nPlease check:\n1. You have Site Collection Admin permissions\n2. Function App is accessible\n3. All folder paths are correct`
+        error: `We couldn't save these settings.\n\nPlease check:\n1. You have sufficient permissions on this site\n2. This page can reach the SMEPilot service\n3. The selected folders and template file exist and are accessible.`
       });
     }
   }
@@ -537,7 +670,8 @@ Remember: You can only access documents that the user has permission to view.`;
         copilotPrompt: config.copilotPrompt,
         accessTeams: config.accessTeams,
         accessWeb: config.accessWeb,
-        accessO365: config.accessO365
+        accessO365: config.accessO365,
+        enrichedOutputType: config.enrichedOutputType
       });
 
       if (validationResult.isValid) {
@@ -562,43 +696,202 @@ Remember: You can only access documents that the user has permission to view.`;
   public render(): React.ReactElement<IAdminPanelProps> {
     if (this.state.isLoading && !this.state.isSaving) {
       return (
-        <Stack tokens={{ childrenGap: 15 }} style={{ padding: '20px' }}>
-          <Spinner size={SpinnerSize.large} label="Loading configuration..." />
+        <Stack className={styles.adminPanelRoot}>
+          <Stack className={styles.mainCard}>
+            <Spinner size={SpinnerSize.large} label="Loading configuration..." />
+          </Stack>
         </Stack>
       );
     }
 
-    const { configuration, validationErrors, error, success, isSaving, isConfigured, isViewMode, lastUpdated, subscriptionId } = this.state;
+    const { configuration, validationErrors, error, success, isSaving, isConfigured, isViewMode, lastUpdated, subscriptionId, isHelpPanelOpen, needsAdminConsent } = this.state;
+    const siteUrl = this.props.context.pageContext.web.absoluteUrl;
 
     return (
-      <Stack tokens={{ childrenGap: 20 }} style={{ padding: '20px', maxWidth: '800px' }}>
-        <Stack horizontal horizontalAlign="space-between" verticalAlign="center">
-          <Stack>
-            <Text variant="xLarge" style={{ fontWeight: 600 }}>
-              SMEPilot Installation Configuration
+      <React.Fragment>
+        {/* Help & Setup Guide side panel */}
+        <Panel
+          isOpen={isHelpPanelOpen}
+          onDismiss={() => this.setState({ isHelpPanelOpen: false })}
+          headerText="SMEPilot help & setup guide"
+          type={PanelType.medium}
+          closeButtonAriaLabel="Close"
+        >
+          <Stack tokens={{ childrenGap: 12 }}>
+            <Text variant="mediumPlus" style={{ fontWeight: 600 }}>1. Before you start</Text>
+            <Text variant="small">
+              A Microsoft 365 tenant administrator must grant SMEPilot permission to work with SharePoint for this tenant.
+              Ask an admin to use the &quot;Grant permissions (Admin only)&quot; button on this page. Once they accept the
+              request, you can complete the configuration here.
             </Text>
-            <Text variant="medium" style={{ color: '#666' }}>
-              {isConfigured 
-                ? 'View and manage your SMEPilot configuration.' 
-                : 'Configure all settings during installation. Both functionalities (Document Enrichment & Copilot Agent) will work immediately after configuration.'}
+
+            <Text variant="mediumPlus" style={{ fontWeight: 600 }}>2. Document enrichment</Text>
+            <Text variant="small">
+              Pick the library where users upload raw Word documents (Source folder), the library/folder where enriched
+              documents should be stored (Destination folder), and your company&apos;s .dotx template file. Then click
+              &quot;Save configuration&quot;.
+            </Text>
+
+            <Text variant="mediumPlus" style={{ fontWeight: 600 }}>3. Troubleshooting</Text>
+            <Text variant="small">
+              If you see messages about change notifications or admin consent, first ask a tenant admin to grant
+              permissions using the button on this page, then click &quot;Save configuration&quot; again. For other issues,
+              check that the folders and template file you selected actually exist and that you can open them.
+            </Text>
+
+            <Text variant="mediumPlus" style={{ fontWeight: 600 }}>4. Configure the Copilot agent</Text>
+            <Text variant="small">
+              In Copilot Studio, create a new copilot. Add a SharePoint data source using the Site URL and enriched
+              library shown in the &quot;Copilot Studio configuration&quot; section, then paste the Copilot prompt from
+              this page. Publish and test the copilot with a few sample questions.
+            </Text>
+
+            <Text variant="small">
+              For more detailed technical information or logs, please contact your IT or support team.
             </Text>
           </Stack>
-          {isConfigured && isViewMode && (
-            <Stack horizontal tokens={{ childrenGap: 10 }}>
-              <DefaultButton
-                text="Edit Configuration"
-                onClick={this.handleEditConfiguration}
-                iconProps={{ iconName: 'Edit' }}
-              />
-              <DefaultButton
-                text="Reset"
-                onClick={this.handleResetConfiguration}
-                iconProps={{ iconName: 'Refresh' }}
-                styles={{ root: { borderColor: '#d13438', color: '#d13438' } }}
-              />
+        </Panel>
+
+        {/* Outer background + main card */}
+        <Stack className={styles.adminPanelRoot}>
+          <Stack className={styles.mainCard} tokens={{ childrenGap: 16 }}>
+            {/* Header band + actions */}
+            <Stack className={styles.pageHeader}>
+              <Stack horizontal horizontalAlign="space-between" verticalAlign="center">
+                <Stack className={styles.pageHeaderText}>
+                  <Text className={styles.pageHeaderTitle}>
+                    SMEPilot Installation
+                  </Text>
+                </Stack>
+                <Stack horizontal tokens={{ childrenGap: 8 }} className={styles.pageHeaderActions}>
+                  {isConfigured && isViewMode && (
+                    <React.Fragment>
+                      <DefaultButton
+                        text="Edit"
+                        onClick={this.handleEditConfiguration}
+                        iconProps={{ iconName: 'Edit' }}
+                        styles={{
+                          root: {
+                            background: '#0078D4',
+                            borderColor: '#0078D4',
+                            color: '#ffffff',
+                            borderRadius: 6,
+                            padding: '10px 16px',
+                            fontSize: 14,
+                            fontWeight: 500
+                          },
+                          rootHovered: {
+                            background: '#005a9e',
+                            borderColor: '#005a9e'
+                          },
+                          icon: {
+                            color: '#ffffff',
+                            fontSize: 16
+                          }
+                        }}
+                      />
+                      <DefaultButton
+                        text="Reset"
+                        onClick={this.handleResetConfiguration}
+                        iconProps={{ iconName: 'Refresh' }}
+                        styles={{
+                          root: {
+                            background: '#ffffff',
+                            borderColor: '#0078D4',
+                            color: '#0078D4',
+                            borderRadius: 6,
+                            padding: '10px 16px',
+                            fontSize: 14,
+                            fontWeight: 500
+                          },
+                          rootHovered: {
+                            background: 'rgba(0,120,212,0.06)',
+                            borderColor: '#005a9e'
+                          },
+                          icon: {
+                            color: '#0078D4',
+                            fontSize: 16
+                          }
+                        }}
+                      />
+                    </React.Fragment>
+                  )}
+                  <DefaultButton
+                    text="Help"
+                    onClick={() => this.setState({ isHelpPanelOpen: true })}
+                    iconProps={{ iconName: 'Help' }}
+                    styles={{
+                      root: {
+                        background: '#ffffff',
+                        borderColor: '#0078D4',
+                        color: '#0078D4',
+                        borderRadius: 6,
+                        padding: '10px 16px',
+                        fontSize: 14,
+                        fontWeight: 500
+                      },
+                      rootHovered: {
+                        background: 'rgba(0,120,212,0.06)',
+                        borderColor: '#005a9e'
+                      },
+                      icon: {
+                        color: '#0078D4',
+                        fontSize: 16
+                      }
+                    }}
+                  />
+                </Stack>
+              </Stack>
+              <Text className={styles.pageHeaderSubtitle}>
+                Configure where documents are enriched and how Copilot can use them for this site.
+              </Text>
             </Stack>
-          )}
-        </Stack>
+
+            {/* Compact status row */}
+            <div className={styles.statusRow}>
+              <div>
+                <div className={styles.statusItemTitle}>Configuration</div>
+                <div className={styles.statusItemValue}>{isConfigured ? 'Completed' : 'Not configured yet'}</div>
+              </div>
+              <div>
+                <div className={styles.statusItemTitle}>Change notifications</div>
+                <div className={styles.statusItemValue}>
+                  {subscriptionId ? `Active (ID: ${subscriptionId.substring(0, 8)}...)` : 'Not connected'}
+                </div>
+              </div>
+              <div>
+                <div className={styles.statusItemTitle}>Admin consent</div>
+                <div className={styles.statusItemValue}>{needsAdminConsent ? 'Required' : 'Granted'}</div>
+              </div>
+            </div>
+
+            {/* Admin consent helper for first-time installation */}
+            {!isConfigured && (
+              <Stack
+                tokens={{ childrenGap: 8 }}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 4,
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #edebe9'
+                }}
+              >
+                <Text variant="small" style={{ color: '#323130' }}>
+                  Step 0 (Admin only): A Microsoft 365 tenant administrator must grant SMEPilot
+                  permission to access SharePoint via Microsoft Graph. Click the button below,
+                  sign in as an admin, accept the permissions, then return here and click
+                  &quot;Save Configuration&quot;.
+                </Text>
+                <Stack horizontal tokens={{ childrenGap: 8 }}>
+                  <PrimaryButton
+                    text="Grant permissions (Admin only)"
+                    onClick={this.openAdminConsent}
+                    disabled={isSaving}
+                    iconProps={{ iconName: 'Permissions' }}
+                  />
+                </Stack>
+              </Stack>
+            )}
 
         {error && (
           <MessageBar messageBarType={MessageBarType.error} onDismiss={() => this.setState({ error: null })}>
@@ -612,84 +905,192 @@ Remember: You can only access documents that the user has permission to view.`;
           </MessageBar>
         )}
 
+        {/* Top status banner when configuration is active */}
         {isConfigured && isViewMode && (
-          <MessageBar messageBarType={MessageBarType.success}>
-            Configuration is active and working. Click "Edit Configuration" to make changes.
-          </MessageBar>
+          <div className={styles.statusBanner} role="status">
+            <span className={styles.statusBannerIcon}>✓</span>
+            <span className={styles.statusBannerText}>
+              Configuration is active and working. Click &quot;Edit&quot; to make changes.
+            </span>
+          </div>
         )}
 
         {isConfigured && isViewMode && (
-          <>
-            <Separator />
+          <React.Fragment>
             {/* View Configuration Section */}
-            <Stack tokens={{ childrenGap: 15 }}>
-              <Text variant="large" style={{ fontWeight: 600 }}>
-                📋 Current Configuration
-              </Text>
-              
-              <Stack tokens={{ childrenGap: 10 }} style={{ backgroundColor: '#f3f2f1', padding: '15px', borderRadius: '4px' }}>
-                <Stack horizontal horizontalAlign="space-between">
-                  <Text variant="medium" style={{ fontWeight: 600 }}>Last Updated:</Text>
-                  <Text variant="medium">
+            <div className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <Text className={styles.sectionTitle}>Current configuration</Text>
+              </div>
+
+              <div className={styles.currentConfigCard}>
+                <div className={styles.configRow}>
+                  <span className={styles.configLabel}>Last updated</span>
+                  <span className={styles.configValue}>
                     {lastUpdated ? new Date(lastUpdated).toLocaleString() : 'Not available'}
-                  </Text>
-                </Stack>
-                
+                  </span>
+                </div>
+
                 {subscriptionId && (
-                  <Stack horizontal horizontalAlign="space-between">
-                    <Text variant="medium" style={{ fontWeight: 600 }}>Webhook Subscription:</Text>
-                    <Text variant="medium" style={{ color: '#107c10' }}>
+                  <div className={styles.configRow}>
+                    <span className={styles.configLabel}>Webhook subscription</span>
+                    <span className={styles.configValueMonospace}>
                       ✓ Active (ID: {subscriptionId.substring(0, 20)}...)
-                    </Text>
-                  </Stack>
+                    </span>
+                  </div>
                 )}
-                
+
                 <Separator />
-                
-                <Stack tokens={{ childrenGap: 8 }}>
-                  <Text variant="medium" style={{ fontWeight: 600 }}>Source Folder:</Text>
-                  <Text variant="small" style={{ marginLeft: '15px' }}>{configuration.sourceFolderPath || 'Not set'}</Text>
-                  
-                  <Text variant="medium" style={{ fontWeight: 600 }}>Destination Folder:</Text>
-                  <Text variant="small" style={{ marginLeft: '15px' }}>{configuration.destinationFolderPath || 'Not set'}</Text>
-                  
-                  <Text variant="medium" style={{ fontWeight: 600 }}>Template File:</Text>
-                  <Text variant="small" style={{ marginLeft: '15px' }}>{configuration.templateFileUrl || 'Not set'}</Text>
-                  
-                  <Text variant="medium" style={{ fontWeight: 600 }}>Processing Settings:</Text>
-                  <Text variant="small" style={{ marginLeft: '15px' }}>
-                    Max Size: {configuration.maxFileSizeMB}MB | 
-                    Timeout: {configuration.processingTimeoutSeconds}s | 
-                    Retries: {configuration.maxRetries}
-                  </Text>
-                  
-                  <Text variant="medium" style={{ fontWeight: 600 }}>Access Points:</Text>
-                  <Text variant="small" style={{ marginLeft: '15px' }}>
+
+                <div className={styles.configRow}>
+                  <span className={styles.configLabel}>Source folder</span>
+                  <Stack horizontal verticalAlign="center" tokens={{ childrenGap: 8 }}>
+                    <span className={styles.configValueMonospace}>
+                      {configuration.sourceFolderPath || 'Not set'}
+                    </span>
+                    {configuration.sourceFolderPath && (
+                      <IconButton
+                        iconProps={{ iconName: 'Copy' }}
+                        title="Copy source folder path"
+                        ariaLabel="Copy source folder path"
+                        onClick={() => this.copyToClipboard(configuration.sourceFolderPath, 'Source folder path')}
+                      />
+                    )}
+                  </Stack>
+                </div>
+
+                <div className={styles.configRow}>
+                  <span className={styles.configLabel}>Destination folder</span>
+                  <Stack horizontal verticalAlign="center" tokens={{ childrenGap: 8 }}>
+                    <span className={styles.configValueMonospace}>
+                      {configuration.destinationFolderPath || 'Not set'}
+                    </span>
+                    {configuration.destinationFolderPath && (
+                      <IconButton
+                        iconProps={{ iconName: 'Copy' }}
+                        title="Copy destination folder path"
+                        ariaLabel="Copy destination folder path"
+                        onClick={() => this.copyToClipboard(configuration.destinationFolderPath, 'Destination folder path')}
+                      />
+                    )}
+                  </Stack>
+                </div>
+
+                <div className={styles.configRow}>
+                  <span className={styles.configLabel}>Template file</span>
+                  <Stack horizontal verticalAlign="center" tokens={{ childrenGap: 8 }}>
+                    <span className={styles.configValueMonospace}>
+                      {configuration.templateFileUrl || 'Not set'}
+                    </span>
+                    {configuration.templateFileUrl && (
+                      <IconButton
+                        iconProps={{ iconName: 'Copy' }}
+                        title="Copy template file path"
+                        ariaLabel="Copy template file path"
+                        onClick={() => this.copyToClipboard(configuration.templateFileUrl, 'Template file path')}
+                      />
+                    )}
+                  </Stack>
+                </div>
+
+                <div className={styles.configRow}>
+                  <span className={styles.configLabel}>Processing settings</span>
+                  <span className={styles.configValue}>
+                    Max size: {configuration.maxFileSizeMB}MB · Timeout: {configuration.processingTimeoutSeconds}s · Retries: {configuration.maxRetries}
+                  </span>
+                </div>
+
+                <div className={styles.configRow}>
+                  <span className={styles.configLabel}>Access points</span>
+                  <span className={styles.configValue}>
                     {[
                       configuration.accessTeams && 'Teams',
                       configuration.accessWeb && 'Web',
                       configuration.accessO365 && 'O365'
                     ].filter(Boolean).join(', ') || 'None'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Copilot configuration helper */}
+            <div className={styles.copilotBox}>
+              <Text variant="medium" style={{ fontWeight: 600 }}>
+                🤖 Copilot Studio configuration (for admin)
+              </Text>
+              <Text variant="small" className={styles.sectionDescription}>
+                Use the values below when creating the Copilot Agent in Copilot Studio. You can copy them directly.
+              </Text>
+              <Stack tokens={{ childrenGap: 6 }} style={{ marginTop: '8px' }}>
+                <Stack horizontal horizontalAlign="space-between" verticalAlign="center">
+                  <Text variant="small"><strong>SharePoint Site URL:</strong> {siteUrl}</Text>
+                  <IconButton
+                    iconProps={{ iconName: 'Copy' }}
+                    title="Copy site URL"
+                    ariaLabel="Copy site URL"
+                    onClick={() => this.copyToClipboard(siteUrl, 'Site URL')}
+                  />
+                </Stack>
+                <Stack horizontal horizontalAlign="space-between" verticalAlign="center">
+                  <Text variant="small">
+                    <strong>Enriched library/folder:</strong> {configuration.destinationFolderPath || 'Not set'}
                   </Text>
+                  {configuration.destinationFolderPath && (
+                    <IconButton
+                      iconProps={{ iconName: 'Copy' }}
+                      title="Copy enriched folder path"
+                      ariaLabel="Copy enriched folder path"
+                      onClick={() => this.copyToClipboard(configuration.destinationFolderPath, 'Enriched folder path')}
+                    />
+                  )}
+                </Stack>
+                <Stack horizontal horizontalAlign="space-between" verticalAlign="center">
+                  <Text variant="small">
+                    <strong>Copilot Agent Prompt:</strong> {configuration.copilotPrompt ? 'Configured' : 'Not set'}
+                  </Text>
+                  {configuration.copilotPrompt && (
+                    <IconButton
+                      iconProps={{ iconName: 'Copy' }}
+                      title="Copy Copilot prompt"
+                      ariaLabel="Copy Copilot prompt"
+                      onClick={() => this.copyToClipboard(configuration.copilotPrompt, 'Copilot prompt')}
+                    />
+                  )}
                 </Stack>
               </Stack>
-            </Stack>
+            </div>
             <Separator />
-          </>
+          </React.Fragment>
         )}
 
-        {!isViewMode && <Separator />}
+        {/* Edit mode sections (no duplication in view mode) */}
+        {!isViewMode && (
+        <React.Fragment>
+        <Separator />
 
         {/* PART 1: Document Enrichment Configuration */}
-        <Stack tokens={{ childrenGap: 15 }}>
-          <Text variant="large" style={{ fontWeight: 600, color: '#0078d4' }}>
-            📄 Part 1: Document Enrichment Configuration
+        <Stack tokens={{ childrenGap: 10 }} className={styles.section}>
+          <Stack horizontal horizontalAlign="space-between" verticalAlign="center" className={styles.sectionHeader}>
+            <Text className={styles.sectionTitle}>
+              Document enrichment
+            </Text>
+            <IconButton
+              iconProps={{ iconName: this.state.showPart1 ? 'ChevronUp' : 'ChevronDown' }}
+              title={this.state.showPart1 ? 'Collapse' : 'Expand'}
+              ariaLabel={this.state.showPart1 ? 'Collapse document enrichment section' : 'Expand document enrichment section'}
+              onClick={() => this.setState(prev => ({ showPart1: !prev.showPart1 }))}
+            />
+          </Stack>
+          <Text className={styles.sectionDescription}>
+            Choose where raw documents are uploaded, where enriched versions are stored, and which template to apply.
           </Text>
 
+          {this.state.showPart1 && (
+          <React.Fragment>
           {/* Source Folder */}
-          <Stack tokens={{ childrenGap: 4 }}>
+          <Stack tokens={{ childrenGap: 4 }} className={styles.fieldGroup}>
             <Label required>Source Folder (User Selected) *</Label>
-            <Text variant="small" style={{ color: '#666', marginBottom: '4px' }}>
+            <Text variant="small" className={styles.fieldHelper}>
               Where users upload raw documents (.docx files). Folder must exist and be accessible.
             </Text>
             <ComboBox
@@ -723,10 +1124,10 @@ Remember: You can only access documents that the user has permission to view.`;
           )}
 
           {/* Destination Folder */}
-          <Stack tokens={{ childrenGap: 4 }}>
+          <Stack tokens={{ childrenGap: 4 }} className={styles.fieldGroup}>
             <Label required>Destination Folder (User Selected) *</Label>
-            <Text variant="small" style={{ color: '#666', marginBottom: '4px' }}>
-              Where enriched documents are stored. Folder will be created if it doesn't exist.
+            <Text variant="small" className={styles.fieldHelper}>
+              Where enriched documents are stored. Folder will be created if it doesn&apos;t exist.
             </Text>
             <ComboBox
               options={this.state.folderOptions}
@@ -753,10 +1154,10 @@ Remember: You can only access documents that the user has permission to view.`;
           </Stack>
 
           {/* Template File */}
-          <Stack tokens={{ childrenGap: 8 }}>
+          <Stack tokens={{ childrenGap: 8 }} className={styles.fieldGroup}>
             <Stack tokens={{ childrenGap: 4 }}>
               <Label required>Template File *</Label>
-              <Text variant="small" style={{ color: '#666', marginBottom: '4px' }}>
+              <Text variant="small" style={{ color: '#323130', marginBottom: '4px' }}>
                 Company template file (.dotx) for document formatting. File must exist and be accessible.
               </Text>
               <Stack horizontal tokens={{ childrenGap: 10 }} verticalAlign="end">
@@ -835,8 +1236,8 @@ Remember: You can only access documents that the user has permission to view.`;
               )}
             </Stack>
             {!isViewMode && !configuration.templateFileUrl && (
-              <Stack tokens={{ childrenGap: 4 }} style={{ padding: '12px', backgroundColor: '#f3f2f1', borderRadius: '4px', border: '1px solid #edebe9' }}>
-                <Text variant="small" style={{ fontWeight: 600, marginBottom: '4px' }}>📁 Upload to folder:</Text>
+            <Stack tokens={{ childrenGap: 4 }} style={{ padding: '12px', backgroundColor: '#ffffff', borderRadius: '4px', border: '1px solid #edebe9' }}>
+                <Text variant="small" style={{ fontWeight: 600, marginBottom: '4px', color: '#323130' }}>📁 Upload to folder:</Text>
                 <ComboBox
                   options={this.state.folderOptions}
                   selectedKey={this.state.templateUploadFolder}
@@ -853,7 +1254,7 @@ Remember: You can only access documents that the user has permission to view.`;
                   disabled={isSaving || this.state.isUploadingTemplate}
                   styles={{ root: { maxWidth: '400px' } }}
                 />
-                <Text variant="small" style={{ color: '#666', marginTop: '4px' }}>
+                <Text variant="small" style={{ color: '#323130', marginTop: '4px' }}>
                   Select the folder where you want to upload the template file. Default: /Shared Documents/Templates
                 </Text>
               </Stack>
@@ -865,16 +1266,31 @@ Remember: You can only access documents that the user has permission to view.`;
               <Text variant="small">Loading template files...</Text>
             </Stack>
           )}
+          </React.Fragment>
+          )}
         </Stack>
 
         <Separator />
 
         {/* PART 2: Copilot Agent Configuration */}
-        <Stack tokens={{ childrenGap: 15 }}>
-          <Text variant="large" style={{ fontWeight: 600, color: '#c2185b' }}>
-            🤖 Part 2: Copilot Agent Configuration
+        <Stack tokens={{ childrenGap: 10 }} className={styles.section}>
+          <Stack horizontal horizontalAlign="space-between" verticalAlign="center" className={styles.sectionHeader}>
+            <Text className={styles.sectionTitle}>
+              Copilot configuration
+            </Text>
+            <IconButton
+              iconProps={{ iconName: this.state.showPart2 ? 'ChevronUp' : 'ChevronDown' }}
+              title={this.state.showPart2 ? 'Collapse' : 'Expand'}
+              ariaLabel={this.state.showPart2 ? 'Collapse Copilot section' : 'Expand Copilot section'}
+              onClick={() => this.setState(prev => ({ showPart2: !prev.showPart2 }))}
+            />
+          </Stack>
+          <Text className={styles.sectionDescription}>
+            Provide guidance for the Copilot agent and choose where users will be able to access it.
           </Text>
 
+          {this.state.showPart2 && (
+          <React.Fragment>
           <MessageBar messageBarType={MessageBarType.info}>
             Copilot Agent is always enabled. Users can access it via the selected access points below.
           </MessageBar>
@@ -923,89 +1339,150 @@ Remember: You can only access documents that the user has permission to view.`;
               disabled={isSaving || isViewMode}
             />
           </Stack>
+          </React.Fragment>
+          )}
         </Stack>
 
         <Separator />
 
         {/* PART 3: Processing Settings */}
-        <Stack tokens={{ childrenGap: 15 }}>
-          <Text variant="large" style={{ fontWeight: 600, color: '#e65100' }}>
-            ⚙️ Part 3: Processing Settings
-          </Text>
-
-          <Stack horizontal tokens={{ childrenGap: 20 }}>
-            <TextField
-              label="Max File Size (MB)"
-              description="Files larger than this will be rejected"
-              value={configuration.maxFileSizeMB.toString()}
-              onChange={(e, value) => {
-                const numValue = parseInt(value || '50', 10);
-                if (!isNaN(numValue)) {
-                  this.handleInputChange('maxFileSizeMB', numValue);
-                }
-              }}
-              errorMessage={validationErrors.maxFileSizeMB}
-              type="number"
-              required
-              disabled={isSaving || isViewMode}
-              readOnly={isViewMode}
-              styles={{ root: { width: '200px' } }}
-            />
-
-            <TextField
-              label="Processing Timeout (seconds)"
-              description="Maximum time to process a file"
-              value={configuration.processingTimeoutSeconds.toString()}
-              onChange={(e, value) => {
-                const numValue = parseInt(value || '60', 10);
-                if (!isNaN(numValue)) {
-                  this.handleInputChange('processingTimeoutSeconds', numValue);
-                }
-              }}
-              errorMessage={validationErrors.processingTimeoutSeconds}
-              type="number"
-              required
-              disabled={isSaving || isViewMode}
-              readOnly={isViewMode}
-              styles={{ root: { width: '200px' } }}
-            />
-
-            <TextField
-              label="Max Retries"
-              description="Number of retry attempts for failed processing"
-              value={configuration.maxRetries.toString()}
-              onChange={(e, value) => {
-                const numValue = parseInt(value || '3', 10);
-                if (!isNaN(numValue)) {
-                  this.handleInputChange('maxRetries', numValue);
-                }
-              }}
-              errorMessage={validationErrors.maxRetries}
-              type="number"
-              required
-              disabled={isSaving || isViewMode}
-              readOnly={isViewMode}
-              styles={{ root: { width: '200px' } }}
+        <Stack tokens={{ childrenGap: 10 }} className={styles.section}>
+          <Stack horizontal horizontalAlign="space-between" verticalAlign="center" className={styles.sectionHeader}>
+            <Text className={styles.sectionTitle}>
+              Processing settings
+            </Text>
+            <IconButton
+              iconProps={{ iconName: this.state.showPart3 ? 'ChevronUp' : 'ChevronDown' }}
+              title={this.state.showPart3 ? 'Collapse' : 'Expand'}
+              ariaLabel={this.state.showPart3 ? 'Collapse processing settings section' : 'Expand processing settings section'}
+              onClick={() => this.setState(prev => ({ showPart3: !prev.showPart3 }))}
             />
           </Stack>
+
+          {this.state.showPart3 && (
+          <div className={styles.processingRow}>
+            {/* Max File Size */}
+            <Stack tokens={{ childrenGap: 4 }} className={styles.fieldGroup}>
+              <Label required>Max File Size (MB)</Label>
+              <TextField
+                value={configuration.maxFileSizeMB.toString()}
+                onChange={(e, value) => {
+                  const numValue = parseInt(value || '50', 10);
+                  if (!isNaN(numValue)) {
+                    this.handleInputChange('maxFileSizeMB', numValue);
+                  }
+                }}
+                errorMessage={validationErrors.maxFileSizeMB}
+                type="number"
+                required
+                disabled={isSaving || isViewMode}
+                readOnly={isViewMode}
+                styles={{ root: { width: '90%' } }}
+              />
+              <Text variant="small" className={styles.fieldHelper}>
+                Files larger than this will be rejected.
+              </Text>
+            </Stack>
+
+            {/* Timeout */}
+            <Stack tokens={{ childrenGap: 4 }} className={styles.fieldGroup}>
+              <Label required>Timeout (seconds)</Label>
+              <TextField
+                value={configuration.processingTimeoutSeconds.toString()}
+                onChange={(e, value) => {
+                  const numValue = parseInt(value || '60', 10);
+                  if (!isNaN(numValue)) {
+                    this.handleInputChange('processingTimeoutSeconds', numValue);
+                  }
+                }}
+                errorMessage={validationErrors.processingTimeoutSeconds}
+                type="number"
+                required
+                disabled={isSaving || isViewMode}
+                readOnly={isViewMode}
+                styles={{ root: { width: '90%' } }}
+              />
+              <Text variant="small" className={styles.fieldHelper}>
+                Max time per document before timeout.
+              </Text>
+            </Stack>
+
+            {/* Max Retries */}
+            <Stack tokens={{ childrenGap: 4 }} className={styles.fieldGroup}>
+              <Label required>Max Retries</Label>
+              <TextField
+                value={configuration.maxRetries.toString()}
+                onChange={(e, value) => {
+                  const numValue = parseInt(value || '3', 10);
+                  if (!isNaN(numValue)) {
+                    this.handleInputChange('maxRetries', numValue);
+                  }
+                }}
+                errorMessage={validationErrors.maxRetries}
+                type="number"
+                required
+                disabled={isSaving || isViewMode}
+                readOnly={isViewMode}
+                styles={{ root: { width: '90%' } }}
+              />
+              <Text variant="small" className={styles.fieldHelper}>
+                Number of times the system will retry processing a document after a failure.
+              </Text>
+            </Stack>
+
+            {/* Enriched Output Type */}
+            <Stack tokens={{ childrenGap: 4 }} className={styles.fieldGroup}>
+              <Label>Enriched Output Type</Label>
+              <ComboBox
+                selectedKey={(configuration.enrichedOutputType || 'Both').toLowerCase()}
+                options={[
+                  { key: 'both', text: 'Both (DOCX + PDF)' },
+                  { key: 'docx', text: 'DOCX only' },
+                  { key: 'pdf', text: 'PDF only' }
+                ]}
+                onChange={(e, option) => {
+                  if (option) {
+                    const value = option.key.toString().toLowerCase() === 'pdf'
+                      ? 'Pdf'
+                      : option.key.toString().toLowerCase() === 'docx'
+                        ? 'Docx'
+                        : 'Both';
+                    this.handleInputChange('enrichedOutputType', value);
+                  }
+                }}
+                disabled={isSaving || isViewMode}
+                styles={{ root: { width: '90%' } }}
+              />
+              <Text variant="small" className={styles.fieldHelper}>
+                Choose whether SMEPilot should keep only the enriched DOCX, only a rendered PDF, or both. Default is Both.
+              </Text>
+            </Stack>
+          </div>
+          )}
         </Stack>
+        </React.Fragment>
+        )}
 
         <Separator />
 
         {/* Action Buttons */}
-        {!isViewMode && (
-          <Stack horizontal tokens={{ childrenGap: 10 }}>
+            {!isViewMode && (
+          <Stack horizontal horizontalAlign="end" tokens={{ childrenGap: 10 }} className={styles.actionsRow}>
             <PrimaryButton
-              text="Save Configuration"
+              text="Save configuration"
               onClick={this.handleSaveConfiguration}
               disabled={isSaving}
               iconProps={isSaving ? undefined : { iconName: 'Save' }}
+              styles={{
+                root: { background: '#0B78A8', borderColor: '#0B78A8' },
+                rootHovered: { background: '#0A6894', borderColor: '#0A6894' }
+              }}
             />
             <DefaultButton
-              text="Test Configuration"
+              text="Test configuration"
               onClick={this.handleTestConfiguration}
               disabled={isSaving || this.state.isLoading}
-              iconProps={{ iconName: 'CheckMark' }}
+              iconProps={{ iconName: 'TestCase' }}
             />
             {isConfigured && (
               <DefaultButton
@@ -1017,15 +1494,17 @@ Remember: You can only access documents that the user has permission to view.`;
               />
             )}
           </Stack>
-        )}
+            )}
 
-        {isSaving && (
-          <Stack horizontal tokens={{ childrenGap: 10 }} verticalAlign="center">
-            <Spinner size={SpinnerSize.small} />
-            <Text>Saving configuration...</Text>
+            {isSaving && (
+              <Stack horizontal tokens={{ childrenGap: 10 }} verticalAlign="center">
+                <Spinner size={SpinnerSize.small} />
+                <Text>Saving configuration...</Text>
+              </Stack>
+            )}
           </Stack>
-        )}
-      </Stack>
+        </Stack>
+      </React.Fragment>
     );
   }
 }
