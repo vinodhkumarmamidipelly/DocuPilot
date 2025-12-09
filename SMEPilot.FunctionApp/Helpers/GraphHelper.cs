@@ -27,6 +27,7 @@ namespace SMEPilot.FunctionApp.Helpers
         private readonly ILogger<GraphHelper>? _logger;
         private readonly AsyncRetryPolicy _retryPolicy;
         private static readonly HttpClient _httpClient = new HttpClient();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _driveSiteCache = new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
 
         public GraphHelper(Config cfg, ILogger<GraphHelper>? logger = null)
         {
@@ -241,61 +242,13 @@ namespace SMEPilot.FunctionApp.Helpers
 
                 _logger?.LogInformation("🔍 [Tracking] Querying latest *succeeded* run for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}", rawDriveId, rawItemId, tenantId ?? "default");
 
-                var items = await client.Sites[siteId].Lists[listId].Items.GetAsync(requestConfig =>
+                var itemsResponse = await client.Sites[siteId].Lists[listId].Items.GetAsync(requestConfig =>
                 {
                     requestConfig.QueryParameters.Expand = new[] { "fields" };
                     requestConfig.QueryParameters.Top = 200;
                 });
 
-                if (items?.Value == null || items.Value.Count == 0)
-                {
-                    _logger?.LogInformation("ℹ️ [Tracking] No tracking records found yet for RawDriveId={DriveId}, RawItemId={ItemId}", rawDriveId, rawItemId);
-                    return null;
-                }
-
-                ProcessingRunRecord? latestSucceeded = null;
-                foreach (var item in items.Value)
-                {
-                    var fields = item.Fields?.AdditionalData;
-                    if (fields == null || fields.Count == 0)
-                        continue;
-
-                    if (!fields.TryGetValue("RawDriveId", out var dObj) ||
-                        !fields.TryGetValue("RawItemId", out var iObj))
-                    {
-                        continue;
-                    }
-
-                    var d = dObj?.ToString();
-                    var i = iObj?.ToString();
-                    if (!string.Equals(d, rawDriveId, StringComparison.OrdinalIgnoreCase) ||
-                        !string.Equals(i, rawItemId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    var record = MapFieldsToProcessingRunRecord(fields);
-                    if (!string.Equals(record.Status, "Succeeded", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    if (latestSucceeded == null || record.LastUpdatedUtc > latestSucceeded.LastUpdatedUtc)
-                    {
-                        latestSucceeded = record;
-                    }
-                }
-
-                if (latestSucceeded == null)
-                {
-                    _logger?.LogInformation("ℹ️ [Tracking] No succeeded tracking records for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}", rawDriveId, rawItemId, tenantId ?? "default");
-                }
-                else
-                {
-                    _logger?.LogInformation("📋 [Tracking] Latest *succeeded* run for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}: Status={Status}, Hash={Hash}, LastUpdated={LastUpdated:o}",
-                        latestSucceeded.RawDriveId, latestSucceeded.RawItemId, tenantId ?? "default", latestSucceeded.Status, latestSucceeded.ContentHash, latestSucceeded.LastUpdatedUtc);
-                }
-
+                var latestSucceeded = FilterLatestSucceededRun(itemsResponse?.Value, siteId, rawDriveId, rawItemId, tenantId);
                 return latestSucceeded;
             }
             catch (ODataError odataError)
@@ -310,6 +263,120 @@ namespace SMEPilot.FunctionApp.Helpers
                 return null;
             }
         }
+
+        /// <summary>
+        /// Cache a mapping between driveId and siteId when we successfully discover it from a file context.
+        /// This allows later deletion events (which may not include siteId) to reuse the cached mapping
+        /// without needing to call Graph again.
+        /// </summary>
+        public void CacheDriveSiteMapping(string driveId, string siteId)
+        {
+            if (string.IsNullOrWhiteSpace(driveId) || string.IsNullOrWhiteSpace(siteId))
+                return;
+
+            _driveSiteCache[driveId] = siteId;
+            _logger?.LogDebug("🧠 [DriveSiteCache] Cached mapping DriveId={DriveId} -> SiteId={SiteId}", driveId, siteId);
+        }
+
+        /// <summary>
+        /// Try to get a cached siteId for a given driveId.
+        /// Returns null if no mapping is known.
+        /// </summary>
+        public string? TryGetCachedSiteIdForDrive(string driveId)
+        {
+            if (string.IsNullOrWhiteSpace(driveId))
+                return null;
+
+            return _driveSiteCache.TryGetValue(driveId, out var siteId) ? siteId : null;
+        }
+
+        /// <summary>
+        /// Shared helper to compute the latest *Succeeded* run from a list items sequence,
+        /// optionally filtering by RawItemId when provided.
+        /// </summary>
+        private ProcessingRunRecord? FilterLatestSucceededRun(IEnumerable<ListItem>? items, string siteId, string rawDriveId, string? rawItemId, string? tenantId)
+        {
+            if (items == null)
+            {
+                if (!string.IsNullOrWhiteSpace(rawItemId))
+                {
+                    _logger?.LogInformation("ℹ️ [Tracking] No tracking records found yet for RawDriveId={DriveId}, RawItemId={ItemId}", rawDriveId, rawItemId);
+                }
+                else
+                {
+                    _logger?.LogInformation("ℹ️ [Tracking] No tracking records found yet for RawDriveId={DriveId} on site {SiteId}", rawDriveId, siteId);
+                }
+                return null;
+            }
+
+            ProcessingRunRecord? latestSucceeded = null;
+            foreach (var item in items)
+            {
+                var fields = item.Fields?.AdditionalData;
+                if (fields == null || fields.Count == 0)
+                    continue;
+
+                if (!fields.TryGetValue("RawDriveId", out var dObj))
+                {
+                    continue;
+                }
+
+                var d = dObj?.ToString();
+                if (!string.Equals(d, rawDriveId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(rawItemId))
+                {
+                    if (!fields.TryGetValue("RawItemId", out var iObj))
+                        continue;
+
+                    var i = iObj?.ToString();
+                    if (!string.Equals(i, rawItemId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
+
+                var record = MapFieldsToProcessingRunRecord(fields);
+                if (!string.Equals(record.Status, "Succeeded", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (latestSucceeded == null || record.LastUpdatedUtc > latestSucceeded.LastUpdatedUtc)
+                {
+                    latestSucceeded = record;
+                }
+            }
+
+            if (latestSucceeded == null)
+            {
+                if (!string.IsNullOrWhiteSpace(rawItemId))
+                {
+                    _logger?.LogInformation("ℹ️ [Tracking] No succeeded tracking records for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}", rawDriveId, rawItemId, tenantId ?? "default");
+                }
+                else
+                {
+                    _logger?.LogInformation("ℹ️ [Tracking] No succeeded tracking records for RawDriveId={DriveId} on site {SiteId} in tenant {TenantId}", rawDriveId, siteId, tenantId ?? "default");
+                }
+            }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(rawItemId))
+                {
+                    _logger?.LogInformation("📋 [Tracking] Latest *succeeded* run for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}: Status={Status}, Hash={Hash}, LastUpdated={LastUpdated:o}",
+                        latestSucceeded.RawDriveId, latestSucceeded.RawItemId, tenantId ?? "default", latestSucceeded.Status, latestSucceeded.ContentHash, latestSucceeded.LastUpdatedUtc);
+                }
+                else
+                {
+                    _logger?.LogInformation("📋 [Tracking] Latest *succeeded* run for RawDriveId={DriveId} on site {SiteId} in tenant {TenantId}: Status={Status}, Hash={Hash}, LastUpdated={LastUpdated:o}",
+                        latestSucceeded.RawDriveId, siteId, tenantId ?? "default", latestSucceeded.Status, latestSucceeded.ContentHash, latestSucceeded.LastUpdatedUtc);
+                }
+            }
+
+            return latestSucceeded;
+        }
+
 
         /// <summary>
         /// Upserts a ProcessingRunRecord entry for a given raw file.
@@ -339,6 +406,7 @@ namespace SMEPilot.FunctionApp.Helpers
                 {
                     AdditionalData = new Dictionary<string, object>
                     {
+                        ["Title"] = record.Title ?? string.Empty,
                         ["RawDriveId"] = record.RawDriveId,
                         ["RawItemId"] = record.RawItemId,
                         ["ContentHash"] = record.ContentHash,
@@ -352,13 +420,65 @@ namespace SMEPilot.FunctionApp.Helpers
                     }
                 };
 
-                var listItem = new ListItem { Fields = fields };
+                // Try to find an existing item for this RawDriveId + RawItemId so we can update
+                // in-place instead of creating multiple rows per file.
+                string? existingItemId = null;
+                try
+                {
+                    var existingItems = await client.Sites[siteId].Lists[listId].Items.GetAsync(requestConfig =>
+                    {
+                        requestConfig.QueryParameters.Expand = new[] { "fields" };
+                        requestConfig.QueryParameters.Top = 200;
+                    });
 
-                _logger?.LogInformation("📝 [Tracking] Writing run record to {ListName} for RawDriveId={DriveId}, RawItemId={ItemId}, Status={Status} in tenant {TenantId}",
-                    ProcessingRunsListName, record.RawDriveId, record.RawItemId, record.Status, tenantId ?? "default");
+                    if (existingItems?.Value != null)
+                    {
+                        foreach (var item in existingItems.Value)
+                        {
+                            var f = item.Fields?.AdditionalData;
+                            if (f == null || f.Count == 0)
+                                continue;
 
-                await client.Sites[siteId].Lists[listId].Items.PostAsync(listItem);
-                _logger?.LogInformation("✅ [Tracking] Tracking record written successfully to {ListName} for tenant {TenantId}.", ProcessingRunsListName, tenantId ?? "default");
+                            if (!f.TryGetValue("RawDriveId", out var dObj) ||
+                                !f.TryGetValue("RawItemId", out var iObj))
+                            {
+                                continue;
+                            }
+
+                            var d = dObj?.ToString();
+                            var i = iObj?.ToString();
+                            if (string.Equals(d, record.RawDriveId, StringComparison.OrdinalIgnoreCase) &&
+                                string.Equals(i, record.RawItemId, StringComparison.OrdinalIgnoreCase))
+                            {
+                                existingItemId = item.Id;
+                                break;
+                            }
+                        }
+                    }
+                }
+                catch (Exception lookupEx)
+                {
+                    _logger?.LogWarning(lookupEx, "⚠️ [Tracking] Failed to look up existing SMEPilotRuns item for RawDriveId={DriveId}, RawItemId={ItemId}. Will append a new row.", record.RawDriveId, record.RawItemId);
+                }
+
+                if (!string.IsNullOrWhiteSpace(existingItemId))
+                {
+                    _logger?.LogInformation("📝 [Tracking] Updating existing run record in {ListName} for RawDriveId={DriveId}, RawItemId={ItemId}, Status={Status} in tenant {TenantId}",
+                        ProcessingRunsListName, record.RawDriveId, record.RawItemId, record.Status, tenantId ?? "default");
+
+                    await client.Sites[siteId].Lists[listId].Items[existingItemId].Fields.PatchAsync(fields);
+                }
+                else
+                {
+                    var listItem = new ListItem { Fields = fields };
+
+                    _logger?.LogInformation("📝 [Tracking] Writing new run record to {ListName} for RawDriveId={DriveId}, RawItemId={ItemId}, Status={Status} in tenant {TenantId}",
+                        ProcessingRunsListName, record.RawDriveId, record.RawItemId, record.Status, tenantId ?? "default");
+
+                    await client.Sites[siteId].Lists[listId].Items.PostAsync(listItem);
+                }
+
+                _logger?.LogInformation("✅ [Tracking] Tracking record written/updated successfully in {ListName} for tenant {TenantId}.", ProcessingRunsListName, tenantId ?? "default");
             }
             catch (ODataError odataError)
             {
@@ -504,6 +624,7 @@ namespace SMEPilot.FunctionApp.Helpers
         {
             var record = new ProcessingRunRecord
             {
+                Title = fields.TryGetValue("Title", out var t) ? t?.ToString() : null,
                 RawDriveId = fields.TryGetValue("RawDriveId", out var d) ? d?.ToString() ?? string.Empty : string.Empty,
                 RawItemId = fields.TryGetValue("RawItemId", out var i) ? i?.ToString() ?? string.Empty : string.Empty,
                 ContentHash = fields.TryGetValue("ContentHash", out var h) ? h?.ToString() ?? string.Empty : string.Empty,
@@ -1988,17 +2109,12 @@ namespace SMEPilot.FunctionApp.Helpers
                                 errorMessage.Contains("permission", StringComparison.OrdinalIgnoreCase) || 
                                 errorMessage.Contains("access denied", StringComparison.OrdinalIgnoreCase))
                             {
-                                _logger?.LogError("❌ [EnsureColumnsExistAsync] PERMISSION ERROR: App does not have permission to create columns!");
-                                _logger?.LogError("   Error Code: {Code}, Message: {Message}", errorCode, errorMessage);
-                                _logger?.LogError("   ⚠️ IMPORTANT: Sites.ReadWrite.All may NOT be sufficient for column creation!");
-                                _logger?.LogError("   Required permission: Sites.Manage.All (Application permission) - REQUIRED for column creation");
-                                _logger?.LogError("   Sites.ReadWrite.All only allows reading/writing items, NOT schema changes (columns)");
-                                _logger?.LogError("   Admin consent: REQUIRED");
-                                _logger?.LogError("   📖 See: PERMISSIONS_SETUP.md for step-by-step permission setup instructions");
-                                _logger?.LogError("   ⚠️ After adding Sites.Manage.All, RESTART the Function App to clear cached tokens!");
-                                _logger?.LogError("   ⚠️ Without this permission, columns must be created manually (see CREATE_SHAREPOINT_COLUMNS.md)");
-                                // Don't continue - permission errors affect all columns
-                                throw;
+                                _logger?.LogWarning("⚠️ [EnsureColumnsExistAsync] PERMISSION ERROR: App is not allowed to create columns via Graph (app-only).");
+                                _logger?.LogWarning("   Error Code: {Code}, Message: {Message}", errorCode, errorMessage);
+                                _logger?.LogWarning("   Columns must be provisioned using SharePoint/SPFx under an admin user context (e.g., via the Admin Panel).");
+                                _logger?.LogWarning("   For now, tracking metadata will be limited until the SMEPilotRuns list and its columns exist.");
+                                // Do not throw; simply stop trying to create more columns.
+                                break;
                             }
                         }
                         else
@@ -2127,7 +2243,11 @@ namespace SMEPilot.FunctionApp.Helpers
 
                 var subscription = new Subscription
                 {
-                    ChangeType = "updated",  // Graph API only supports "updated" for drive subscriptions (not "created")
+                    // NOTE: For the resources we are using (drive and list item), Graph currently rejects
+                    // 'deleted' in the changeType (see Invalid 'changeType' attribute: 'deleted').
+                    // To keep subscriptions working reliably across tenants, we request only 'updated'
+                    // and derive deletions via 404/delta where possible instead of asking for 'deleted'.
+                    ChangeType = "updated",
                     NotificationUrl = notificationUrl,
                     Resource = resource,
                     ExpirationDateTime = expiration,

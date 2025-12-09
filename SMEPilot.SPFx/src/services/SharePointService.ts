@@ -53,20 +53,6 @@ export class SharePointService {
       // Check if list already exists
       const listExists = await this.listExists();
       if (listExists) {
-        // Ensure required columns exist even for existing lists (handles upgrades)
-        try {
-          const listUrl = `${this.webUrl}/_api/web/lists/getbytitle('${this.listName}')?$select=Id`;
-          const listResponse = await this.httpClient.get(listUrl, SPHttpClient.configurations.v1);
-          if (listResponse.ok) {
-            const listData = await listResponse.json();
-            const listId = listData.Id || listData.d?.Id;
-            if (listId) {
-              await this.addListColumns(listId);
-            }
-          }
-        } catch (e) {
-          console.warn('[createSMEPilotConfigList] Failed to ensure columns on existing list:', e);
-        }
         return true;
       }
 
@@ -314,6 +300,98 @@ export class SharePointService {
     await this.verifyColumnsExist(listId, columnNames);
     
     console.log(`[addListColumns] Finished adding columns to list`);
+  }
+
+  /**
+   * Ensure SMEPilotRuns tracking list exists with required columns.
+   * This is called from the Admin Panel under the admin's user context so that
+   * we don't need app-only Sites.Manage.All permissions.
+   */
+  public async ensureSMEPilotRunsList(): Promise<void> {
+    const listTitle = 'SMEPilotRuns';
+
+    try {
+      // Check if list already exists
+      const getUrl = `${this.webUrl}/_api/web/lists/getbytitle('${listTitle}')?$select=Id`;
+      const getResponse = await this.httpClient.get(getUrl, SPHttpClient.configurations.v1);
+      if (getResponse.ok) {
+        const existingData = await getResponse.json();
+        const existingId = existingData.Id || existingData.d?.Id;
+        console.log(`[ensureSMEPilotRunsList] List ${listTitle} already exists with Id ${existingId}`);
+        // We could add columns here if ever needed, but they are already managed on the backend side.
+        return;
+      }
+    } catch (error: any) {
+      // If getbytitle fails with 404, we'll create the list; other errors are logged and we bail out.
+      const msg = error?.message || String(error);
+      if (!msg.includes('404') && !msg.includes('not found')) {
+        console.warn('[ensureSMEPilotRunsList] Error checking existing list:', msg);
+        return;
+      }
+    }
+
+    try {
+      const digest = await this.getRequestDigest();
+
+      const createListUrl = `${this.webUrl}/_api/web/lists`;
+      const listBody = {
+        Title: listTitle,
+        Description: 'Tracks SMEPilot processing runs for idempotency and diagnostics',
+        BaseTemplate: 100, // Custom List
+        ContentTypesEnabled: false,
+        Hidden: false
+      };
+
+      const createResponse = await this.httpClient.post(
+        createListUrl,
+        SPHttpClient.configurations.v1,
+        {
+          headers: {
+            'X-RequestDigest': digest
+          },
+          body: JSON.stringify(listBody)
+        }
+      );
+
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        console.error(`[ensureSMEPilotRunsList] Failed to create list (${createResponse.status}): ${errorText}`);
+        return;
+      }
+
+      const listData = await createResponse.json();
+      const listId = listData.d?.Id || listData.Id;
+      console.log(`[ensureSMEPilotRunsList] Created list ${listTitle} with Id ${listId}`);
+
+      // Add minimal tracking columns; backend also has defensive column creation, but this gives a good baseline.
+      const fieldsXml = [
+        `<Field Type='Text' Name='RawDriveId' StaticName='RawDriveId' DisplayName='RawDriveId' MaxLength='255' />`,
+        `<Field Type='Text' Name='RawItemId' StaticName='RawItemId' DisplayName='RawItemId' MaxLength='255' />`,
+        `<Field Type='Text' Name='ContentHash' StaticName='ContentHash' DisplayName='ContentHash' MaxLength='255' />`,
+        `<Field Type='Text' Name='Version' StaticName='Version' DisplayName='Version' MaxLength='50' />`,
+        `<Field Type='Text' Name='EnrichedUrl' StaticName='EnrichedUrl' DisplayName='EnrichedUrl' MaxLength='1024' />`,
+        `<Field Type='Text' Name='EnrichedDriveId' StaticName='EnrichedDriveId' DisplayName='EnrichedDriveId' MaxLength='255' />`,
+        `<Field Type='Text' Name='EnrichedItemId' StaticName='EnrichedItemId' DisplayName='EnrichedItemId' MaxLength='255' />`,
+        `<Field Type='Text' Name='Status' StaticName='Status' DisplayName='Status' MaxLength='50' />`,
+        `<Field Type='Note' Name='ErrorMessage' StaticName='ErrorMessage' DisplayName='ErrorMessage' NumLines='10' RichText='FALSE' />`,
+        `<Field Type='Text' Name='LastUpdatedUtc' StaticName='LastUpdatedUtc' DisplayName='LastUpdatedUtc' MaxLength='64' />`
+      ];
+
+      for (const xml of fieldsXml) {
+        try {
+          await this.createFieldXml(listId, xml);
+        } catch (e: any) {
+          const msg = e?.message || String(e);
+          if (msg.includes('already exists') || msg.includes('duplicate')) {
+            console.log('[ensureSMEPilotRunsList] Column already exists, skipping:', xml);
+            continue;
+          }
+          console.warn('[ensureSMEPilotRunsList] Failed to create column:', msg);
+        }
+      }
+    } catch (error: any) {
+      console.error('[ensureSMEPilotRunsList] Unexpected error ensuring SMEPilotRuns list:', error);
+    }
   }
 
   /**

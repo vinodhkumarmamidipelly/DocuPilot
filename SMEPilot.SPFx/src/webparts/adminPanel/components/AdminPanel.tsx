@@ -554,7 +554,12 @@ Remember: You can only access documents that the user has permission to view.`;
       await this.sharePointService.createSMEPilotConfigList();
       steps.push('✓ Configuration list is ready');
 
-      // Step 2: Save configuration to list
+      // Step 2: Ensure SMEPilotRuns tracking list exists (for status/idempotency)
+      steps.push('Preparing tracking list (SMEPilotRuns)...');
+      await this.sharePointService.ensureSMEPilotRunsList();
+      steps.push('✓ Tracking list is ready');
+
+      // Step 3: Save configuration to list
       steps.push('Saving settings...');
       await this.sharePointService.saveConfiguration({
         sourceFolderPath: config.sourceFolderPath,
@@ -571,17 +576,17 @@ Remember: You can only access documents that the user has permission to view.`;
       });
       steps.push('✓ Settings saved');
 
-      // Step 3: Create metadata columns
+      // Step 4: Create metadata columns
       steps.push('Checking document status columns...');
       await this.sharePointService.createMetadataColumns(config.sourceFolderPath);
       steps.push('✓ Document status columns are ready');
 
-      // Step 4: Create error folders
+      // Step 5: Create error folders
       steps.push('Creating error folders (for rejected or failed documents)...');
       await this.sharePointService.createErrorFolders(config.sourceFolderPath);
       steps.push('✓ Error folders created');
 
-      // Step 5: Connect change notifications (webhook)
+      // Step 6: Connect change notifications (webhook)
       steps.push('Connecting change notifications...');
       const tenantId = this.props.context.pageContext.aadInfo?.tenantId?.toString() || '';
       
