@@ -242,23 +242,54 @@ namespace SMEPilot.FunctionApp.Functions
                     return bad;
                 }
 
-                // If an existing subscription ID was provided, try to delete it first
-                if (!string.IsNullOrWhiteSpace(existingSubscriptionId))
+                // Clean up any existing SMEPilot subscriptions for this tenant before creating a new one.
+                // Product rule: at any time, there should be at most ONE SMEPilot webhook subscription per org (tenant).
+                if (!string.IsNullOrWhiteSpace(driveId))
                 {
                     try
                     {
-                        _logger.LogInformation("🗑️ [SetupSubscription] Deleting existing subscription before creating a new one. SubscriptionId: {SubscriptionId}, TenantId: {TenantId}", existingSubscriptionId, tenantId ?? "default");
-                        await _graph.DeleteSubscriptionAsync(existingSubscriptionId, tenantId);
+                        _logger.LogInformation("🔍 [SetupSubscription] Looking for existing SMEPilot subscriptions to clean up for tenant {TenantId}", tenantId ?? "default");
+                        var allSubscriptions = await _graph.GetSubscriptionsAsync(tenantId);
+                        var toDelete = allSubscriptions
+                            .Where(s => IsSmepilotSubscription(s))
+                            .ToList();
+
+                        if (toDelete.Count > 0)
+                        {
+                            _logger.LogInformation("🗑️ [SetupSubscription] Found {Count} existing SMEPilot subscriptions for this tenant. Deleting them before creating a new one.", toDelete.Count);
+                            foreach (var sub in toDelete)
+                            {
+                                if (string.IsNullOrWhiteSpace(sub.Id))
+                                    continue;
+
+                                try
+                                {
+                                    await _graph.DeleteSubscriptionAsync(sub.Id, tenantId);
+                                    _logger.LogInformation("🗑️ [SetupSubscription] Deleted old subscription {SubscriptionId} for tenant {TenantId}", sub.Id, tenantId ?? "default");
+                                }
+                                catch (Exception exDel)
+                                {
+                                    _logger.LogWarning(exDel, "⚠️ [SetupSubscription] Failed to delete old subscription {SubscriptionId}. Continuing with setup.", sub.Id);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogInformation("ℹ️ [SetupSubscription] No existing SMEPilot subscriptions found for this drive/tenant.");
+                        }
                     }
-                    catch (Exception deleteEx)
+                    catch (Exception cleanupEx)
                     {
-                        _logger.LogWarning(deleteEx, "⚠️ [SetupSubscription] Failed to delete existing subscription {SubscriptionId}. Proceeding to create a new subscription.", existingSubscriptionId);
+                        _logger.LogWarning(cleanupEx, "⚠️ [SetupSubscription] Failed during existing subscription cleanup. Proceeding to create a new subscription.");
                     }
                 }
 
-                // Resource format (drive-based, known to be supported):
+                // Resource format (drive-based, known to be supported and stable across tenants):
                 // - If folderItemId is available: /drives/{driveId}/items/{folderItemId}/children (monitors changes inside the folder)
                 // - Otherwise: /drives/{driveId}/root (monitors changes in the root folder of the drive)
+                // NOTE: We previously attempted a list-based resource (/sites/.../lists/{listId}/items) to get per-item delete IDs,
+                // but Graph returned InvalidRequest: "resource '.../items' is not supported" in this tenant. To keep the
+                // subscription creation reliable, we stick with the proven drive-based resources here.
                 var resource = !string.IsNullOrWhiteSpace(folderItemId)
                     ? $"/drives/{driveId}/items/{folderItemId}/children"
                     : $"/drives/{driveId}/root";
@@ -299,46 +330,75 @@ namespace SMEPilot.FunctionApp.Functions
                 _logger.LogInformation("✅ [SetupSubscription] Subscription created successfully! ID: {SubscriptionId}, Expires: {Expiration}", 
                     subscription.Id, subscription.ExpirationDateTime);
 
-                // Store subscription ID in SMEPilotConfig list if siteId is available
-                if (!string.IsNullOrWhiteSpace(siteId))
+                // Store subscription ID in SMEPilotConfig list if we can determine a reliable siteId
+                // Prefer resolving siteId from the drive so we use the same GUID-style ID that
+                // ProcessSharePointFile uses (this is known to work well with GetListItemsByNameAsync).
+                if (!string.IsNullOrWhiteSpace(driveId) || !string.IsNullOrWhiteSpace(siteId))
                 {
                     try
                     {
-                        _logger.LogInformation("💾 [SetupSubscription] Storing subscription ID in SMEPilotConfig for site {SiteId}", siteId);
-                        
-                        // Load configuration to get ConfigService
-                        await _cfg.LoadSharePointConfigAsync(_graph, siteId, _logger, tenantId: tenantId);
-                        
-                        // Get list items from SMEPilotConfig (pass sourceFolderPath and tenantId to help normalize site ID)
-                        var configItems = await _graph.GetListItemsByNameAsync(siteId, "SMEPilotConfig", top: 1, sourceFolderPath, tenantId);
-                        if (configItems != null && configItems.Any())
+                        // Derive a stable siteId for config operations
+                        string? siteIdForConfig = siteId;
+                        if (!string.IsNullOrWhiteSpace(driveId))
                         {
-                            var configItem = configItems.First();
-                            var listItemId = configItem.Id;
-                            
-                            // Get the list ID for SMEPilotConfig (pass sourceFolderPath and tenantId to help normalize site ID)
-                            var configListId = await _graph.GetListIdByNameAsync(siteId, "SMEPilotConfig", sourceFolderPath, tenantId);
-                            if (!string.IsNullOrWhiteSpace(configListId))
+                            var driveSiteId = await _graph.GetSiteIdFromDriveAsync(driveId, tenantId);
+                            if (!string.IsNullOrWhiteSpace(driveSiteId))
                             {
-                                // Update the subscription ID in the config item
-                                var updateFields = new Dictionary<string, object>
+                                // If driveSiteId is in hostname,tenantId,siteGuid format, prefer the GUID part
+                                var parts = driveSiteId.Split(',');
+                                if (parts.Length >= 3)
                                 {
-                                    {"SubscriptionId", subscription.Id ?? ""},
-                                    {"SubscriptionExpiration", subscription.ExpirationDateTime?.ToString("O") ?? ""},
-                                    {"ClientStateSecret", clientStateSecret}
-                                };
-                                
-                                await _graph.UpdateListItemFieldsByListIdAsync(siteId, configListId, listItemId, updateFields, sourceFolderPath);
-                                _logger.LogInformation("✅ [SetupSubscription] Successfully stored subscription ID {SubscriptionId} in SMEPilotConfig", subscription.Id);
+                                    siteIdForConfig = parts[2];
+                                }
+                                else
+                                {
+                                    siteIdForConfig = driveSiteId;
+                                }
                             }
-                            else
-                            {
-                                _logger.LogWarning("⚠️ [SetupSubscription] Could not get list ID for SMEPilotConfig. Subscription ID will not be stored.");
-                            }
+                        }
+
+                        if (string.IsNullOrWhiteSpace(siteIdForConfig))
+                        {
+                            _logger.LogWarning("⚠️ [SetupSubscription] Could not determine a reliable siteId for SMEPilotConfig. Subscription ID will not be stored.");
                         }
                         else
                         {
-                            _logger.LogWarning("⚠️ [SetupSubscription] SMEPilotConfig list not found or empty. Subscription ID will not be stored in SharePoint.");
+                            _logger.LogInformation("💾 [SetupSubscription] Storing subscription ID in SMEPilotConfig for site {SiteId}", siteIdForConfig);
+                        
+                            // Load configuration to get ConfigService
+                            await _cfg.LoadSharePointConfigAsync(_graph, siteIdForConfig, _logger, tenantId: tenantId);
+                        
+                            // Get list items from SMEPilotConfig (pass sourceFolderPath and tenantId to help normalize site ID)
+                            var configItems = await _graph.GetListItemsByNameAsync(siteIdForConfig, "SMEPilotConfig", top: 1, sourceFolderPath, tenantId);
+                            if (configItems != null && configItems.Any())
+                            {
+                                var configItem = configItems.First();
+                                var listItemId = configItem.Id;
+                            
+                                // Get the list ID for SMEPilotConfig (pass sourceFolderPath and tenantId to help normalize site ID)
+                                var configListId = await _graph.GetListIdByNameAsync(siteIdForConfig, "SMEPilotConfig", sourceFolderPath, tenantId);
+                                if (!string.IsNullOrWhiteSpace(configListId))
+                                {
+                                    // Update the subscription ID in the config item
+                                    var updateFields = new Dictionary<string, object>
+                                    {
+                                        {"SubscriptionId", subscription.Id ?? ""},
+                                        {"SubscriptionExpiration", subscription.ExpirationDateTime?.ToString("O") ?? ""},
+                                        {"ClientStateSecret", clientStateSecret}
+                                    };
+                                
+                                    await _graph.UpdateListItemFieldsByListIdAsync(siteIdForConfig, configListId, listItemId, updateFields, sourceFolderPath);
+                                    _logger.LogInformation("✅ [SetupSubscription] Successfully stored subscription ID {SubscriptionId} in SMEPilotConfig", subscription.Id);
+                                }
+                                else
+                                {
+                                    _logger.LogWarning("⚠️ [SetupSubscription] Could not get list ID for SMEPilotConfig. Subscription ID will not be stored.");
+                                }
+                            }
+                            else
+                            {
+                                _logger.LogWarning("⚠️ [SetupSubscription] SMEPilotConfig list not found or empty. Subscription ID will not be stored in SharePoint.");
+                            }
                         }
                     }
                     catch (Exception storeEx)
@@ -419,6 +479,44 @@ namespace SMEPilot.FunctionApp.Functions
             response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
             response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
             response.Headers.Add("Access-Control-Max-Age", "3600");
+        }
+
+        /// <summary>
+        /// Returns true if the subscription looks like one created by SMEPilot.
+        /// We currently treat any subscription whose NotificationUrl points at
+        /// our ProcessSharePointFile endpoint as "ours".
+        /// </summary>
+        private bool IsSmepilotSubscription(Microsoft.Graph.Models.Subscription? subscription)
+        {
+            if (subscription == null)
+                return false;
+
+            var url = subscription.NotificationUrl ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(url))
+                return false;
+
+            // All SMEPilot webhooks are pointed at /api/ProcessSharePointFile
+            return url.IndexOf("/api/ProcessSharePointFile", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private string? ExtractDriveIdFromResource(string resource)
+        {
+            // Resource format: /drives/{driveId}/root or /drives/{driveId}/items/{itemId}/children
+            try
+            {
+                var parts = resource.Split('/');
+                if (parts.Length >= 3 && parts[1] == "drives")
+                {
+                    var driveId = parts[2];
+                    return driveId;
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+
+            return null;
         }
     }
 }

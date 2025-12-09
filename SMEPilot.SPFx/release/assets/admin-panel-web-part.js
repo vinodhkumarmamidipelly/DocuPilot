@@ -364,56 +364,34 @@ var SharePointService = /** @class */ (function () {
      * Create SMEPilotConfig list with all required columns
      */
     SharePointService.prototype.createSMEPilotConfigList = function () {
-        var _a, _b, _c, _d;
+        var _a, _b, _c;
         return __awaiter(this, void 0, void 0, function () {
-            var listExists, listUrl, listResponse, listData_1, listId_1, e_1, digestUrl, digestResponse, errorText, digestData, digest, createListUrl, listBody, createResponse, errorText, listData, listId, error_1;
-            return __generator(this, function (_e) {
-                switch (_e.label) {
+            var listExists, digestUrl, digestResponse, errorText, digestData, digest, createListUrl, listBody, createResponse, errorText, listData, listId, error_1;
+            return __generator(this, function (_d) {
+                switch (_d.label) {
                     case 0:
-                        _e.trys.push([0, 19, , 20]);
+                        _d.trys.push([0, 11, , 12]);
                         return [4 /*yield*/, this.listExists()];
                     case 1:
-                        listExists = _e.sent();
-                        if (!listExists) return [3 /*break*/, 9];
-                        _e.label = 2;
-                    case 2:
-                        _e.trys.push([2, 7, , 8]);
-                        listUrl = "".concat(this.webUrl, "/_api/web/lists/getbytitle('").concat(this.listName, "')?$select=Id");
-                        return [4 /*yield*/, this.httpClient.get(listUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_0__.SPHttpClient.configurations.v1)];
-                    case 3:
-                        listResponse = _e.sent();
-                        if (!listResponse.ok) return [3 /*break*/, 6];
-                        return [4 /*yield*/, listResponse.json()];
-                    case 4:
-                        listData_1 = _e.sent();
-                        listId_1 = listData_1.Id || ((_a = listData_1.d) === null || _a === void 0 ? void 0 : _a.Id);
-                        if (!listId_1) return [3 /*break*/, 6];
-                        return [4 /*yield*/, this.addListColumns(listId_1)];
-                    case 5:
-                        _e.sent();
-                        _e.label = 6;
-                    case 6: return [3 /*break*/, 8];
-                    case 7:
-                        e_1 = _e.sent();
-                        console.warn('[createSMEPilotConfigList] Failed to ensure columns on existing list:', e_1);
-                        return [3 /*break*/, 8];
-                    case 8: return [2 /*return*/, true];
-                    case 9:
+                        listExists = _d.sent();
+                        if (listExists) {
+                            return [2 /*return*/, true];
+                        }
                         digestUrl = "".concat(this.webUrl, "/_api/contextinfo");
                         return [4 /*yield*/, this.httpClient.post(digestUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_0__.SPHttpClient.configurations.v1, {
                                 body: '' // Empty body for contextinfo
                             })];
-                    case 10:
-                        digestResponse = _e.sent();
-                        if (!!digestResponse.ok) return [3 /*break*/, 12];
+                    case 2:
+                        digestResponse = _d.sent();
+                        if (!!digestResponse.ok) return [3 /*break*/, 4];
                         return [4 /*yield*/, digestResponse.text()];
-                    case 11:
-                        errorText = _e.sent();
+                    case 3:
+                        errorText = _d.sent();
                         throw new Error("Failed to get request digest (".concat(digestResponse.status, "): ").concat(errorText));
-                    case 12: return [4 /*yield*/, digestResponse.json()];
-                    case 13:
-                        digestData = _e.sent();
-                        digest = ((_c = (_b = digestData.d) === null || _b === void 0 ? void 0 : _b.GetContextWebInformation) === null || _c === void 0 ? void 0 : _c.FormDigestValue) ||
+                    case 4: return [4 /*yield*/, digestResponse.json()];
+                    case 5:
+                        digestData = _d.sent();
+                        digest = ((_b = (_a = digestData.d) === null || _a === void 0 ? void 0 : _a.GetContextWebInformation) === null || _b === void 0 ? void 0 : _b.FormDigestValue) ||
                             digestData.FormDigestValue ||
                             '';
                         if (!digest) {
@@ -433,26 +411,26 @@ var SharePointService = /** @class */ (function () {
                                 },
                                 body: JSON.stringify(listBody)
                             })];
-                    case 14:
-                        createResponse = _e.sent();
-                        if (!!createResponse.ok) return [3 /*break*/, 16];
+                    case 6:
+                        createResponse = _d.sent();
+                        if (!!createResponse.ok) return [3 /*break*/, 8];
                         return [4 /*yield*/, createResponse.text()];
-                    case 15:
-                        errorText = _e.sent();
+                    case 7:
+                        errorText = _d.sent();
                         throw new Error("Failed to create list (".concat(createResponse.status, "): ").concat(errorText));
-                    case 16: return [4 /*yield*/, createResponse.json()];
-                    case 17:
-                        listData = _e.sent();
-                        listId = ((_d = listData.d) === null || _d === void 0 ? void 0 : _d.Id) || listData.Id;
+                    case 8: return [4 /*yield*/, createResponse.json()];
+                    case 9:
+                        listData = _d.sent();
+                        listId = ((_c = listData.d) === null || _c === void 0 ? void 0 : _c.Id) || listData.Id;
                         return [4 /*yield*/, this.addListColumns(listId)];
-                    case 18:
-                        _e.sent();
+                    case 10:
+                        _d.sent();
                         return [2 /*return*/, true];
-                    case 19:
-                        error_1 = _e.sent();
+                    case 11:
+                        error_1 = _d.sent();
                         console.error('Error creating SMEPilotConfig list:', error_1);
                         throw error_1;
-                    case 20: return [2 /*return*/];
+                    case 12: return [2 /*return*/];
                 }
             });
         });
@@ -684,12 +662,127 @@ var SharePointService = /** @class */ (function () {
         });
     };
     /**
+     * Ensure SMEPilotRuns tracking list exists with required columns.
+     * This is called from the Admin Panel under the admin's user context so that
+     * we don't need app-only Sites.Manage.All permissions.
+     */
+    SharePointService.prototype.ensureSMEPilotRunsList = function () {
+        var _a, _b;
+        return __awaiter(this, void 0, void 0, function () {
+            var listTitle, getUrl, getResponse, existingData, existingId, error_4, msg, digest, createListUrl, listBody, createResponse, errorText, listData, listId, fieldsXml, _i, fieldsXml_1, xml, e_1, msg, error_5;
+            return __generator(this, function (_c) {
+                switch (_c.label) {
+                    case 0:
+                        listTitle = 'SMEPilotRuns';
+                        _c.label = 1;
+                    case 1:
+                        _c.trys.push([1, 5, , 6]);
+                        getUrl = "".concat(this.webUrl, "/_api/web/lists/getbytitle('").concat(listTitle, "')?$select=Id");
+                        return [4 /*yield*/, this.httpClient.get(getUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_0__.SPHttpClient.configurations.v1)];
+                    case 2:
+                        getResponse = _c.sent();
+                        if (!getResponse.ok) return [3 /*break*/, 4];
+                        return [4 /*yield*/, getResponse.json()];
+                    case 3:
+                        existingData = _c.sent();
+                        existingId = existingData.Id || ((_a = existingData.d) === null || _a === void 0 ? void 0 : _a.Id);
+                        console.log("[ensureSMEPilotRunsList] List ".concat(listTitle, " already exists with Id ").concat(existingId));
+                        // We could add columns here if ever needed, but they are already managed on the backend side.
+                        return [2 /*return*/];
+                    case 4: return [3 /*break*/, 6];
+                    case 5:
+                        error_4 = _c.sent();
+                        msg = (error_4 === null || error_4 === void 0 ? void 0 : error_4.message) || String(error_4);
+                        if (!msg.includes('404') && !msg.includes('not found')) {
+                            console.warn('[ensureSMEPilotRunsList] Error checking existing list:', msg);
+                            return [2 /*return*/];
+                        }
+                        return [3 /*break*/, 6];
+                    case 6:
+                        _c.trys.push([6, 18, , 19]);
+                        return [4 /*yield*/, this.getRequestDigest()];
+                    case 7:
+                        digest = _c.sent();
+                        createListUrl = "".concat(this.webUrl, "/_api/web/lists");
+                        listBody = {
+                            Title: listTitle,
+                            Description: 'Tracks SMEPilot processing runs for idempotency and diagnostics',
+                            BaseTemplate: 100,
+                            ContentTypesEnabled: false,
+                            Hidden: false
+                        };
+                        return [4 /*yield*/, this.httpClient.post(createListUrl, _microsoft_sp_http__WEBPACK_IMPORTED_MODULE_0__.SPHttpClient.configurations.v1, {
+                                headers: {
+                                    'X-RequestDigest': digest
+                                },
+                                body: JSON.stringify(listBody)
+                            })];
+                    case 8:
+                        createResponse = _c.sent();
+                        if (!!createResponse.ok) return [3 /*break*/, 10];
+                        return [4 /*yield*/, createResponse.text()];
+                    case 9:
+                        errorText = _c.sent();
+                        console.error("[ensureSMEPilotRunsList] Failed to create list (".concat(createResponse.status, "): ").concat(errorText));
+                        return [2 /*return*/];
+                    case 10: return [4 /*yield*/, createResponse.json()];
+                    case 11:
+                        listData = _c.sent();
+                        listId = ((_b = listData.d) === null || _b === void 0 ? void 0 : _b.Id) || listData.Id;
+                        console.log("[ensureSMEPilotRunsList] Created list ".concat(listTitle, " with Id ").concat(listId));
+                        fieldsXml = [
+                            "<Field Type='Text' Name='RawDriveId' StaticName='RawDriveId' DisplayName='RawDriveId' MaxLength='255' />",
+                            "<Field Type='Text' Name='RawItemId' StaticName='RawItemId' DisplayName='RawItemId' MaxLength='255' />",
+                            "<Field Type='Text' Name='ContentHash' StaticName='ContentHash' DisplayName='ContentHash' MaxLength='255' />",
+                            "<Field Type='Text' Name='Version' StaticName='Version' DisplayName='Version' MaxLength='50' />",
+                            "<Field Type='Text' Name='EnrichedUrl' StaticName='EnrichedUrl' DisplayName='EnrichedUrl' MaxLength='1024' />",
+                            "<Field Type='Text' Name='EnrichedDriveId' StaticName='EnrichedDriveId' DisplayName='EnrichedDriveId' MaxLength='255' />",
+                            "<Field Type='Text' Name='EnrichedItemId' StaticName='EnrichedItemId' DisplayName='EnrichedItemId' MaxLength='255' />",
+                            "<Field Type='Text' Name='Status' StaticName='Status' DisplayName='Status' MaxLength='50' />",
+                            "<Field Type='Note' Name='ErrorMessage' StaticName='ErrorMessage' DisplayName='ErrorMessage' NumLines='10' RichText='FALSE' />",
+                            "<Field Type='Text' Name='LastUpdatedUtc' StaticName='LastUpdatedUtc' DisplayName='LastUpdatedUtc' MaxLength='64' />"
+                        ];
+                        _i = 0, fieldsXml_1 = fieldsXml;
+                        _c.label = 12;
+                    case 12:
+                        if (!(_i < fieldsXml_1.length)) return [3 /*break*/, 17];
+                        xml = fieldsXml_1[_i];
+                        _c.label = 13;
+                    case 13:
+                        _c.trys.push([13, 15, , 16]);
+                        return [4 /*yield*/, this.createFieldXml(listId, xml)];
+                    case 14:
+                        _c.sent();
+                        return [3 /*break*/, 16];
+                    case 15:
+                        e_1 = _c.sent();
+                        msg = (e_1 === null || e_1 === void 0 ? void 0 : e_1.message) || String(e_1);
+                        if (msg.includes('already exists') || msg.includes('duplicate')) {
+                            console.log('[ensureSMEPilotRunsList] Column already exists, skipping:', xml);
+                            return [3 /*break*/, 16];
+                        }
+                        console.warn('[ensureSMEPilotRunsList] Failed to create column:', msg);
+                        return [3 /*break*/, 16];
+                    case 16:
+                        _i++;
+                        return [3 /*break*/, 12];
+                    case 17: return [3 /*break*/, 19];
+                    case 18:
+                        error_5 = _c.sent();
+                        console.error('[ensureSMEPilotRunsList] Unexpected error ensuring SMEPilotRuns list:', error_5);
+                        return [3 /*break*/, 19];
+                    case 19: return [2 /*return*/];
+                }
+            });
+        });
+    };
+    /**
      * Verify that columns exist in the list
      */
     SharePointService.prototype.verifyColumnsExist = function (listId, columnNames) {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var url, response, data, fields, fieldNames_1, missingColumns, error_4;
+            var url, response, data, fields, fieldNames_1, missingColumns, error_6;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
@@ -716,8 +809,8 @@ var SharePointService = /** @class */ (function () {
                         _b.label = 3;
                     case 3: return [3 /*break*/, 5];
                     case 4:
-                        error_4 = _b.sent();
-                        console.warn("[verifyColumnsExist] Error verifying columns:", error_4);
+                        error_6 = _b.sent();
+                        console.warn("[verifyColumnsExist] Error verifying columns:", error_6);
                         return [3 /*break*/, 5];
                     case 5: return [2 /*return*/];
                 }
@@ -732,7 +825,7 @@ var SharePointService = /** @class */ (function () {
     SharePointService.prototype.listColumns = function (listId) {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var url, response, data, fields, error_5;
+            var url, response, data, fields, error_7;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
@@ -756,9 +849,9 @@ var SharePointService = /** @class */ (function () {
                     case 3: throw new Error("Failed to list columns: ".concat(response.status));
                     case 4: return [3 /*break*/, 6];
                     case 5:
-                        error_5 = _b.sent();
-                        console.error("[listColumns] Error listing columns:", error_5);
-                        throw error_5;
+                        error_7 = _b.sent();
+                        console.error("[listColumns] Error listing columns:", error_7);
+                        throw error_7;
                     case 6: return [2 /*return*/];
                 }
             });
@@ -773,7 +866,7 @@ var SharePointService = /** @class */ (function () {
     SharePointService.prototype.deleteColumn = function (listId, columnInternalName) {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var fieldUrl, fieldResponse, fieldData, fieldId, digest, deleteUrl, deleteResponse, errorText, error_6;
+            var fieldUrl, fieldResponse, fieldData, fieldId, digest, deleteUrl, deleteResponse, errorText, error_8;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
@@ -817,9 +910,9 @@ var SharePointService = /** @class */ (function () {
                         throw new Error("Failed to delete column: ".concat(deleteResponse.status, " - ").concat(errorText));
                     case 7: return [3 /*break*/, 9];
                     case 8:
-                        error_6 = _b.sent();
-                        console.error("[deleteColumn] Error deleting column '".concat(columnInternalName, "':"), error_6);
-                        throw error_6;
+                        error_8 = _b.sent();
+                        console.error("[deleteColumn] Error deleting column '".concat(columnInternalName, "':"), error_8);
+                        throw error_8;
                     case 9: return [2 /*return*/];
                 }
             });
@@ -833,7 +926,7 @@ var SharePointService = /** @class */ (function () {
     SharePointService.prototype.listColumnsByPath = function (sourceFolderPath) {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var normalizedPath, parts, libraryName, libraryUrl, libraryResponse, libraryData, libraryId, error_7;
+            var normalizedPath, parts, libraryName, libraryUrl, libraryResponse, libraryData, libraryId, error_9;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
@@ -870,9 +963,9 @@ var SharePointService = /** @class */ (function () {
                         return [4 /*yield*/, this.listColumns(libraryId)];
                     case 3: return [2 /*return*/, _b.sent()];
                     case 4:
-                        error_7 = _b.sent();
-                        console.error("[listColumnsByPath] Error:", error_7);
-                        throw error_7;
+                        error_9 = _b.sent();
+                        console.error("[listColumnsByPath] Error:", error_9);
+                        throw error_9;
                     case 5: return [2 /*return*/];
                 }
             });
@@ -887,7 +980,7 @@ var SharePointService = /** @class */ (function () {
     SharePointService.prototype.createFieldXml = function (listId, schemaXml) {
         var _a, _b, _c, _d, _e, _f;
         return __awaiter(this, void 0, void 0, function () {
-            var digest, url, body, response, errorText, errorJson, errorMessage_1, errorMessage, error_8;
+            var digest, url, body, response, errorText, errorJson, errorMessage_1, errorMessage, error_10;
             return __generator(this, function (_g) {
                 switch (_g.label) {
                     case 0:
@@ -958,9 +1051,9 @@ var SharePointService = /** @class */ (function () {
                         console.log("[createFieldXml] Field created successfully");
                         return [3 /*break*/, 6];
                     case 5:
-                        error_8 = _g.sent();
-                        console.error("[createFieldXml] Error creating field:", error_8);
-                        throw error_8;
+                        error_10 = _g.sent();
+                        console.error("[createFieldXml] Error creating field:", error_10);
+                        throw error_10;
                     case 6: return [2 /*return*/];
                 }
             });
@@ -972,7 +1065,7 @@ var SharePointService = /** @class */ (function () {
     SharePointService.prototype.getFieldNameMapping = function () {
         var _a, _b;
         return __awaiter(this, void 0, void 0, function () {
-            var mapping, listUrl, listResponse, listData, listId, fieldsUrl, fieldsResponse, fieldsData, fields, _i, fields_1, field, title, internalName, error_9;
+            var mapping, listUrl, listResponse, listData, listId, fieldsUrl, fieldsResponse, fieldsData, fields, _i, fields_1, field, title, internalName, error_11;
             return __generator(this, function (_c) {
                 switch (_c.label) {
                     case 0:
@@ -1011,8 +1104,8 @@ var SharePointService = /** @class */ (function () {
                         _c.label = 6;
                     case 6: return [3 /*break*/, 8];
                     case 7:
-                        error_9 = _c.sent();
-                        console.warn('[getFieldNameMapping] Error getting field mapping:', error_9);
+                        error_11 = _c.sent();
+                        console.warn('[getFieldNameMapping] Error getting field mapping:', error_11);
                         return [3 /*break*/, 8];
                     case 8: return [2 /*return*/, mapping];
                 }
@@ -1025,7 +1118,7 @@ var SharePointService = /** @class */ (function () {
     SharePointService.prototype.saveConfiguration = function (config) {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var fieldMapping_1, requiredFields, missingFields, existingItem, getFieldName, siteTitle, normalizeLibraryName_1, normalizePathForSave, itemBody, internal, serverRelative, parts, fileName, libraryPath, digest, entityType, listMetaUrl, metaResponse, metaData, error_10, response, updateUrl, errorText, createUrl, errorText, error_11;
+            var fieldMapping_1, requiredFields, missingFields, existingItem, getFieldName, siteTitle, normalizeLibraryName_1, normalizePathForSave, itemBody, internal, serverRelative, parts, fileName, libraryPath, digest, entityType, listMetaUrl, metaResponse, metaData, error_12, response, updateUrl, errorText, createUrl, errorText, error_13;
             var _b;
             return __generator(this, function (_c) {
                 switch (_c.label) {
@@ -1170,8 +1263,8 @@ var SharePointService = /** @class */ (function () {
                         _c.label = 8;
                     case 8: return [3 /*break*/, 10];
                     case 9:
-                        error_10 = _c.sent();
-                        console.warn('[saveConfiguration] Could not get entity type, will try without it:', error_10);
+                        error_12 = _c.sent();
+                        console.warn('[saveConfiguration] Could not get entity type, will try without it:', error_12);
                         return [3 /*break*/, 10];
                     case 10:
                         // DO NOT include __metadata - SharePoint REST API doesn't accept it for list item creation/update
@@ -1223,9 +1316,9 @@ var SharePointService = /** @class */ (function () {
                         console.log('Configuration saved successfully');
                         return [2 /*return*/, true];
                     case 18:
-                        error_11 = _c.sent();
-                        console.error('Error saving configuration:', error_11);
-                        throw error_11;
+                        error_13 = _c.sent();
+                        console.error('Error saving configuration:', error_13);
+                        throw error_13;
                     case 19: return [2 /*return*/];
                 }
             });
@@ -1236,7 +1329,7 @@ var SharePointService = /** @class */ (function () {
      */
     SharePointService.prototype.getConfiguration = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var fieldMapping_2, item_1, normalizeFolderPath, getFieldValue, config, error_12;
+            var fieldMapping_2, item_1, normalizeFolderPath, getFieldValue, config, error_14;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -1329,8 +1422,8 @@ var SharePointService = /** @class */ (function () {
                         console.log('[getConfiguration] Parsed configuration:', config);
                         return [2 /*return*/, config];
                     case 3:
-                        error_12 = _a.sent();
-                        console.error('[getConfiguration] Error getting configuration:', error_12);
+                        error_14 = _a.sent();
+                        console.error('[getConfiguration] Error getting configuration:', error_14);
                         return [2 /*return*/, null];
                     case 4: return [2 /*return*/];
                 }
@@ -1342,7 +1435,7 @@ var SharePointService = /** @class */ (function () {
      */
     SharePointService.prototype.getConfigurationItem = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var url, response, errorText, data, error_13;
+            var url, response, errorText, data, error_15;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -1369,8 +1462,8 @@ var SharePointService = /** @class */ (function () {
                         console.log("[getConfigurationItem] No configuration items found in list");
                         return [2 /*return*/, null];
                     case 5:
-                        error_13 = _a.sent();
-                        console.error("[getConfigurationItem] Exception getting configuration item:", error_13);
+                        error_15 = _a.sent();
+                        console.error("[getConfigurationItem] Exception getting configuration item:", error_15);
                         return [2 /*return*/, null];
                     case 6: return [2 /*return*/];
                 }
@@ -1382,7 +1475,7 @@ var SharePointService = /** @class */ (function () {
      */
     SharePointService.prototype.validateConfiguration = function (config) {
         return __awaiter(this, void 0, void 0, function () {
-            var errors, normalizePath, src, dest, error_14;
+            var errors, normalizePath, src, dest, error_16;
             var _this = this;
             return __generator(this, function (_a) {
                 switch (_a.label) {
@@ -1437,8 +1530,8 @@ var SharePointService = /** @class */ (function () {
                         }
                         return [3 /*break*/, 5];
                     case 4:
-                        error_14 = _a.sent();
-                        errors.push("Validation error: ".concat(error_14.message));
+                        error_16 = _a.sent();
+                        errors.push("Validation error: ".concat(error_16.message));
                         return [3 /*break*/, 5];
                     case 5: return [2 /*return*/, {
                             isValid: errors.length === 0,
@@ -1510,7 +1603,7 @@ var SharePointService = /** @class */ (function () {
     SharePointService.prototype.createMetadataColumns = function (sourceFolderPath) {
         var _a, _b, _c;
         return __awaiter(this, void 0, void 0, function () {
-            var normalizedPath, safePath, libraryId, parts, isLikelyLibraryRoot, listIdUrl, listIdResponse, listIdData, parentList, directListIdUrl, directListIdResponse, directListIdData, error_15, libraryName, serverRelativeLibraryPath, safePath_1, getListUrl, getListResponse, listData, error_16, libraryUrl, libraryResponse, libraryData, error_17, error_18;
+            var normalizedPath, safePath, libraryId, parts, isLikelyLibraryRoot, listIdUrl, listIdResponse, listIdData, parentList, directListIdUrl, directListIdResponse, directListIdData, error_17, libraryName, serverRelativeLibraryPath, safePath_1, getListUrl, getListResponse, listData, error_18, libraryUrl, libraryResponse, libraryData, error_19, error_20;
             return __generator(this, function (_d) {
                 switch (_d.label) {
                     case 0:
@@ -1569,8 +1662,8 @@ var SharePointService = /** @class */ (function () {
                         _d.label = 9;
                     case 9: return [3 /*break*/, 11];
                     case 10:
-                        error_15 = _d.sent();
-                        console.log("[createMetadataColumns] Folder query failed, fallback to library name:", error_15);
+                        error_17 = _d.sent();
+                        console.log("[createMetadataColumns] Folder query failed, fallback to library name:", error_17);
                         return [3 /*break*/, 11];
                     case 11: return [3 /*break*/, 13];
                     case 12:
@@ -1619,8 +1712,8 @@ var SharePointService = /** @class */ (function () {
                         _d.label = 18;
                     case 18: return [3 /*break*/, 20];
                     case 19:
-                        error_16 = _d.sent();
-                        console.log("[createMetadataColumns] Error with GetList(serverRelativePath), trying getbytitle:", error_16);
+                        error_18 = _d.sent();
+                        console.log("[createMetadataColumns] Error with GetList(serverRelativePath), trying getbytitle:", error_18);
                         return [3 /*break*/, 20];
                     case 20:
                         if (!!libraryId) return [3 /*break*/, 27];
@@ -1643,8 +1736,8 @@ var SharePointService = /** @class */ (function () {
                         _d.label = 25;
                     case 25: return [3 /*break*/, 27];
                     case 26:
-                        error_17 = _d.sent();
-                        console.log("[createMetadataColumns] Error getting library ID from getbytitle:", error_17);
+                        error_19 = _d.sent();
+                        console.log("[createMetadataColumns] Error getting library ID from getbytitle:", error_19);
                         return [3 /*break*/, 27];
                     case 27:
                         if (!libraryId) {
@@ -1653,9 +1746,9 @@ var SharePointService = /** @class */ (function () {
                         return [4 /*yield*/, this.addMetadataColumnsToLibrary(libraryId)];
                     case 28: return [2 /*return*/, _d.sent()];
                     case 29:
-                        error_18 = _d.sent();
-                        console.error('Error creating metadata columns:', error_18);
-                        throw error_18;
+                        error_20 = _d.sent();
+                        console.error('Error creating metadata columns:', error_20);
+                        throw error_20;
                     case 30: return [2 /*return*/];
                 }
             });
@@ -1666,7 +1759,7 @@ var SharePointService = /** @class */ (function () {
      */
     SharePointService.prototype.addMetadataColumnsToLibrary = function (libraryId) {
         return __awaiter(this, void 0, void 0, function () {
-            var metadataFieldsXml, successCount, skippedCount, errorCount, columnLimitReached, _i, metadataFieldsXml_1, xml, error_19, errorMessage, error_20;
+            var metadataFieldsXml, successCount, skippedCount, errorCount, columnLimitReached, _i, metadataFieldsXml_1, xml, error_21, errorMessage, error_22;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -1700,8 +1793,8 @@ var SharePointService = /** @class */ (function () {
                         successCount++;
                         return [3 /*break*/, 5];
                     case 4:
-                        error_19 = _a.sent();
-                        errorMessage = error_19.message || String(error_19);
+                        error_21 = _a.sent();
+                        errorMessage = error_21.message || String(error_21);
                         // Check if column limit was reached
                         if (errorMessage.includes('total size of the columns') ||
                             errorMessage.includes('exceeds the limit') ||
@@ -1744,9 +1837,9 @@ var SharePointService = /** @class */ (function () {
                         // Return true if at least some columns were created or already existed
                         return [2 /*return*/, successCount > 0 || skippedCount > 0];
                     case 7:
-                        error_20 = _a.sent();
-                        console.error('Error adding metadata columns to library:', error_20);
-                        throw error_20;
+                        error_22 = _a.sent();
+                        console.error('Error adding metadata columns to library:', error_22);
+                        throw error_22;
                     case 8: return [2 /*return*/];
                 }
             });
@@ -1759,7 +1852,7 @@ var SharePointService = /** @class */ (function () {
      */
     SharePointService.prototype.getDriveIdFromFolderPath = function (folderPath) {
         return __awaiter(this, void 0, void 0, function () {
-            var graphClient, normalizedPath, pathParts, siteName, libraryName_1, webUrlObj, hostname, siteId, webId, siteResponse, error_21, graphSitePath, siteResponse, pathError_1, drivesResponse, normalizedLibraryName_1, matchingDrive, driveId, error_22;
+            var graphClient, normalizedPath, pathParts, siteName, libraryName_1, webUrlObj, hostname, siteId, webId, siteResponse, error_23, graphSitePath, siteResponse, pathError_1, drivesResponse, normalizedLibraryName_1, matchingDrive, driveId, error_24;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -1803,7 +1896,7 @@ var SharePointService = /** @class */ (function () {
                         }
                         return [3 /*break*/, 5];
                     case 4:
-                        error_21 = _a.sent();
+                        error_23 = _a.sent();
                         console.log("[getDriveIdFromFolderPath] Could not use site ID from context, trying path format");
                         return [3 /*break*/, 5];
                     case 5:
@@ -1860,8 +1953,8 @@ var SharePointService = /** @class */ (function () {
                         console.log("[getDriveIdFromFolderPath] \u2705 Found driveId: ".concat(driveId, " for library: ").concat(libraryName_1));
                         return [2 /*return*/, driveId];
                     case 11:
-                        error_22 = _a.sent();
-                        console.error('[getDriveIdFromFolderPath] Error getting driveId from Graph API:', error_22);
+                        error_24 = _a.sent();
+                        console.error('[getDriveIdFromFolderPath] Error getting driveId from Graph API:', error_24);
                         // Fallback to REST API method if Graph API fails
                         console.log('[getDriveIdFromFolderPath] Falling back to REST API method');
                         return [2 /*return*/, this.getDriveIdFromFolderPathREST(folderPath)];
@@ -1878,7 +1971,7 @@ var SharePointService = /** @class */ (function () {
     SharePointService.prototype.getDriveIdFromFolderPathREST = function (folderPath) {
         var _a, _b;
         return __awaiter(this, void 0, void 0, function () {
-            var normalizedPath, parts, libraryName, listId, serverRelativeLibraryPath, safePath, getListUrl, getListResponse, listData, error_23, libraryUrl, libraryResponse, libraryData, driveId, error_24;
+            var normalizedPath, parts, libraryName, listId, serverRelativeLibraryPath, safePath, getListUrl, getListResponse, listData, error_25, libraryUrl, libraryResponse, libraryData, driveId, error_26;
             return __generator(this, function (_c) {
                 switch (_c.label) {
                     case 0:
@@ -1931,8 +2024,8 @@ var SharePointService = /** @class */ (function () {
                         _c.label = 4;
                     case 4: return [3 /*break*/, 6];
                     case 5:
-                        error_23 = _c.sent();
-                        console.warn("[getDriveIdFromFolderPathREST] GetList failed, trying getbytitle:", error_23);
+                        error_25 = _c.sent();
+                        console.warn("[getDriveIdFromFolderPathREST] GetList failed, trying getbytitle:", error_25);
                         return [3 /*break*/, 6];
                     case 6:
                         if (!!listId) return [3 /*break*/, 10];
@@ -1959,8 +2052,8 @@ var SharePointService = /** @class */ (function () {
                         console.warn("[getDriveIdFromFolderPathREST] WARNING: Using constructed driveId format. This may not work with Graph API.");
                         return [2 /*return*/, driveId];
                     case 11:
-                        error_24 = _c.sent();
-                        console.error('[getDriveIdFromFolderPathREST] Error getting drive ID:', error_24);
+                        error_26 = _c.sent();
+                        console.error('[getDriveIdFromFolderPathREST] Error getting drive ID:', error_26);
                         return [2 /*return*/, null];
                     case 12: return [2 /*return*/];
                 }
@@ -1993,7 +2086,7 @@ var SharePointService = /** @class */ (function () {
     SharePointService.prototype.getFolders = function () {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var folders, systemFolders, librariesUrl, response, data, libraries, _i, libraries_1, library, libraryName, rootUrl, normalizedRootUrl, foldersUrl, foldersResponse, foldersData, subfolders, _loop_1, this_1, _b, subfolders_1, folder, error_25, error_26;
+            var folders, systemFolders, librariesUrl, response, data, libraries, _i, libraries_1, library, libraryName, rootUrl, normalizedRootUrl, foldersUrl, foldersResponse, foldersData, subfolders, _loop_1, this_1, _b, subfolders_1, folder, error_27, error_28;
             return __generator(this, function (_c) {
                 switch (_c.label) {
                     case 0:
@@ -2068,16 +2161,16 @@ var SharePointService = /** @class */ (function () {
                         _c.label = 7;
                     case 7: return [3 /*break*/, 9];
                     case 8:
-                        error_25 = _c.sent();
-                        console.warn("Error fetching folders from ".concat(libraryName, ":"), error_25);
+                        error_27 = _c.sent();
+                        console.warn("Error fetching folders from ".concat(libraryName, ":"), error_27);
                         return [3 /*break*/, 9];
                     case 9:
                         _i++;
                         return [3 /*break*/, 3];
                     case 10: return [2 /*return*/, folders.sort(function (a, b) { return a.text.localeCompare(b.text); })];
                     case 11:
-                        error_26 = _c.sent();
-                        console.error('Error getting folders:', error_26);
+                        error_28 = _c.sent();
+                        console.error('Error getting folders:', error_28);
                         return [2 /*return*/, []];
                     case 12: return [2 /*return*/];
                 }
@@ -2090,7 +2183,7 @@ var SharePointService = /** @class */ (function () {
     SharePointService.prototype.getTemplateFiles = function () {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var files, systemFolders, librariesUrl, response, data, libraries, _i, libraries_2, library, libraryName, rootUrl, filesUrl, filesResponse, filesData, allFiles, dotxFiles, _b, dotxFiles_1, file, normalizedPath, error_27, error_28;
+            var files, systemFolders, librariesUrl, response, data, libraries, _i, libraries_2, library, libraryName, rootUrl, filesUrl, filesResponse, filesData, allFiles, dotxFiles, _b, dotxFiles_1, file, normalizedPath, error_29, error_30;
             return __generator(this, function (_c) {
                 switch (_c.label) {
                     case 0:
@@ -2153,16 +2246,16 @@ var SharePointService = /** @class */ (function () {
                         _c.sent();
                         return [3 /*break*/, 10];
                     case 9:
-                        error_27 = _c.sent();
-                        console.warn("Error fetching files from ".concat(libraryName, ":"), error_27);
+                        error_29 = _c.sent();
+                        console.warn("Error fetching files from ".concat(libraryName, ":"), error_29);
                         return [3 /*break*/, 10];
                     case 10:
                         _i++;
                         return [3 /*break*/, 3];
                     case 11: return [2 /*return*/, files.sort(function (a, b) { return a.text.localeCompare(b.text); })];
                     case 12:
-                        error_28 = _c.sent();
-                        console.error('Error getting template files:', error_28);
+                        error_30 = _c.sent();
+                        console.error('Error getting template files:', error_30);
                         return [2 /*return*/, []];
                     case 13: return [2 /*return*/];
                 }
@@ -2198,7 +2291,7 @@ var SharePointService = /** @class */ (function () {
      */
     SharePointService.prototype.getTemplateFilesFromFolder = function (folderUrl, libraryName, files, systemFolders) {
         return __awaiter(this, void 0, void 0, function () {
-            var foldersUrl, foldersResponse, foldersData, subfolders, _loop_2, this_2, _i, subfolders_2, folder, error_29;
+            var foldersUrl, foldersResponse, foldersData, subfolders, _loop_2, this_2, _i, subfolders_2, folder, error_31;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -2279,9 +2372,9 @@ var SharePointService = /** @class */ (function () {
                         return [3 /*break*/, 3];
                     case 6: return [3 /*break*/, 8];
                     case 7:
-                        error_29 = _a.sent();
+                        error_31 = _a.sent();
                         // Silently continue if folder access fails
-                        console.warn("Error getting files from folder ".concat(folderUrl, ":"), error_29);
+                        console.warn("Error getting files from folder ".concat(folderUrl, ":"), error_31);
                         return [3 /*break*/, 8];
                     case 8: return [2 /*return*/];
                 }
@@ -2294,7 +2387,7 @@ var SharePointService = /** @class */ (function () {
     SharePointService.prototype.uploadTemplateFile = function (file, targetFolderPath) {
         var _a, _b, _c;
         return __awaiter(this, void 0, void 0, function () {
-            var normalizeFolder, serverRelativeFolder, digestUrl, digestResponse, errorText, digestData, digest, encodedPath, folderCheckUrl, folderCheck, createFolderUrl, fileBuffer, uploadUrl, uploadResponse, errorText, uploadData, fileUrl, error_30;
+            var normalizeFolder, serverRelativeFolder, digestUrl, digestResponse, errorText, digestData, digest, encodedPath, folderCheckUrl, folderCheck, createFolderUrl, fileBuffer, uploadUrl, uploadResponse, errorText, uploadData, fileUrl, error_32;
             var _this = this;
             return __generator(this, function (_d) {
                 switch (_d.label) {
@@ -2386,9 +2479,9 @@ var SharePointService = /** @class */ (function () {
                         // Return normalized path
                         return [2 /*return*/, fileUrl.replace(this.webUrl, '') || fileUrl];
                     case 13:
-                        error_30 = _d.sent();
-                        console.error('Error uploading template file:', error_30);
-                        throw error_30;
+                        error_32 = _d.sent();
+                        console.error('Error uploading template file:', error_32);
+                        throw error_32;
                     case 14: return [2 /*return*/];
                 }
             });
@@ -2399,7 +2492,7 @@ var SharePointService = /** @class */ (function () {
      */
     SharePointService.prototype.createErrorFolders = function (sourceFolderPath) {
         return __awaiter(this, void 0, void 0, function () {
-            var folders, _i, folders_1, folderName, folderPath, encodedPath, url, response, errorText, error_31, error_32;
+            var folders, _i, folders_1, folderName, folderPath, encodedPath, url, response, errorText, error_33, error_34;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -2436,18 +2529,18 @@ var SharePointService = /** @class */ (function () {
                         _a.label = 6;
                     case 6: return [3 /*break*/, 8];
                     case 7:
-                        error_31 = _a.sent();
+                        error_33 = _a.sent();
                         // Folder might already exist, continue
-                        console.warn("Folder ".concat(folderName, " might already exist:"), error_31.message);
+                        console.warn("Folder ".concat(folderName, " might already exist:"), error_33.message);
                         return [3 /*break*/, 8];
                     case 8:
                         _i++;
                         return [3 /*break*/, 1];
                     case 9: return [2 /*return*/, true];
                     case 10:
-                        error_32 = _a.sent();
-                        console.error('Error creating error folders:', error_32);
-                        throw error_32;
+                        error_34 = _a.sent();
+                        console.error('Error creating error folders:', error_34);
+                        throw error_34;
                     case 11: return [2 /*return*/];
                 }
             });
@@ -2799,7 +2892,7 @@ var AdminPanel = /** @class */ (function (_super) {
                         });
                         _c.label = 1;
                     case 1:
-                        _c.trys.push([1, 12, , 13]);
+                        _c.trys.push([1, 13, , 14]);
                         config = this.state.configuration;
                         steps = [];
                         // Step 1: Prepare configuration storage
@@ -2808,7 +2901,13 @@ var AdminPanel = /** @class */ (function (_super) {
                     case 2:
                         _c.sent();
                         steps.push('✓ Configuration list is ready');
-                        // Step 2: Save configuration to list
+                        // Step 2: Ensure SMEPilotRuns tracking list exists (for status/idempotency)
+                        steps.push('Preparing tracking list (SMEPilotRuns)...');
+                        return [4 /*yield*/, this.sharePointService.ensureSMEPilotRunsList()];
+                    case 3:
+                        _c.sent();
+                        steps.push('✓ Tracking list is ready');
+                        // Step 3: Save configuration to list
                         steps.push('Saving settings...');
                         return [4 /*yield*/, this.sharePointService.saveConfiguration({
                                 sourceFolderPath: config.sourceFolderPath,
@@ -2823,27 +2922,27 @@ var AdminPanel = /** @class */ (function (_super) {
                                 accessO365: config.accessO365,
                                 enrichedOutputType: config.enrichedOutputType
                             })];
-                    case 3:
-                        _c.sent();
-                        steps.push('✓ Settings saved');
-                        // Step 3: Create metadata columns
-                        steps.push('Checking document status columns...');
-                        return [4 /*yield*/, this.sharePointService.createMetadataColumns(config.sourceFolderPath)];
                     case 4:
                         _c.sent();
-                        steps.push('✓ Document status columns are ready');
-                        // Step 4: Create error folders
-                        steps.push('Creating error folders (for rejected or failed documents)...');
-                        return [4 /*yield*/, this.sharePointService.createErrorFolders(config.sourceFolderPath)];
+                        steps.push('✓ Settings saved');
+                        // Step 4: Create metadata columns
+                        steps.push('Checking document status columns...');
+                        return [4 /*yield*/, this.sharePointService.createMetadataColumns(config.sourceFolderPath)];
                     case 5:
                         _c.sent();
+                        steps.push('✓ Document status columns are ready');
+                        // Step 5: Create error folders
+                        steps.push('Creating error folders (for rejected or failed documents)...');
+                        return [4 /*yield*/, this.sharePointService.createErrorFolders(config.sourceFolderPath)];
+                    case 6:
+                        _c.sent();
                         steps.push('✓ Error folders created');
-                        // Step 5: Connect change notifications (webhook)
+                        // Step 6: Connect change notifications (webhook)
                         steps.push('Connecting change notifications...');
                         tenantId = ((_b = (_a = this.props.context.pageContext.aadInfo) === null || _a === void 0 ? void 0 : _a.tenantId) === null || _b === void 0 ? void 0 : _b.toString()) || '';
                         siteId = this.sharePointService.getSiteId();
                         return [4 /*yield*/, this.sharePointService.getDriveIdFromFolderPath(config.sourceFolderPath)];
-                    case 6:
+                    case 7:
                         driveId = _c.sent();
                         if (!driveId) {
                             steps.push("\u26A0 Could not resolve the library ID for the source folder. The service will still try to detect it automatically.");
@@ -2857,17 +2956,17 @@ var AdminPanel = /** @class */ (function (_super) {
                                 notificationUrl: "".concat(this.props.functionAppUrl, "/api/ProcessSharePointFile"),
                                 subscriptionId: config.subscriptionId
                             })];
-                    case 7:
+                    case 8:
                         webhookResult = _c.sent();
-                        if (!(webhookResult.success && webhookResult.subscriptionId)) return [3 /*break*/, 9];
+                        if (!(webhookResult.success && webhookResult.subscriptionId)) return [3 /*break*/, 10];
                         // Save subscription ID to configuration
                         return [4 /*yield*/, this.sharePointService.saveConfiguration(__assign(__assign({}, config), { subscriptionId: webhookResult.subscriptionId }))];
-                    case 8:
+                    case 9:
                         // Save subscription ID to configuration
                         _c.sent();
                         steps.push("\u2713 Change notifications connected (ID: ".concat(webhookResult.subscriptionId, ")"));
-                        return [3 /*break*/, 10];
-                    case 9:
+                        return [3 /*break*/, 11];
+                    case 10:
                         if (webhookResult.needsAdminConsent) {
                             steps.push('⚠ Change notifications are not connected because admin consent is required. ' +
                                 'Ask a Microsoft 365 tenant administrator to click "Grant permissions (Admin only)" above, ' +
@@ -2877,9 +2976,9 @@ var AdminPanel = /** @class */ (function (_super) {
                         else {
                             steps.push("\u26A0 Change notifications could not be connected: ".concat(webhookResult.message || 'Unknown error'));
                         }
-                        _c.label = 10;
-                    case 10: return [4 /*yield*/, this.sharePointService.getConfiguration()];
-                    case 11:
+                        _c.label = 11;
+                    case 11: return [4 /*yield*/, this.sharePointService.getConfiguration()];
+                    case 12:
                         updatedConfig = _c.sent();
                         this.setState({
                             isSaving: false,
@@ -2889,15 +2988,15 @@ var AdminPanel = /** @class */ (function (_super) {
                             lastUpdated: (updatedConfig === null || updatedConfig === void 0 ? void 0 : updatedConfig.lastUpdated) || new Date(),
                             subscriptionId: webhookResult.subscriptionId || null
                         });
-                        return [3 /*break*/, 13];
-                    case 12:
+                        return [3 /*break*/, 14];
+                    case 13:
                         error_1 = _c.sent();
                         this.setState({
                             isSaving: false,
                             error: "We couldn't save these settings.\n\nPlease check:\n1. You have sufficient permissions on this site\n2. This page can reach the SMEPilot service\n3. The selected folders and template file exist and are accessible."
                         });
-                        return [3 /*break*/, 13];
-                    case 13: return [2 /*return*/];
+                        return [3 /*break*/, 14];
+                    case 14: return [2 /*return*/];
                 }
             });
         }); };

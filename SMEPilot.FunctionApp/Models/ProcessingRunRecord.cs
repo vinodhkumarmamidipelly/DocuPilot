@@ -9,6 +9,12 @@ namespace SMEPilot.FunctionApp.Models
     /// </summary>
     public class ProcessingRunRecord
     {
+        /// <summary>
+        /// Optional title/label for the run (typically the file name). Mapped to the
+        /// SharePoint list's built-in Title column so that rows are readable in the UI.
+        /// </summary>
+        public string? Title { get; set; }
+
         public string RawDriveId { get; set; } = string.Empty;
         public string RawItemId { get; set; } = string.Empty;
         public string ContentHash { get; set; } = string.Empty;

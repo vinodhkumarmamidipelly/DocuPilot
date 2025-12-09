@@ -417,7 +417,8 @@ namespace SMEPilot.FunctionApp.Functions
             {
                 // Step 2: Parse request body
                 var body = await new StreamReader(req.Body).ReadToEndAsync();
-                
+                _logger.LogInformation("📥 [WEBHOOK] Incoming request body length: {Length}", body?.Length ?? 0);
+
                 // Step 3: Try to parse as Graph notification first
                 try
                 {
@@ -425,20 +426,38 @@ namespace SMEPilot.FunctionApp.Functions
                     
                     if (graphNotification?.Value != null && graphNotification.Value.Count > 0)
                     {
-                        _logger.LogDebug("Received Graph notification with {Count} items", graphNotification.Value.Count);
-                        _logger.LogDebug("Notification body: {Body}", body.Substring(0, Math.Min(500, body.Length)));
+                        _logger.LogInformation("📥 [WEBHOOK] Received Graph notification batch with {Count} item(s)", graphNotification.Value.Count);
+                        
+                        // Log a safe preview of the payload for debugging (first 1000 chars max)
+                        if (!string.IsNullOrEmpty(body))
+                        {
+                            var preview = body.Length > 1000 ? body.Substring(0, 1000) + " ...[truncated]" : body;
+                            _logger.LogInformation("📥 [WEBHOOK] Notification body preview: {Body}", preview);
+                        }
                         
                         // Process each notification item
                         var processedCount = 0;
                         foreach (var notification in graphNotification.Value)
                         {
-                            _logger.LogDebug("=== Processing Notification Item ===");
-                            _logger.LogDebug("Subscription ID: {SubscriptionId}, Change Type: {ChangeType}, Resource: {Resource}", 
+                            _logger.LogInformation("🔔 [NOTIF] Processing notification. SubscriptionId={SubscriptionId}, ChangeType={ChangeType}, Resource={Resource}",
                                 notification.SubscriptionId, notification.ChangeType, notification.Resource);
                             
-                            // Process "updated" events but filter out duplicates using idempotency check
-                            // Graph API only supports "updated" for drive subscriptions (not "created")
-                            // We use metadata check + semaphore lock to prevent duplicate processing
+                            var hasResourceData = notification.ResourceData != null;
+                            _logger.LogInformation("🔔 [NOTIF] ResourceData present: {HasResourceData}", hasResourceData);
+                            if (hasResourceData)
+                            {
+                                _logger.LogInformation(
+                                    "🔔 [NOTIF] ResourceData summary: Id={Id}, Name={Name}, DriveId={DriveId}, SiteId={SiteId}, ListId={ListId}, TenantId={TenantId}",
+                                    notification.ResourceData?.Id,
+                                    notification.ResourceData?.Name,
+                                    notification.ResourceData?.DriveId,
+                                    notification.ResourceData?.SiteId,
+                                    notification.ResourceData?.ListId,
+                                    notification.ResourceData?.TenantId);
+                            }
+                            
+                            // Process "updated" events but filter out duplicates using idempotency check.
+                            // Our current subscriptions use 'updated' only; delete propagation is derived via 404/delta when possible.
                             if (notification.ChangeType != "updated")
                             {
                                 _logger.LogInformation("⏭️ Skipping {ChangeType} event - only processing 'updated' events", notification.ChangeType);
@@ -579,7 +598,7 @@ namespace SMEPilot.FunctionApp.Functions
                                 _logger.LogWarning("⚠️ Notification has no resource data: {SubscriptionId}. Will attempt recent-items fallback.", notification.SubscriptionId);
                                 _logger.LogDebug("Full notification JSON: {Json}", JsonConvert.SerializeObject(notification));
                             }
-                            
+
                             // If resourceData is missing fields, extract driveId from resource path
                             if (string.IsNullOrWhiteSpace(driveId) && !string.IsNullOrWhiteSpace(notification.Resource))
                             {
@@ -592,7 +611,120 @@ namespace SMEPilot.FunctionApp.Functions
                                     _logger.LogDebug("✅ Extracted driveId from resource: {DriveId}", driveId);
                                 }
                             }
-                            
+
+                            // EARLY DELETION CHECK (strong signal based on driveId + itemId)
+                            // If we already have driveId + itemId, verify that the item still exists.
+                            // If Graph returns null/404, treat this as a deletion event and try to clean up enriched output.
+                            if (!string.IsNullOrWhiteSpace(driveId) && !string.IsNullOrWhiteSpace(itemId))
+                            {
+                                try
+                                {
+                                    var tenantIdForDelete = GetTenantIdFromNotification(notification) ?? _cfg.GraphTenantId ?? "default";
+                                    _logger.LogDebug("🔍 [DELETION-CHECK] Verifying existence of item before processing. DriveId={DriveId}, ItemId={ItemId}, TenantId={TenantId}",
+                                        driveId, itemId, tenantIdForDelete);
+
+                                    var driveItemCheck = await _graph.GetDriveItemAsync(driveId, itemId, tenantIdForDelete);
+                                    if (driveItemCheck == null)
+                                    {
+                                        _logger.LogDebug("🗑️ [DELETION] Pre-processing check: file (ItemId={ItemId}) no longer exists. Attempting enriched-file cleanup.", itemId);
+
+                                        try
+                                        {
+                                            var siteIdForDelete = await _graph.GetSiteIdFromDriveAsync(driveId, tenantIdForDelete);
+                                            if (!string.IsNullOrWhiteSpace(siteIdForDelete))
+                                            {
+                                                _logger.LogDebug("🔍 [DELETION] Looking up latest *succeeded* run for deletion cleanup. SiteId={SiteId}, DriveId={DriveId}, RawItemId={ItemId}, TenantId={TenantId}",
+                                                    siteIdForDelete, driveId, itemId, tenantIdForDelete);
+
+                                                var latestRunForDelete = await _graph.GetLatestSucceededProcessingRunAsync(siteIdForDelete, driveId, itemId, tenantIdForDelete);
+                                                if (latestRunForDelete != null &&
+                                                    !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedDriveId) &&
+                                                    !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedItemId))
+                                                {
+                                                    _logger.LogInformation("🗑️ [DELETION] Deleting enriched file for RawItemId={ItemId}. EnrichedDriveId={EnrichedDriveId}, EnrichedItemId={EnrichedItemId}",
+                                                        itemId, latestRunForDelete.EnrichedDriveId, latestRunForDelete.EnrichedItemId);
+
+                                                    _logger.LogDebug("🔍 [DELETION] Calling DeleteFileAsync for EnrichedDriveId={EnrichedDriveId}, EnrichedItemId={EnrichedItemId}, TenantId={TenantId}",
+                                                        latestRunForDelete.EnrichedDriveId, latestRunForDelete.EnrichedItemId, tenantIdForDelete);
+
+                                                    await _graph.DeleteFileAsync(latestRunForDelete.EnrichedDriveId!, latestRunForDelete.EnrichedItemId!, tenantIdForDelete);
+                                                }
+                                                else
+                                                {
+                                                    _logger.LogInformation("ℹ️ [DELETION] No enriched file metadata found for RawDriveId={DriveId}, RawItemId={ItemId}. Nothing to delete.",
+                                                        driveId, itemId);
+                                                }
+                                            }
+                                            else
+                                            {
+                                                _logger.LogWarning("⚠️ [DELETION] Could not determine siteId for drive {DriveId} during pre-processing deletion check. Skipping enriched-file cleanup.", driveId);
+                                            }
+                                        }
+                                        catch (Exception deleteEx)
+                                        {
+                                            _logger.LogWarning(deleteEx, "⚠️ [DELETION] Failed to delete enriched file during pre-processing deletion check for RawDriveId={DriveId}, RawItemId={ItemId}: {Error}",
+                                                driveId, itemId, deleteEx.Message);
+                                        }
+
+                                        // Skip further processing for this notification - it's a pure deletion event.
+                                        continue;
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    if (ex is ODataError odataError &&
+                                        (odataError.Error?.Code == "itemNotFound" || odataError.Error?.Code == "NotFound"))
+                                    {
+                                        _logger.LogDebug("🗑️ [DELETION] Pre-processing check: file (ItemId={ItemId}) not found (404). Attempting enriched-file cleanup.", itemId);
+
+                                        try
+                                        {
+                                            var tenantIdForDelete = GetTenantIdFromNotification(notification) ?? _cfg.GraphTenantId ?? "default";
+                                            var siteIdForDelete = await _graph.GetSiteIdFromDriveAsync(driveId, tenantIdForDelete);
+                                            if (!string.IsNullOrWhiteSpace(siteIdForDelete))
+                                            {
+                                                _logger.LogDebug("🔍 [DELETION] Looking up latest *succeeded* run for deletion cleanup (404 case). SiteId={SiteId}, DriveId={DriveId}, RawItemId={ItemId}, TenantId={TenantId}",
+                                                    siteIdForDelete, driveId, itemId, tenantIdForDelete);
+
+                                                var latestRunForDelete = await _graph.GetLatestSucceededProcessingRunAsync(siteIdForDelete, driveId, itemId, tenantIdForDelete);
+                                                if (latestRunForDelete != null &&
+                                                    !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedDriveId) &&
+                                                    !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedItemId))
+                                                {
+                                                    _logger.LogInformation("🗑️ [DELETION] Deleting enriched file for RawItemId={ItemId} (404 case). EnrichedDriveId={EnrichedDriveId}, EnrichedItemId={EnrichedItemId}",
+                                                        itemId, latestRunForDelete.EnrichedDriveId, latestRunForDelete.EnrichedItemId);
+
+                                                    _logger.LogDebug("🔍 [DELETION] Calling DeleteFileAsync for EnrichedDriveId={EnrichedDriveId}, EnrichedItemId={EnrichedItemId}, TenantId={TenantId} (404 case)",
+                                                        latestRunForDelete.EnrichedDriveId, latestRunForDelete.EnrichedItemId, tenantIdForDelete);
+
+                                                    await _graph.DeleteFileAsync(latestRunForDelete.EnrichedDriveId!, latestRunForDelete.EnrichedItemId!, tenantIdForDelete);
+                                                }
+                                                else
+                                                {
+                                                    _logger.LogInformation("ℹ️ [DELETION] No enriched file metadata found for RawDriveId={DriveId}, RawItemId={ItemId} (404 case). Nothing to delete.",
+                                                        driveId, itemId);
+                                                }
+                                            }
+                                            else
+                                            {
+                                                _logger.LogWarning("⚠️ [DELETION] Could not determine siteId for drive {DriveId} during pre-processing deletion check (404 case). Skipping enriched-file cleanup.", driveId);
+                                            }
+                                        }
+                                        catch (Exception deleteEx)
+                                        {
+                                            _logger.LogWarning(deleteEx, "⚠️ [DELETION] Failed to delete enriched file during pre-processing deletion check (404 case) for RawDriveId={DriveId}, RawItemId={ItemId}: {Error}",
+                                                driveId, itemId, deleteEx.Message);
+                                        }
+
+                                        // Skip further processing for this notification - it's a pure deletion event.
+                                        continue;
+                                    }
+
+                                    _logger.LogWarning(ex, "⚠️ [DELETION] Pre-processing deletion check failed for DriveId={DriveId}, ItemId={ItemId}. Will proceed with normal processing. Error: {Error}",
+                                        driveId, itemId, ex.Message);
+                                }
+                            }
+
                             // If we still don't have file details, query Graph API for recent changes,
                             // preferring the delta API so we can filter by source folder and recency.
                             // BUT: Check metadata FIRST before querying (to avoid processing same file multiple times)
@@ -633,6 +765,9 @@ namespace SMEPilot.FunctionApp.Functions
                                     var lookback = TimeSpan.Zero;
 
                                     // 1) Try delta-based recent items with strong filtering (path + time window)
+                                    _logger.LogDebug("🔍 [Delta] Entering delta/recent-items fallback in ProcessSharePointFile. DriveId={DriveId}, SourceFolderPathForFilter={SourceFolderPath}, TenantIdForDelta={TenantId}, SiteIdForDelta(before)={SiteId}",
+                                        driveId, sourceFolderPathForFilter ?? "<null>", tenantIdForDelta, siteIdForDelta ?? "<null>");
+
                                     var deltaCandidates = await _graph.GetRecentItemsFromDeltaAsync(
                                         driveId,
                                         sourceFolderPathForFilter,
@@ -723,33 +858,76 @@ namespace SMEPilot.FunctionApp.Functions
                                     {
                                         // No recent files found - this likely indicates a file deletion.
                                         // When a file is deleted, SharePoint sends "updated" notification but file no longer exists.
-                                        _logger.LogDebug("🗑️ [DELETION] No recent files found in drive - likely file deletion event. Attempting enriched-file cleanup.");
+                                        _logger.LogInformation("🗑️ [DELETION] No recent files found in drive - likely file deletion event. Attempting enriched-file cleanup. DriveId={DriveId}, ItemIdForDedup={ItemId}, SiteIdForDelta={SiteId}, TenantIdForDelta={TenantId}",
+                                            driveId, itemIdForDedup ?? "<null>", siteIdForDelta ?? "<null>", tenantIdForDelta);
 
                                         try
                                         {
-                                            if (!string.IsNullOrWhiteSpace(siteIdForDelta))
+                                            // If we don't yet know the site ID, first try cache, then resolve from the drive.
+                                            if (string.IsNullOrWhiteSpace(siteIdForDelta))
                                             {
-                                                var latestRunForDelete = await _graph.GetLatestSucceededProcessingRunAsync(siteIdForDelta, driveId, itemIdForDedup, tenantIdForDelta);
-                                                if (latestRunForDelete != null &&
-                                                    !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedDriveId) &&
-                                                    !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedItemId))
+                                                var cachedSiteId = _graph.TryGetCachedSiteIdForDrive(driveId);
+                                                if (!string.IsNullOrWhiteSpace(cachedSiteId))
                                                 {
-                                                    _logger.LogInformation("🗑️ [DELETION] Deleting enriched file for RawItemId={ItemId}. EnrichedDriveId={EnrichedDriveId}, EnrichedItemId={EnrichedItemId}",
-                                                        itemIdForDedup, latestRunForDelete.EnrichedDriveId, latestRunForDelete.EnrichedItemId);
-
-                                                    await _graph.DeleteFileAsync(latestRunForDelete.EnrichedDriveId!, latestRunForDelete.EnrichedItemId!, tenantIdForDelta);
+                                                    siteIdForDelta = cachedSiteId;
+                                                    _logger.LogInformation("🔍 [DELETION] Using cached siteIdForDelta={SiteId} for drive {DriveId}", siteIdForDelta, driveId);
                                                 }
                                                 else
                                                 {
-                                                    _logger.LogInformation("ℹ️ [DELETION] No enriched file metadata found for RawDriveId={DriveId}, RawItemId={ItemId}. Nothing to delete.",
-                                                        driveId, itemIdForDedup);
+                                                    _logger.LogInformation("🔍 [DELETION] siteIdForDelta is null/empty and not in cache. Resolving site ID from drive {DriveId} for deletion cleanup.", driveId);
+                                                    siteIdForDelta = await _graph.GetSiteIdFromDriveAsync(driveId, tenantIdForDelta);
+                                                    _logger.LogInformation("🔍 [DELETION] Resolved siteIdForDelta={SiteId} from drive {DriveId}", siteIdForDelta ?? "<null>", driveId);
+
+                                                    if (!string.IsNullOrWhiteSpace(siteIdForDelta))
+                                                    {
+                                                        _graph.CacheDriveSiteMapping(driveId, siteIdForDelta);
+                                                    }
                                                 }
+                                            }
+
+                                            if (!string.IsNullOrWhiteSpace(siteIdForDelta))
+                                            {
+                                                if (!string.IsNullOrWhiteSpace(itemIdForDedup))
+                                                {
+                                                    _logger.LogInformation("🔍 [DELETION] Looking up latest *succeeded* run by RawDriveId+RawItemId. SiteId={SiteId}, DriveId={DriveId}, RawItemId={ItemId}, TenantId={TenantId}",
+                                                        siteIdForDelta, driveId, itemIdForDedup, tenantIdForDelta);
+
+                                                    var latestRunForDelete = await _graph.GetLatestSucceededProcessingRunAsync(siteIdForDelta, driveId, itemIdForDedup, tenantIdForDelta);
+                                                    if (latestRunForDelete != null &&
+                                                        !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedDriveId) &&
+                                                        !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedItemId))
+                                                    {
+                                                        _logger.LogInformation("🗑️ [DELETION] Deleting enriched file for RawDriveId={RawDriveId}, RawItemId={RawItemId}. EnrichedDriveId={EnrichedDriveId}, EnrichedItemId={EnrichedItemId}",
+                                                            latestRunForDelete.RawDriveId, latestRunForDelete.RawItemId, latestRunForDelete.EnrichedDriveId, latestRunForDelete.EnrichedItemId);
+
+                                                        _logger.LogDebug("🔍 [DELETION] Calling DeleteFileAsync for EnrichedDriveId={EnrichedDriveId}, EnrichedItemId={EnrichedItemId}, TenantId={TenantId}",
+                                                            latestRunForDelete.EnrichedDriveId, latestRunForDelete.EnrichedItemId, tenantIdForDelta);
+
+                                                        await _graph.DeleteFileAsync(latestRunForDelete.EnrichedDriveId!, latestRunForDelete.EnrichedItemId!, tenantIdForDelta);
+                                                    }
+                                                    else
+                                                    {
+                                                        _logger.LogInformation("ℹ️ [DELETION] No succeeded tracking record with enriched file found for RawDriveId={DriveId}, RawItemId={ItemId}. Nothing to delete.",
+                                                            driveId, itemIdForDedup);
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    // We know "some file" under this drive+source folder was deleted, but Graph didn't give us its id.
+                                                    // Instead of guessing (which could delete the wrong enriched file), we log and skip.
+                                                    _logger.LogWarning("⚠️ [DELETION] Delta indicates a deletion under SourceFolderPath, but notification has no itemId. DriveId={DriveId}, SiteId={SiteId}. Skipping enriched delete to avoid deleting the wrong file.",
+                                                        driveId, siteIdForDelta);
+                                                }
+                                            }
+                                            else
+                                            {
+                                                _logger.LogWarning("⚠️ [DELETION] Could not determine siteId for drive {DriveId} during delta-based deletion cleanup. Skipping enriched-file cleanup.", driveId);
                                             }
                                         }
                                         catch (Exception deleteEx)
                                         {
                                             _logger.LogWarning(deleteEx, "⚠️ [DELETION] Failed to delete enriched file for RawDriveId={DriveId}, RawItemId={ItemId}: {Error}",
-                                                driveId, itemIdForDedup, deleteEx.Message);
+                                                driveId, itemIdForDedup ?? "<null>", deleteEx.Message);
                                         }
 
                                         continue;
@@ -789,14 +967,15 @@ namespace SMEPilot.FunctionApp.Functions
                             try
                             {
                                 var driveItem = await _graph.GetDriveItemAsync(driveId, itemId, tenantId);
-                                if (driveItem != null)
-                                {
-                                    siteId = driveItem.ParentReference?.SiteId;
-                                    if (!string.IsNullOrWhiteSpace(siteId))
+                                    if (driveItem != null)
                                     {
-                                        _logger.LogInformation("✅ [SITE_ID] Captured site ID from source file: {SiteId}", siteId);
+                                        siteId = driveItem.ParentReference?.SiteId;
+                                        if (!string.IsNullOrWhiteSpace(siteId))
+                                        {
+                                            _logger.LogInformation("✅ [SITE_ID] Captured site ID from source file: {SiteId}", siteId);
+                                            _graph.CacheDriveSiteMapping(driveId, siteId);
+                                        }
                                     }
-                                }
                             }
                             catch (Exception ex)
                             {
@@ -1465,7 +1644,12 @@ namespace SMEPilot.FunctionApp.Functions
         }
 
         private async Task<(bool Success, string? EnrichedUrl, string? ErrorMessage)> ProcessFileAsync(
-            string driveId, string itemId, string fileName, string uploaderEmail, string tenantId, string? siteId = null)
+            string driveId,
+            string itemId,
+            string fileName,
+            string uploaderEmail,
+            string tenantId,
+            string? siteId = null)
         {
             var processingStartTime = DateTimeOffset.UtcNow;
             long fileSizeBytes = 0;
@@ -1515,6 +1699,7 @@ namespace SMEPilot.FunctionApp.Functions
                 {
                     var runRecord = new ProcessingRunRecord
                     {
+                        Title = fileName,
                         RawDriveId = driveId,
                         RawItemId = itemId,
                         ContentHash = string.Empty,
@@ -1546,7 +1731,41 @@ namespace SMEPilot.FunctionApp.Functions
                 var driveItem = await _graph.GetDriveItemAsync(driveId, itemId, tenantId);
                 if (driveItem == null)
                 {
-                    _logger.LogDebug("🗑️ [DELETION] File {FileName} (ID: {ItemId}) no longer exists - likely deleted. Skipping processing.", fileName, itemId);
+                    _logger.LogDebug("🗑️ [DELETION] File {FileName} (ID: {ItemId}) no longer exists - likely deleted. Attempting enriched-file cleanup.", fileName, itemId);
+
+                    try
+                    {
+                        var tenantIdForDelete = tenantId ?? _cfg.GraphTenantId ?? "default";
+                        var siteIdForDelete = await _graph.GetSiteIdFromDriveAsync(driveId, tenantIdForDelete);
+                        if (!string.IsNullOrWhiteSpace(siteIdForDelete))
+                        {
+                            var latestRunForDelete = await _graph.GetLatestSucceededProcessingRunAsync(siteIdForDelete, driveId, itemId, tenantIdForDelete);
+                            if (latestRunForDelete != null &&
+                                !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedDriveId) &&
+                                !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedItemId))
+                            {
+                                _logger.LogInformation("🗑️ [DELETION] Deleting enriched file for RawItemId={ItemId}. EnrichedDriveId={EnrichedDriveId}, EnrichedItemId={EnrichedItemId}",
+                                    itemId, latestRunForDelete.EnrichedDriveId, latestRunForDelete.EnrichedItemId);
+
+                                await _graph.DeleteFileAsync(latestRunForDelete.EnrichedDriveId!, latestRunForDelete.EnrichedItemId!, tenantIdForDelete);
+                            }
+                            else
+                            {
+                                _logger.LogInformation("ℹ️ [DELETION] No enriched file metadata found for RawDriveId={DriveId}, RawItemId={ItemId}. Nothing to delete.",
+                                    driveId, itemId);
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogWarning("⚠️ [DELETION] Could not determine siteId for drive {DriveId}. Skipping enriched-file cleanup.", driveId);
+                        }
+                    }
+                    catch (Exception deleteEx)
+                    {
+                        _logger.LogWarning(deleteEx, "⚠️ [DELETION] Failed to delete enriched file for RawDriveId={DriveId}, RawItemId={ItemId}: {Error}",
+                            driveId, itemId, deleteEx.Message);
+                    }
+
                     return (false, null, "File was deleted and no longer exists");
                 }
                 if (driveItem.Folder != null)
@@ -1560,6 +1779,7 @@ namespace SMEPilot.FunctionApp.Functions
                 if (!string.IsNullOrWhiteSpace(sourceSiteId))
                 {
                     _logger.LogInformation("✅ [SITE_ID] Captured site ID from source file: {SiteId}", sourceSiteId);
+                    _graph.CacheDriveSiteMapping(driveId, sourceSiteId);
                     
                     // PERMANENT FIX: Load SharePoint configuration using the captured site ID
                     // This ensures we get the correct DestinationFolderPath from SharePoint config
@@ -1586,7 +1806,41 @@ namespace SMEPilot.FunctionApp.Functions
                 // If we get a 404 or item not found error, it's likely a deletion
                 if (ex is ODataError odataError && (odataError.Error?.Code == "itemNotFound" || odataError.Error?.Code == "NotFound"))
                 {
-                    _logger.LogDebug("🗑️ [DELETION] File {FileName} (ID: {ItemId}) not found - likely deleted. Skipping processing.", fileName, itemId);
+                    _logger.LogDebug("🗑️ [DELETION] File {FileName} (ID: {ItemId}) not found - likely deleted. Attempting enriched-file cleanup.", fileName, itemId);
+
+                    try
+                    {
+                        var tenantIdForDelete = tenantId ?? _cfg.GraphTenantId ?? "default";
+                        var siteIdForDelete = await _graph.GetSiteIdFromDriveAsync(driveId, tenantIdForDelete);
+                        if (!string.IsNullOrWhiteSpace(siteIdForDelete))
+                        {
+                            var latestRunForDelete = await _graph.GetLatestSucceededProcessingRunAsync(siteIdForDelete, driveId, itemId, tenantIdForDelete);
+                            if (latestRunForDelete != null &&
+                                !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedDriveId) &&
+                                !string.IsNullOrWhiteSpace(latestRunForDelete.EnrichedItemId))
+                            {
+                                _logger.LogInformation("🗑️ [DELETION] Deleting enriched file for RawItemId={ItemId}. EnrichedDriveId={EnrichedDriveId}, EnrichedItemId={EnrichedItemId}",
+                                    itemId, latestRunForDelete.EnrichedDriveId, latestRunForDelete.EnrichedItemId);
+
+                                await _graph.DeleteFileAsync(latestRunForDelete.EnrichedDriveId!, latestRunForDelete.EnrichedItemId!, tenantIdForDelete);
+                            }
+                            else
+                            {
+                                _logger.LogInformation("ℹ️ [DELETION] No enriched file metadata found for RawDriveId={DriveId}, RawItemId={ItemId}. Nothing to delete.",
+                                    driveId, itemId);
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogWarning("⚠️ [DELETION] Could not determine siteId for drive {DriveId}. Skipping enriched-file cleanup.", driveId);
+                        }
+                    }
+                    catch (Exception deleteEx)
+                    {
+                        _logger.LogWarning(deleteEx, "⚠️ [DELETION] Failed to delete enriched file for RawDriveId={DriveId}, RawItemId={ItemId}: {Error}",
+                            driveId, itemId, deleteEx.Message);
+                    }
+
                     return (false, null, "File was deleted and no longer exists");
                 }
                 _logger.LogWarning(ex, "⚠️ Warning: Could not verify item type (will proceed): {Error}", ex.Message);
@@ -2498,6 +2752,7 @@ namespace SMEPilot.FunctionApp.Functions
                     var hashForTracking = processingContentHash ?? string.Empty;
                     var runRecord = new ProcessingRunRecord
                     {
+                        Title = fileName,
                         RawDriveId = driveId,
                         RawItemId = itemId,
                         ContentHash = hashForTracking,
