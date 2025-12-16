@@ -39,562 +39,6 @@ namespace SMEPilot.FunctionApp.Services
             _extractor = new DocumentExtractor(null);
         }
 
-        #region Region 1: TemplateBuilder Methods (Build from scratch)
-
-        /// <summary>
-        /// Builds DOCX from DocumentModel (fallback when no template)
-        /// </summary>
-        public byte[] BuildDocxBytes(DocumentModel model, List<byte[]> images)
-        {
-            using var mem = new MemoryStream();
-            using (var doc = WordprocessingDocument.Create(mem, WordprocessingDocumentType.Document))
-            {
-                var mainPart = doc.AddMainDocumentPart();
-                
-                var stylesPart = mainPart.AddNewPart<StyleDefinitionsPart>();
-                stylesPart.Styles = GenerateStyles();
-                
-                mainPart.Document = new Document(new Body());
-                var body = mainPart.Document.Body;
-
-                AddCoverPage(body, model);
-                AddTableOfContents(body);
-                AddSectionsWithHierarchy(body, model);
-
-                if (images != null && images.Count > 0)
-                {
-                    AddImagesSection(body, mainPart, images);
-                }
-
-                AddRevisionHistory(body);
-                mainPart.Document.Save();
-            }
-            return mem.ToArray();
-        }
-
-        private void AddCoverPage(Body body, DocumentModel model)
-        {
-            if (!string.IsNullOrWhiteSpace(model.Title))
-            {
-                body.Append(new Paragraph(new Run(new Text(model.Title)))
-                {
-                    ParagraphProperties = new ParagraphProperties(
-                        new ParagraphStyleId() { Val = "Title" },
-                        new SpacingBetweenLines() { After = "240" })
-                });
-            }
-
-            body.Append(new Paragraph(new Run(new Text($"Document Type: {model.Title ?? "Documentation"}")))
-            {
-                ParagraphProperties = new ParagraphProperties(
-                    new ParagraphStyleId() { Val = "Subtitle" },
-                    new SpacingBetweenLines() { After = "120" })
-            });
-
-            body.Append(new Paragraph(new Run(new Text($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC")))
-            {
-                ParagraphProperties = new ParagraphProperties(
-                    new ParagraphStyleId() { Val = "Subtitle" },
-                    new SpacingBetweenLines() { After = "480" })
-            });
-
-            body.Append(new Paragraph(new Run(new Break() { Type = BreakValues.Page })));
-        }
-
-        private void AddTableOfContents(Body body)
-        {
-            body.Append(new Paragraph(new Run(new Text("Table of Contents")))
-            {
-                ParagraphProperties = new ParagraphProperties(
-                    new ParagraphStyleId() { Val = "TOCHeading" },
-                    new SpacingBetweenLines() { After = "240" })
-            });
-
-            var tocParagraph = new Paragraph();
-            var tocRun = new Run();
-            
-            tocRun.Append(new FieldChar() { FieldCharType = FieldCharValues.Begin });
-            tocRun.Append(new FieldCode(" TOC \\o \"1-3\" \\h \\z \\u ") { Space = SpaceProcessingModeValues.Preserve });
-            tocRun.Append(new FieldChar() { FieldCharType = FieldCharValues.Separate });
-            tocRun.Append(new FieldChar() { FieldCharType = FieldCharValues.End });
-            
-            tocParagraph.Append(tocRun);
-            tocParagraph.ParagraphProperties = new ParagraphProperties(
-                new SpacingBetweenLines() { After = "240" });
-            
-            body.Append(tocParagraph);
-            body.Append(new Paragraph(new Run(new Break() { Type = BreakValues.Page })));
-        }
-
-        private void AddSectionsWithHierarchy(Body body, DocumentModel model)
-        {
-            int headingLevel = 1;
-            
-            foreach (var section in model.Sections)
-            {
-                var styleName = DetermineHeadingStyle(section, headingLevel, model.Sections);
-                
-                var headingPara = new Paragraph(new Run(new Text(section.Heading)))
-                {
-                    ParagraphProperties = new ParagraphProperties(
-                        new ParagraphStyleId() { Val = styleName },
-                        new SpacingBetweenLines() { After = "120" })
-                };
-                body.Append(headingPara);
-
-                if (!string.IsNullOrWhiteSpace(section.Heading))
-                {
-                    var bookmarkName = $"Section_{section.Id}".Replace(" ", "_").Replace("-", "_");
-                    if (bookmarkName.Length > 40) bookmarkName = bookmarkName.Substring(0, 40);
-                    
-                    var bookmarkId = section.Id.Replace("s", "").Replace("-", "");
-                    if (string.IsNullOrWhiteSpace(bookmarkId) || !int.TryParse(bookmarkId, out _))
-                    {
-                        bookmarkId = headingLevel.ToString();
-                    }
-                    
-                    var bookmarkStart = new BookmarkStart()
-                    {
-                        Name = bookmarkName,
-                        Id = bookmarkId
-                    };
-                    var bookmarkEnd = new BookmarkEnd() { Id = bookmarkId };
-                    
-                    headingPara.InsertBefore(bookmarkStart, headingPara.GetFirstChild<Run>());
-                    headingPara.InsertAfter(bookmarkEnd, headingPara.GetFirstChild<Run>());
-                }
-
-                if (!string.IsNullOrWhiteSpace(section.Summary))
-                {
-                    body.Append(new Paragraph(new Run(new Text("Summary: " + section.Summary)))
-                    {
-                        ParagraphProperties = new ParagraphProperties(
-                            new ParagraphStyleId() { Val = "Normal" },
-                            new SpacingBetweenLines() { After = "120" })
-                    });
-                }
-
-                if (!string.IsNullOrWhiteSpace(section.Body))
-                {
-                    var bodyText = section.Body;
-                    var paragraphs = bodyText.Split(new[] { "\n\n", "\r\n\r\n", "\n\r\n\r" }, StringSplitOptions.RemoveEmptyEntries);
-                    
-                    if (paragraphs.Length == 1 && bodyText.Length > 500)
-                    {
-                        var lines = bodyText.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                        var grouped = new List<string>();
-                        var currentGroup = new StringBuilder();
-                        
-                        foreach (var line in lines)
-                        {
-                            var trimmed = line.Trim();
-                            if (string.IsNullOrWhiteSpace(trimmed)) continue;
-                            
-                            if (currentGroup.Length > 0 && 
-                                (trimmed.EndsWith(".") || trimmed.EndsWith("!") || trimmed.EndsWith("?")) &&
-                                currentGroup.Length > 100)
-                            {
-                                grouped.Add(currentGroup.ToString());
-                                currentGroup.Clear();
-                            }
-                            
-                            if (currentGroup.Length > 0) currentGroup.Append(" ");
-                            currentGroup.Append(trimmed);
-                            
-                            if (currentGroup.Length > 400)
-                            {
-                                grouped.Add(currentGroup.ToString());
-                                currentGroup.Clear();
-                            }
-                        }
-                        
-                        if (currentGroup.Length > 0)
-                        {
-                            grouped.Add(currentGroup.ToString());
-                        }
-                        
-                        paragraphs = grouped.ToArray();
-                    }
-                    
-                    foreach (var paraText in paragraphs)
-                    {
-                        var trimmed = paraText.Trim();
-                        if (!string.IsNullOrWhiteSpace(trimmed))
-                        {
-                            body.Append(new Paragraph(new Run(new Text(trimmed)))
-                            {
-                                ParagraphProperties = new ParagraphProperties(
-                                    new ParagraphStyleId() { Val = "Normal" },
-                                    new SpacingBetweenLines() { After = "120" })
-                            });
-                        }
-                    }
-                }
-
-                headingLevel++;
-            }
-        }
-
-        private string DetermineHeadingStyle(Section section, int position, List<Section> allSections)
-        {
-            if (position == 1)
-                return "Heading1";
-
-            var heading = section.Heading ?? "";
-            var previousHeading = position > 1 ? allSections[position - 2].Heading ?? "" : "";
-
-            if (heading.Length < previousHeading.Length * 0.7 && 
-                heading.Length < 50 &&
-                !heading.Contains(".") && 
-                !heading.Contains(":"))
-            {
-                if (position % 2 == 0)
-                    return "Heading2";
-            }
-
-            if (System.Text.RegularExpressions.Regex.IsMatch(heading, @"^\d+\.\d+"))
-            {
-                return "Heading2";
-            }
-
-            return position % 2 == 1 ? "Heading1" : "Heading2";
-        }
-
-        private void AddImagesSection(Body body, MainDocumentPart mainPart, List<byte[]> images)
-        {
-            body.Append(new Paragraph(new Run(new Text("Screenshots and Images")))
-            {
-                ParagraphProperties = new ParagraphProperties(
-                    new ParagraphStyleId() { Val = "Heading2" },
-                    new SpacingBetweenLines() { Before = "480", After = "240" })
-            });
-
-            int idx = 0;
-            foreach (var imgBytes in images)
-            {
-                idx++;
-                try
-                {
-                    // Feedback2: Resize and compress images before embedding
-                    byte[] processedImageBytes = imgBytes;
-                    if (ImageResizeHelper.ShouldResize(imgBytes))
-                    {
-                        processedImageBytes = ImageResizeHelper.ResizeAndCompressImage(imgBytes, maxWidth: 1200, jpegQuality: 80, _logger);
-                    }
-
-                    var imagePartType = DetectImageFormat(processedImageBytes);
-                    var imagePart = mainPart.AddImagePart(imagePartType);
-                    using var imgStream = new MemoryStream(processedImageBytes);
-                    imagePart.FeedData(imgStream);
-
-                    var imageRelId = mainPart.GetIdOfPart(imagePart);
-                    var (widthEmu, heightEmu) = CalculateImageDimensions(processedImageBytes);
-                    var altText = $"Figure {idx}: Image from document";
-
-                    var inline = CreateImageInline(imageRelId, widthEmu, heightEmu, idx, altText);
-                    var drawing = CreateDrawingWrapper(inline);
-
-                    var imagePara = new Paragraph();
-                    var run = new Run();
-                    run.AppendChild(drawing);
-                    imagePara.Append(run);
-                    imagePara.ParagraphProperties = new ParagraphProperties(
-                        new Justification() { Val = JustificationValues.Center },
-                        new SpacingBetweenLines() { After = "120" });
-                    
-                    body.Append(imagePara);
-
-                    body.Append(new Paragraph(new Run(new Text($"Figure {idx}: Image from original document")))
-                    {
-                        ParagraphProperties = new ParagraphProperties(
-                            new Justification() { Val = JustificationValues.Center },
-                            new ParagraphStyleId() { Val = "Caption" },
-                            new SpacingBetweenLines() { After = "240" })
-                    });
-                }
-                catch (Exception ex)
-                {
-                    body.Append(new Paragraph(new Run(new Text($"Figure {idx}: Image could not be embedded ({ex.Message})")))
-                    {
-                        ParagraphProperties = new ParagraphProperties(
-                            new Justification() { Val = JustificationValues.Center },
-                            new SpacingBetweenLines() { After = "240" })
-                    });
-                }
-            }
-        }
-
-        private ImagePartType DetectImageFormat(byte[] imgBytes)
-        {
-            if (imgBytes.Length < 8)
-                return ImagePartType.Png;
-
-            if (imgBytes[0] == 0x89 && imgBytes[1] == 0x50 && imgBytes[2] == 0x4E && imgBytes[3] == 0x47)
-                return ImagePartType.Png;
-
-            if (imgBytes[0] == 0xFF && imgBytes[1] == 0xD8)
-                return ImagePartType.Jpeg;
-
-            if (imgBytes[0] == 0x47 && imgBytes[1] == 0x49 && imgBytes[2] == 0x46)
-                return ImagePartType.Gif;
-
-            if (imgBytes[0] == 0x42 && imgBytes[1] == 0x4D)
-                return ImagePartType.Bmp;
-
-            return ImagePartType.Png;
-        }
-
-        private (long widthEmu, long heightEmu) CalculateImageDimensions(byte[] imgBytes)
-        {
-            try
-            {
-                int width = 0, height = 0;
-                
-                if (imgBytes.Length >= 24 && 
-                    imgBytes[0] == 0x89 && imgBytes[1] == 0x50 && imgBytes[2] == 0x4E && imgBytes[3] == 0x47)
-                {
-                    width = (imgBytes[16] << 24) | (imgBytes[17] << 16) | (imgBytes[18] << 8) | imgBytes[19];
-                    height = (imgBytes[20] << 24) | (imgBytes[21] << 16) | (imgBytes[22] << 8) | imgBytes[23];
-                }
-                else if (imgBytes.Length >= 20 && imgBytes[0] == 0xFF && imgBytes[1] == 0xD8)
-                {
-                    for (int i = 2; i < Math.Min(imgBytes.Length - 7, 1000); i++)
-                    {
-                        if (imgBytes[i] == 0xFF && (imgBytes[i + 1] >= 0xC0 && imgBytes[i + 1] <= 0xC3))
-                        {
-                            height = (imgBytes[i + 5] << 8) | imgBytes[i + 6];
-                            width = (imgBytes[i + 7] << 8) | imgBytes[i + 8];
-                            break;
-                        }
-                    }
-                }
-                else if (imgBytes.Length >= 10 && 
-                         imgBytes[0] == 0x47 && imgBytes[1] == 0x49 && imgBytes[2] == 0x46)
-                {
-                    width = imgBytes[6] | (imgBytes[7] << 8);
-                    height = imgBytes[8] | (imgBytes[9] << 8);
-                }
-                
-                if (width > 0 && height > 0)
-                {
-                    const long maxWidthEmu = 576000L;
-                    const long emuPerPixel = 9525L;
-                    
-                    var widthEmu = (long)width * emuPerPixel;
-                    var heightEmu = (long)height * emuPerPixel;
-                    
-                    if (widthEmu > maxWidthEmu)
-                    {
-                        var scale = (double)maxWidthEmu / widthEmu;
-                        widthEmu = maxWidthEmu;
-                        heightEmu = (long)(heightEmu * scale);
-                    }
-                    
-                    return (widthEmu, heightEmu);
-                }
-            }
-            catch
-            {
-            }
-            
-            return (576000L, 432000L);
-        }
-
-        private DrawingWordprocessing.Inline CreateImageInline(string imageRelId, long widthEmu, long heightEmu, int idx, string altText)
-        {
-            var picture = new Drawing.Pictures.Picture(
-                new Drawing.Pictures.NonVisualPictureProperties(
-                    new Drawing.Pictures.NonVisualDrawingProperties() 
-                    { 
-                        Id = (UInt32Value)(idx + 1U), 
-                        Name = $"Image {idx}",
-                        Description = altText
-                    },
-                    new Drawing.Pictures.NonVisualPictureDrawingProperties()),
-                new Drawing.Pictures.BlipFill(
-                    new Drawing.Blip() { Embed = imageRelId },
-                    new Drawing.Stretch(new Drawing.FillRectangle())),
-                new Drawing.Pictures.ShapeProperties(
-                    new Drawing.Transform2D(
-                        new Drawing.Offset() { X = 0L, Y = 0L },
-                        new Drawing.Extents() { Cx = widthEmu, Cy = heightEmu }),
-                    new Drawing.PresetGeometry() { Preset = Drawing.ShapeTypeValues.Rectangle }));
-
-            var graphicData = new Drawing.GraphicData(picture)
-            {
-                Uri = "http://schemas.openxmlformats.org/drawingml/2006/picture"
-            };
-
-            var graphic = new Drawing.Graphic(graphicData);
-
-            var inline = new DrawingWordprocessing.Inline(
-                new DrawingWordprocessing.Extent() { Cx = widthEmu, Cy = heightEmu },
-                new DrawingWordprocessing.EffectExtent() 
-                { 
-                    LeftEdge = 0L, 
-                    TopEdge = 0L, 
-                    RightEdge = 0L, 
-                    BottomEdge = 0L 
-                },
-                new DrawingWordprocessing.DocProperties() 
-                { 
-                    Id = (UInt32Value)(idx + 1U), 
-                    Name = $"Image {idx}",
-                    Description = altText
-                },
-                new DrawingWordprocessing.NonVisualGraphicFrameDrawingProperties(
-                    new Drawing.GraphicFrameLocks() { NoChangeAspect = true }),
-                graphic)
-            {
-                DistanceFromTop = 0,
-                DistanceFromBottom = 0,
-                DistanceFromLeft = 0,
-                DistanceFromRight = 0
-            };
-            
-            return inline;
-        }
-
-        private OpenXmlUnknownElement CreateDrawingWrapper(DrawingWordprocessing.Inline inline)
-        {
-            var drawing = new OpenXmlUnknownElement(
-                "w:drawing",
-                "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
-            
-            drawing.AppendChild(inline);
-            
-            return drawing;
-        }
-
-        private void AddRevisionHistory(Body body)
-        {
-            body.Append(new Paragraph(new Run(new Break() { Type = BreakValues.Page })));
-            
-            body.Append(new Paragraph(new Run(new Text("Revision History")))
-            {
-                ParagraphProperties = new ParagraphProperties(
-                    new ParagraphStyleId() { Val = "Heading1" },
-                    new SpacingBetweenLines() { Before = "480", After = "240" })
-            });
-
-            var table = new Table(
-                new TableProperties(
-                    new TableBorders(
-                        new TopBorder() { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 4 },
-                        new BottomBorder() { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 4 },
-                        new LeftBorder() { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 4 },
-                        new RightBorder() { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 4 },
-                        new InsideHorizontalBorder() { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 4 },
-                        new InsideVerticalBorder() { Val = new EnumValue<BorderValues>(BorderValues.Single), Size = 4 })),
-                
-                new TableRow(
-                    new TableCell(new Paragraph(new Run(new Text("Date")))
-                    {
-                        ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "TableHeading" })
-                    }),
-                    new TableCell(new Paragraph(new Run(new Text("Author")))
-                    {
-                        ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "TableHeading" })
-                    }),
-                    new TableCell(new Paragraph(new Run(new Text("Change Summary")))
-                    {
-                        ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "TableHeading" })
-                    })),
-                
-                new TableRow(
-                    new TableCell(new Paragraph(new Run(new Text(DateTime.UtcNow.ToString("yyyy-MM-dd"))))
-                    {
-                        ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "TableContent" })
-                    }),
-                    new TableCell(new Paragraph(new Run(new Text("SMEPilot")))
-                    {
-                        ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "TableContent" })
-                    }),
-                    new TableCell(new Paragraph(new Run(new Text("Initial document formatting")))
-                    {
-                        ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "TableContent" })
-                    }))
-            );
-
-            body.Append(table);
-        }
-
-        private Styles GenerateStyles()
-        {
-            var styles = new Styles();
-            
-            styles.Append(new Style(new StyleName() { Val = "Title" }, new BasedOn() { Val = "Normal" })
-            {
-                Type = StyleValues.Paragraph,
-                StyleId = "Title",
-                StyleParagraphProperties = new StyleParagraphProperties(
-                    new SpacingBetweenLines() { After = "240" })
-            });
-
-            styles.Append(new Style(new StyleName() { Val = "Subtitle" }, new BasedOn() { Val = "Normal" })
-            {
-                Type = StyleValues.Paragraph,
-                StyleId = "Subtitle"
-            });
-
-            styles.Append(new Style(new StyleName() { Val = "Heading 1" }, new BasedOn() { Val = "Normal" })
-            {
-                Type = StyleValues.Paragraph,
-                StyleId = "Heading1",
-                StyleParagraphProperties = new StyleParagraphProperties(
-                    new KeepNext(),
-                    new SpacingBetweenLines() { Before = "240", After = "120" })
-            });
-
-            styles.Append(new Style(new StyleName() { Val = "Heading 2" }, new BasedOn() { Val = "Normal" })
-            {
-                Type = StyleValues.Paragraph,
-                StyleId = "Heading2",
-                StyleParagraphProperties = new StyleParagraphProperties(
-                    new KeepNext(),
-                    new SpacingBetweenLines() { Before = "180", After = "120" })
-            });
-
-            styles.Append(new Style(new StyleName() { Val = "Heading 3" }, new BasedOn() { Val = "Normal" })
-            {
-                Type = StyleValues.Paragraph,
-                StyleId = "Heading3",
-                StyleParagraphProperties = new StyleParagraphProperties(
-                    new KeepNext(),
-                    new SpacingBetweenLines() { Before = "120", After = "60" })
-            });
-
-            styles.Append(new Style(new StyleName() { Val = "TOC Heading" }, new BasedOn() { Val = "Heading1" })
-            {
-                Type = StyleValues.Paragraph,
-                StyleId = "TOCHeading"
-            });
-
-            styles.Append(new Style(new StyleName() { Val = "Caption" }, new BasedOn() { Val = "Normal" })
-            {
-                Type = StyleValues.Paragraph,
-                StyleId = "Caption",
-                StyleParagraphProperties = new StyleParagraphProperties(
-                    new SpacingBetweenLines() { After = "120" })
-            });
-
-            styles.Append(new Style(new StyleName() { Val = "Table Heading" }, new BasedOn() { Val = "Normal" })
-            {
-                Type = StyleValues.Paragraph,
-                StyleId = "TableHeading"
-            });
-
-            styles.Append(new Style(new StyleName() { Val = "Table Content" }, new BasedOn() { Val = "Normal" })
-            {
-                Type = StyleValues.Paragraph,
-                StyleId = "TableContent"
-            });
-
-            return styles;
-        }
-
-        #endregion
-
         #region Region 2: TemplateFiller Methods (Fill existing template)
 
         /// <summary>
@@ -697,11 +141,14 @@ namespace SMEPilot.FunctionApp.Services
 
                     try
                     {
+                        // Support both bracket and brace-style TOC tokens to align with template guidelines:
+                        // {TOC}, [TOC], [TABLE_OF_CONTENTS], [Table of Contents]
                         var tocTokens = new[]
                         {
                             "[TABLE_OF_CONTENTS]",
                             "[TOC]",
-                            "[Table of Contents]"
+                            "[Table of Contents]",
+                            "{TOC}"
                         };
 
                         bool tocInserted = false;
@@ -733,7 +180,8 @@ namespace SMEPilot.FunctionApp.Services
                                 {
                                     "[TABLE_OF_CONTENTS]",
                                     "[TOC]",
-                                    "[Table of Contents]"
+                                    "[Table of Contents]",
+                                    "{TOC}"
                                 };
 
                                 bool staticInserted = false;
@@ -930,7 +378,22 @@ namespace SMEPilot.FunctionApp.Services
                         }
                         else
                         {
-                            _logger?.LogDebug("⏭️ [TEMPLATE] No content provided for tag: {Tag}", tag);
+                            // No mapped content for this SDT tag – clear it to satisfy "missing section → blank"
+                            _logger?.LogDebug("⏭️ [TEMPLATE] No content provided for tag: {Tag} – clearing content control", tag);
+                            // Best-effort: remove existing content while preserving the control itself
+                            if (sdt is SdtBlock sdtBlock && sdtBlock.SdtContentBlock != null)
+                            {
+                                sdtBlock.SdtContentBlock.RemoveAllChildren();
+                            }
+                            else if (sdt is SdtRun sdtRun && sdtRun.SdtContentRun != null)
+                            {
+                                sdtRun.SdtContentRun.RemoveAllChildren();
+                            }
+                            else
+                            {
+                                // Fallback: use text replacement helper with empty string
+                                ReplaceSdtContent(sdt, string.Empty);
+                            }
                         }
                     }
                     
@@ -1380,6 +843,54 @@ namespace SMEPilot.FunctionApp.Services
                     else if (remainingContentInserted)
                     {
                         _logger?.LogInformation("⏭️ [APPEND-END] RemainingContent already inserted at placeholder - skipping automatic append");
+                    }
+
+                    // FINAL CLEANUP: Any remaining token-like placeholders (e.g. {UPPER_TOKEN}, [UPPER_TOKEN])
+                    // that did not receive content should be cleared to satisfy "missing sections → blank".
+                    var filledContentKeys = new HashSet<string>(
+                        contentMap.Where(kvp => !string.IsNullOrWhiteSpace(kvp.Value))
+                                  .Select(kvp => kvp.Key),
+                        StringComparer.OrdinalIgnoreCase);
+
+                    var allParasForCleanup = body.Descendants<Paragraph>().ToList();
+                    foreach (var para in allParasForCleanup)
+                    {
+                        var paraText = string.Concat(para.Descendants<Text>().Select(t => t.Text ?? string.Empty));
+                        if (string.IsNullOrEmpty(paraText))
+                            continue;
+
+                        // Find {TOKEN} and [TOKEN] patterns where TOKEN is uppercase/underscore/colon
+                        var braceMatches = System.Text.RegularExpressions.Regex.Matches(paraText, @"\{([A-Z_][A-Z0-9_:]*)\}");
+                        var bracketMatches = System.Text.RegularExpressions.Regex.Matches(paraText, @"\[([A-Z_][A-Z0-9_:]*)\]");
+
+                        var placeholdersToClear = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                        foreach (System.Text.RegularExpressions.Match m in braceMatches)
+                        {
+                            var token = m.Groups[1].Value;
+                            if (token.StartsWith("ROW:", StringComparison.OrdinalIgnoreCase))
+                                continue; // dynamic row markers handled elsewhere
+                            if (!filledContentKeys.Contains(token))
+                            {
+                                placeholdersToClear.Add(m.Value);
+                            }
+                        }
+
+                        foreach (System.Text.RegularExpressions.Match m in bracketMatches)
+                        {
+                            var token = m.Groups[1].Value;
+                            if (token.StartsWith("ROW:", StringComparison.OrdinalIgnoreCase))
+                                continue;
+                            if (!filledContentKeys.Contains(token))
+                            {
+                                placeholdersToClear.Add(m.Value);
+                            }
+                        }
+
+                        foreach (var placeholderPattern in placeholdersToClear)
+                        {
+                            ReplaceTokenPreservingRuns(para, placeholderPattern, string.Empty);
+                        }
                     }
 
                     if (placeholderMatches == 0 && sdtList.Count == 0)
@@ -2131,6 +1642,98 @@ namespace SMEPilot.FunctionApp.Services
             }
         }
 
+        /// <summary>
+        /// Detect image format based on magic bytes (used for screenshot embedding).
+        /// </summary>
+        private ImagePartType DetectImageFormat(byte[] imgBytes)
+        {
+            if (imgBytes == null || imgBytes.Length < 4)
+                return ImagePartType.Png;
+
+            // PNG
+            if (imgBytes[0] == 0x89 && imgBytes[1] == 0x50 && imgBytes[2] == 0x4E && imgBytes[3] == 0x47)
+                return ImagePartType.Png;
+
+            // JPEG
+            if (imgBytes[0] == 0xFF && imgBytes[1] == 0xD8)
+                return ImagePartType.Jpeg;
+
+            // GIF
+            if (imgBytes[0] == 0x47 && imgBytes[1] == 0x49 && imgBytes[2] == 0x46)
+                return ImagePartType.Gif;
+
+            // BMP
+            if (imgBytes[0] == 0x42 && imgBytes[1] == 0x4D)
+                return ImagePartType.Bmp;
+
+            return ImagePartType.Png;
+        }
+
+        /// <summary>
+        /// Roughly calculate EMU dimensions from image bytes (used for screenshot sizing).
+        /// Falls back to a sensible default if dimensions cannot be read.
+        /// </summary>
+        private (long widthEmu, long heightEmu) CalculateImageDimensions(byte[] imgBytes)
+        {
+            try
+            {
+                int width = 0, height = 0;
+
+                // PNG: width/height at bytes 16–23 (big endian)
+                if (imgBytes.Length >= 24 &&
+                    imgBytes[0] == 0x89 && imgBytes[1] == 0x50 && imgBytes[2] == 0x4E && imgBytes[3] == 0x47)
+                {
+                    width = (imgBytes[16] << 24) | (imgBytes[17] << 16) | (imgBytes[18] << 8) | imgBytes[19];
+                    height = (imgBytes[20] << 24) | (imgBytes[21] << 16) | (imgBytes[22] << 8) | imgBytes[23];
+                }
+                // JPEG: scan for SOFn segment
+                else if (imgBytes.Length >= 20 && imgBytes[0] == 0xFF && imgBytes[1] == 0xD8)
+                {
+                    for (int i = 2; i < Math.Min(imgBytes.Length - 7, 1000); i++)
+                    {
+                        if (imgBytes[i] == 0xFF && (imgBytes[i + 1] >= 0xC0 && imgBytes[i + 1] <= 0xC3))
+                        {
+                            height = (imgBytes[i + 5] << 8) | imgBytes[i + 6];
+                            width = (imgBytes[i + 7] << 8) | imgBytes[i + 8];
+                            break;
+                        }
+                    }
+                }
+                // GIF: width/height at bytes 6–9 (little endian)
+                else if (imgBytes.Length >= 10 &&
+                         imgBytes[0] == 0x47 && imgBytes[1] == 0x49 && imgBytes[2] == 0x46)
+                {
+                    width = imgBytes[6] | (imgBytes[7] << 8);
+                    height = imgBytes[8] | (imgBytes[9] << 8);
+                }
+
+                if (width > 0 && height > 0)
+                {
+                    const long maxWidthEmu = 576000L; // ~6 inches
+                    const long emuPerPixel = 9525L;
+
+                    var widthEmu = (long)width * emuPerPixel;
+                    var heightEmu = (long)height * emuPerPixel;
+
+                    if (widthEmu > maxWidthEmu)
+                    {
+                        var scale = (double)maxWidthEmu / widthEmu;
+                        widthEmu = maxWidthEmu;
+                        heightEmu = (long)(heightEmu * scale);
+                    }
+
+                    return (widthEmu, heightEmu);
+                }
+            }
+            catch
+            {
+                // Ignore and fall through to default
+            }
+
+            // Default size if we can't detect dimensions
+            return (576000L, 432000L);
+        }
+
         private DocumentFormat.OpenXml.Wordprocessing.Drawing CreateImageDrawing(string imageRelId, long widthEmu, long heightEmu)
         {
             var picture = new PIC.Picture(
@@ -2186,51 +1789,103 @@ namespace SMEPilot.FunctionApp.Services
 
                 var rows = table.Elements<TableRow>().ToList();
                 var headerRow = rows.FirstOrDefault();
+
+                // Look for a template row containing the dynamic marker {ROW:VERSION_HISTORY}
+                TableRow? templateRow = null;
+                if (rows.Count > 1)
+                {
+                    templateRow = rows.Skip(1)
+                        .FirstOrDefault(r => r.InnerText != null &&
+                                             r.InnerText.Contains("{ROW:VERSION_HISTORY}", StringComparison.OrdinalIgnoreCase));
+                }
+
+                // Clear all existing data rows; we'll rebuild from header + template/default rows
+                table.RemoveAllChildren<TableRow>();
                 if (headerRow != null)
                 {
-                    foreach (var row in rows.Skip(1))
-                    {
-                        row.Remove();
-                    }
+                    table.AppendChild(headerRow);
                 }
 
                 if (revisions != null && revisions.Count > 0)
                 {
                     foreach (var revision in revisions)
                     {
-                        var revisionRow = new TableRow(
-                            new TableCell(new Paragraph(new Run(new Text(revision.date)))
+                        TableRow rowToAppend;
+
+                        if (templateRow != null)
+                        {
+                            // Clone template row and replace tokens
+                            rowToAppend = (TableRow)templateRow.CloneNode(true);
+                            foreach (var text in rowToAppend.Descendants<Text>())
                             {
-                                ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
-                            }),
-                            new TableCell(new Paragraph(new Run(new Text(revision.author)))
-                            {
-                                ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
-                            }),
-                            new TableCell(new Paragraph(new Run(new Text(revision.changes)))
-                            {
-                                ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
-                            }));
-                        table.AppendChild(revisionRow);
+                                var val = text.Text ?? string.Empty;
+                                val = val.Replace("{ROW:VERSION_HISTORY}", string.Empty, StringComparison.OrdinalIgnoreCase);
+                                val = val.Replace("{VERSION}", revision.version ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+                                val = val.Replace("{DATE}", revision.date ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+                                val = val.Replace("{AUTHOR}", revision.author ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+                                // APPROVED_BY is not part of our tuple; leave blank
+                                val = val.Replace("{APPROVED_BY}", string.Empty, StringComparison.OrdinalIgnoreCase);
+                                text.Text = val;
+                            }
+                        }
+                        else
+                        {
+                            // Fallback to simple 3-column row (Date, Author, Changes)
+                            rowToAppend = new TableRow(
+                                new TableCell(new Paragraph(new Run(new Text(revision.date)))
+                                {
+                                    ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                                }),
+                                new TableCell(new Paragraph(new Run(new Text(revision.author)))
+                                {
+                                    ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                                }),
+                                new TableCell(new Paragraph(new Run(new Text(revision.changes)))
+                                {
+                                    ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                                }));
+                        }
+
+                        table.AppendChild(rowToAppend);
                     }
                     _logger?.LogDebug("✅ [TEMPLATE] Added {Count} revision history rows", revisions.Count);
                 }
                 else
                 {
-                    var initialRow = new TableRow(
-                        new TableCell(new Paragraph(new Run(new Text(DateTime.UtcNow.ToString("yyyy-MM-dd"))))
+                    // No revisions supplied; add a single default row
+                    if (templateRow != null)
+                    {
+                        var defaultRow = (TableRow)templateRow.CloneNode(true);
+                        foreach (var text in defaultRow.Descendants<Text>())
                         {
-                            ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
-                        }),
-                        new TableCell(new Paragraph(new Run(new Text("SMEPilot")))
-                        {
-                            ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
-                        }),
-                        new TableCell(new Paragraph(new Run(new Text("Initial document enrichment")))
-                        {
-                            ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
-                        }));
-                    table.AppendChild(initialRow);
+                            var val = text.Text ?? string.Empty;
+                            val = val.Replace("{ROW:VERSION_HISTORY}", string.Empty, StringComparison.OrdinalIgnoreCase);
+                            val = val.Replace("{VERSION}", string.Empty, StringComparison.OrdinalIgnoreCase);
+                            val = val.Replace("{DATE}", DateTime.UtcNow.ToString("yyyy-MM-dd"), StringComparison.OrdinalIgnoreCase);
+                            val = val.Replace("{AUTHOR}", "SMEPilot", StringComparison.OrdinalIgnoreCase);
+                            val = val.Replace("{APPROVED_BY}", string.Empty, StringComparison.OrdinalIgnoreCase);
+                            val = val.Replace("{CHANGES}", "Initial document enrichment", StringComparison.OrdinalIgnoreCase);
+                            text.Text = val;
+                        }
+                        table.AppendChild(defaultRow);
+                    }
+                    else
+                    {
+                        var initialRow = new TableRow(
+                            new TableCell(new Paragraph(new Run(new Text(DateTime.UtcNow.ToString("yyyy-MM-dd"))))
+                            {
+                                ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                            }),
+                            new TableCell(new Paragraph(new Run(new Text("SMEPilot")))
+                            {
+                                ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                            }),
+                            new TableCell(new Paragraph(new Run(new Text("Initial document enrichment")))
+                            {
+                                ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                            }));
+                        table.AppendChild(initialRow);
+                    }
                 }
             }
             catch (Exception ex)
@@ -2274,12 +1929,21 @@ namespace SMEPilot.FunctionApp.Services
 
                 var rows = table.Elements<TableRow>().ToList();
                 var headerRow = rows.FirstOrDefault();
+
+                // Look for a template row containing the dynamic marker {ROW:CHANGE_LOG}
+                TableRow? templateRow = null;
+                if (rows.Count > 1)
+                {
+                    templateRow = rows.Skip(1)
+                        .FirstOrDefault(r => r.InnerText != null &&
+                                             r.InnerText.Contains("{ROW:CHANGE_LOG}", StringComparison.OrdinalIgnoreCase));
+                }
+
+                // Clear existing data rows and keep header
+                table.RemoveAllChildren<TableRow>();
                 if (headerRow != null)
                 {
-                    foreach (var row in rows.Skip(1))
-                    {
-                        row.Remove();
-                    }
+                    table.AppendChild(headerRow);
                 }
 
                 // Derive a simple summary from the content map:
@@ -2318,53 +1982,73 @@ namespace SMEPilot.FunctionApp.Services
                     headerCellCount = 5;
                 }
 
-                // Build cells according to available columns
-                var cells = new List<TableCell>();
-
-                // 1) Change Number
-                cells.Add(new TableCell(new Paragraph(new Run(new Text(changeNumber)))
+                if (templateRow != null)
                 {
-                    ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
-                }));
-
-                // 2) Date
-                if (headerCellCount >= 2)
+                    // Use template row with tokens {CHANGE_NUMBER}, {DATE}, {SECTION}, {DESCRIPTION}, {AUTHOR}
+                    var changeRow = (TableRow)templateRow.CloneNode(true);
+                    foreach (var text in changeRow.Descendants<Text>())
+                    {
+                        var val = text.Text ?? string.Empty;
+                        val = val.Replace("{ROW:CHANGE_LOG}", string.Empty, StringComparison.OrdinalIgnoreCase);
+                        val = val.Replace("{CHANGE_NUMBER}", changeNumber, StringComparison.OrdinalIgnoreCase);
+                        val = val.Replace("{DATE}", date, StringComparison.OrdinalIgnoreCase);
+                        val = val.Replace("{SECTION}", sectionsText, StringComparison.OrdinalIgnoreCase);
+                        val = val.Replace("{DESCRIPTION}", description, StringComparison.OrdinalIgnoreCase);
+                        val = val.Replace("{AUTHOR}", author, StringComparison.OrdinalIgnoreCase);
+                        text.Text = val;
+                    }
+                    table.AppendChild(changeRow);
+                }
+                else
                 {
-                    cells.Add(new TableCell(new Paragraph(new Run(new Text(date)))
+                    // Fallback: build a simple row based on available columns
+                    var cells = new List<TableCell>();
+
+                    // 1) Change Number
+                    cells.Add(new TableCell(new Paragraph(new Run(new Text(changeNumber)))
                     {
                         ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
                     }));
-                }
 
-                // 3) Sections
-                if (headerCellCount >= 3)
-                {
-                    cells.Add(new TableCell(new Paragraph(new Run(new Text(sectionsText)))
+                    // 2) Date
+                    if (headerCellCount >= 2)
                     {
-                        ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
-                    }));
-                }
+                        cells.Add(new TableCell(new Paragraph(new Run(new Text(date)))
+                        {
+                            ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                        }));
+                    }
 
-                // 4) Description
-                if (headerCellCount >= 4)
-                {
-                    cells.Add(new TableCell(new Paragraph(new Run(new Text(description)))
+                    // 3) Sections
+                    if (headerCellCount >= 3)
                     {
-                        ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
-                    }));
-                }
+                        cells.Add(new TableCell(new Paragraph(new Run(new Text(sectionsText)))
+                        {
+                            ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                        }));
+                    }
 
-                // 5) Author
-                if (headerCellCount >= 5)
-                {
-                    cells.Add(new TableCell(new Paragraph(new Run(new Text(author)))
+                    // 4) Description
+                    if (headerCellCount >= 4)
                     {
-                        ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
-                    }));
-                }
+                        cells.Add(new TableCell(new Paragraph(new Run(new Text(description)))
+                        {
+                            ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                        }));
+                    }
 
-                var changeRow = new TableRow(cells);
-                table.AppendChild(changeRow);
+                    // 5) Author
+                    if (headerCellCount >= 5)
+                    {
+                        cells.Add(new TableCell(new Paragraph(new Run(new Text(author)))
+                        {
+                            ParagraphProperties = new ParagraphProperties(new ParagraphStyleId() { Val = "Normal" })
+                        }));
+                    }
+
+                    var changeRow = new TableRow(cells);
+                    table.AppendChild(changeRow);
+                }
 
                 _logger?.LogDebug("✅ [TEMPLATE] Added ChangeLog row for sections: {Sections}", sectionsText);
             }
@@ -2666,7 +2350,46 @@ namespace SMEPilot.FunctionApp.Services
             if (docModel.Sections == null || docModel.Sections.Count == 0)
             {
                 _logger?.LogWarning("⚠️ [MAPPER] No sections in DocumentModel");
+
+                // Still provide a CONTENT placeholder if we have any text (e.g., from fullText)
+                if (!string.IsNullOrWhiteSpace(fullText))
+                {
+                    var allText = fullText.Trim();
+                    if (!string.IsNullOrWhiteSpace(allText))
+                    {
+                        contentMap["CONTENT"] = allText;
+                        contentMap["Content"] = allText;
+                    }
+                }
                 return contentMap;
+            }
+
+            // Build full document content for {CONTENT} placeholder (title + all sections)
+            var contentBuilder = new StringBuilder();
+            if (!string.IsNullOrWhiteSpace(docModel.Title))
+            {
+                contentBuilder.AppendLine(docModel.Title.Trim());
+                contentBuilder.AppendLine();
+            }
+            foreach (var section in docModel.Sections)
+            {
+                if (!string.IsNullOrWhiteSpace(section.Heading))
+                {
+                    contentBuilder.AppendLine(section.Heading.Trim());
+                }
+                if (!string.IsNullOrWhiteSpace(section.Body))
+                {
+                    contentBuilder.AppendLine(section.Body.Trim());
+                    contentBuilder.AppendLine();
+                }
+            }
+
+            var fullContent = contentBuilder.ToString().Trim();
+            if (!string.IsNullOrWhiteSpace(fullContent))
+            {
+                contentMap["CONTENT"] = fullContent;
+                // Provide a case-variant to support templates using {Content}
+                contentMap["Content"] = fullContent;
             }
 
             _logger?.LogInformation("📋 [MAPPER] Mapping {SectionCount} sections to template tags", docModel.Sections.Count);

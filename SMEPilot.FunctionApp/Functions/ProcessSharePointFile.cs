@@ -338,7 +338,7 @@ namespace SMEPilot.FunctionApp.Functions
         }
 
         [Function("ProcessSharePointFile")]
-        public async Task<HttpResponseData> Run([HttpTrigger(AuthorizationLevel.Function, "get", "post", "options")] HttpRequestData req)
+        public async Task<HttpResponseData> Run([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", "options")] HttpRequestData req)
         {
             // CRITICAL: Handle webhook validation FIRST - must respond within 10 seconds!
             // Graph API sends validation token via GET request with query parameter
