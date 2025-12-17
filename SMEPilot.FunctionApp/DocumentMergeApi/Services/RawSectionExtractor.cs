@@ -9,7 +9,11 @@ namespace DocumentMergeApi.Services;
 public sealed class RawSectionExtractor
 {
     private static readonly Regex HeadingRegex =
-        new(@"^\s*(?<number>\d+)\.\s+(?<text>.+)$", RegexOptions.Compiled);
+        // Supports headings like:
+        // - "1. PROJECT OVERVIEW"
+        // - "1.1 Project Information"
+        // - "2.3.4 Detailed Design"
+        new(@"^\s*(?<number>\d+(?:\.\d+)*)(?:\.)?\s+(?<text>.+)$", RegexOptions.Compiled);
 
     public IList<RawSection> Extract(WordprocessingDocument rawDoc)
     {
@@ -31,9 +35,16 @@ public sealed class RawSectionExtractor
                         sections.Add(current);
                     }
 
+                    var numberRaw = match.Groups["number"].Value;
+                    var headingText = $"{numberRaw} {match.Groups["text"].Value}".Trim();
+                    // Key should remain numeric for legacy matching, but unique for sub-headings:
+                    // "1" -> 1, "1.1" -> 11, "1.2.3" -> 123
+                    var numericKeyRaw = numberRaw.Replace(".", string.Empty);
+                    var numericKey = int.TryParse(numericKeyRaw, out var parsedKey) ? parsedKey : 0;
+
                     current = new RawSection(
-                        Key: int.Parse(match.Groups["number"].Value),
-                        HeadingText: match.Groups["text"].Value.Trim(),
+                        Key: numericKey,
+                        HeadingText: headingText,
                         Elements: new List<OpenXmlElement>());
 
                     current.Elements.Add(paragraph.CloneNode(true));

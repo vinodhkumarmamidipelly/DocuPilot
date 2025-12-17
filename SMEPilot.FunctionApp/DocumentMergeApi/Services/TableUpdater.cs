@@ -9,6 +9,133 @@ public sealed class TableUpdater
 {
     private static readonly Regex PlaceholderRegex = new(@"\[[^\]]+\]", RegexOptions.Compiled);
 
+    public void RebuildVersionHistoryFromRuns(WordprocessingDocument templateDoc, IReadOnlyList<DocumentMergeApi.Models.RunHistoryEntry> runs)
+    {
+        var table = FindTableByHeader(templateDoc, new[] { "Version", "Date", "Author", "Changes", "Approved By" });
+        if (table == null) return;
+
+        var existingRows = table.Elements<TableRow>().ToList();
+        var headerRow = existingRows.FirstOrDefault();
+        var templateRow = existingRows.Skip(1).FirstOrDefault();
+
+        // Remove placeholder rows first so we don't accidentally clone token-filled content.
+        RemovePlaceholderRows(table);
+
+        // Clear all existing data rows; we rebuild deterministically from SMEPilotRuns history.
+        foreach (var row in table.Elements<TableRow>().Skip(1).ToList())
+        {
+            row.Remove();
+        }
+
+        var ordered = (runs ?? Array.Empty<DocumentMergeApi.Models.RunHistoryEntry>())
+            .Where(r => r != null)
+            .OrderBy(r => r.TimestampUtc)
+            .ToList();
+
+        if (ordered.Count == 0)
+        {
+            return;
+        }
+
+        for (int idx = 0; idx < ordered.Count; idx++)
+        {
+            var r = ordered[idx];
+            var isInitial = idx == 0;
+            var sectionText = string.IsNullOrWhiteSpace(r.SectionSummary) ? "Content" : r.SectionSummary;
+            var changesText = isInitial
+                ? "Initial Version"
+                : (string.IsNullOrWhiteSpace(r.ChangeDescription) ? $"Updated sections: {sectionText}" : r.ChangeDescription);
+
+            TableRow newRow;
+            if (templateRow != null)
+            {
+                newRow = (TableRow)templateRow.CloneNode(true);
+                var cells = newRow.Elements<TableCell>().ToList();
+
+                if (cells.Count >= 1) SetCellText(cells[0], string.IsNullOrWhiteSpace(r.Version) ? "1.0" : r.Version);
+                if (cells.Count >= 2) SetCellText(cells[1], r.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss 'UTC'"));
+                if (cells.Count >= 3) SetCellText(cells[2], string.IsNullOrWhiteSpace(r.Author) ? "System Generated" : r.Author);
+                if (cells.Count >= 4) SetCellText(cells[3], changesText);
+                if (cells.Count >= 5) SetCellText(cells[4], string.Empty);
+            }
+            else
+            {
+                newRow = new TableRow();
+                newRow.Append(Cells(
+                    string.IsNullOrWhiteSpace(r.Version) ? "1.0" : r.Version,
+                    r.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss 'UTC'"),
+                    string.IsNullOrWhiteSpace(r.Author) ? "System Generated" : r.Author,
+                    changesText,
+                    string.Empty));
+            }
+
+            table.Append(newRow);
+        }
+    }
+
+    public void RebuildChangeLogFromRuns(WordprocessingDocument templateDoc, IReadOnlyList<DocumentMergeApi.Models.RunHistoryEntry> runs)
+    {
+        var table = FindTableByHeader(templateDoc, new[] { "Change #", "Date", "Section", "Description", "Author" });
+        if (table == null) return;
+
+        var existingRows = table.Elements<TableRow>().ToList();
+        var headerRow = existingRows.FirstOrDefault();
+        var templateRow = existingRows.Skip(1).FirstOrDefault();
+
+        RemovePlaceholderRows(table);
+
+        foreach (var row in table.Elements<TableRow>().Skip(1).ToList())
+        {
+            row.Remove();
+        }
+
+        var ordered = (runs ?? Array.Empty<DocumentMergeApi.Models.RunHistoryEntry>())
+            .Where(r => r != null)
+            .OrderBy(r => r.TimestampUtc)
+            .ToList();
+
+        if (ordered.Count == 0)
+        {
+            return;
+        }
+
+        for (int idx = 0; idx < ordered.Count; idx++)
+        {
+            var r = ordered[idx];
+            var changeNumberText = (idx + 1).ToString();
+            var sectionText = idx == 0 ? "Content" : (string.IsNullOrWhiteSpace(r.SectionSummary) ? "Content" : r.SectionSummary);
+            var descriptionText = idx == 0
+                ? "Initial Version"
+                : (string.IsNullOrWhiteSpace(r.ChangeDescription) ? $"Updated sections: {sectionText}" : r.ChangeDescription);
+            var authorText = string.IsNullOrWhiteSpace(r.Author) ? "System Generated" : r.Author;
+
+            TableRow newRow;
+            if (templateRow != null)
+            {
+                newRow = (TableRow)templateRow.CloneNode(true);
+                var cells = newRow.Elements<TableCell>().ToList();
+
+                if (cells.Count >= 1) SetCellText(cells[0], changeNumberText);
+                if (cells.Count >= 2) SetCellText(cells[1], r.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss 'UTC'"));
+                if (cells.Count >= 3) SetCellText(cells[2], sectionText);
+                if (cells.Count >= 4) SetCellText(cells[3], descriptionText);
+                if (cells.Count >= 5) SetCellText(cells[4], authorText);
+            }
+            else
+            {
+                newRow = new TableRow();
+                newRow.Append(Cells(
+                    changeNumberText,
+                    r.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss 'UTC'"),
+                    sectionText,
+                    descriptionText,
+                    authorText));
+            }
+
+            table.Append(newRow);
+        }
+    }
+
     public void AppendVersionHistory(WordprocessingDocument templateDoc, string? author, string? version)
     {
         var table = FindTableByHeader(templateDoc, new[] { "Version", "Date", "Author", "Changes", "Approved By" });

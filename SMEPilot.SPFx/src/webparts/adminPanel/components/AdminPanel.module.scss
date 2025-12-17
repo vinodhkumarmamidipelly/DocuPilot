@@ -39,12 +39,22 @@
 }
 
 .adminPanelRoot {
-  padding: var(--space-md);
-  background: #f5f6f8;
+  /* In the local workbench, a background looks nice.
+     In real SharePoint pages, the web part is already inside a canvas/card,
+     so an extra gray backdrop + padding feels "clumsy" and makes the UI look misaligned. */
+  padding: 0;
+  background: transparent;
   font-family: var(--font-family-base);
+
+  /* Ensure the UI is centered within the web part's available width */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .mainCard {
+  width: min(980px, 100%);
   max-width: 980px;
   margin: 0 auto;
   background: var(--color-surface);

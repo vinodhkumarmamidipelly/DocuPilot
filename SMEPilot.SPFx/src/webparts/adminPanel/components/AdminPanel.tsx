@@ -190,7 +190,9 @@ Remember: You can only access documents that the user has permission to view.`;
       }
 
       const clientId = '8e05312f-ad62-4eb4-8127-28293cca6f55'; // SMEPilot multi-tenant app
-      const redirectUri = encodeURIComponent(`${baseUrl}/consent-complete`);
+      // Azure Functions HTTP triggers are exposed under the /api route prefix by default.
+      // Our consent landing function is named ConsentComplete, so the correct path is /api/ConsentComplete.
+      const redirectUri = encodeURIComponent(`${baseUrl}/api/ConsentComplete`);
       const scope = encodeURIComponent('https://graph.microsoft.com/.default');
       const adminConsentUrl =
         `https://login.microsoftonline.com/organizations/v2.0/adminconsent` +

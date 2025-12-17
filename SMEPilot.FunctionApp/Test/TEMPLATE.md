@@ -1,4 +1,4 @@
-[Document_Name]
+[DOCUMENT_NAME]
 
 Project Name:	[PROJECT_NAME]
 Version:	[VERSION_NUMBER]
@@ -9,7 +9,7 @@ Approver(s):	[APPROVER_NAME]
 Status:	[STATUS]
 
  
-[TABLE_OF_CONTENTS]
+[TOC]
 
 
 
@@ -22,14 +22,14 @@ Classification:	[CLASSIFICATION]
 
 Version History
 Version	Date	Author	Changes	Approved By
-1.0	[Date]	[AUTHER]	Initial Version	[APPROVER]
+1.0	[DATE]	[AUTHER]	Initial Version	[APPROVER_NAME]
 Change Log
 Change #	Date	Section	Description	Author
 				
 
-[Document Content Starts Here]
+[DOCUMENT_CONTENT_STARTS_HERE]
  
 
 
-[Document Content Ends Here]
+[DOCUMENT_CONTENT_ENDS_HERE]
 This document is confidential and proprietary. Unauthorized distribution is prohibited.

@@ -4,6 +4,7 @@ using DocumentFormat.OpenXml.Wordprocessing;
 using DocumentMergeApi.Models;
 using System.Text.RegularExpressions;
 using System.Text;
+using System.Security.Cryptography;
 
 namespace DocumentMergeApi.Services;
 
@@ -72,7 +73,14 @@ public sealed class MergeService
         _tables = tables;
     }
 
-    public MergeResult Merge(Stream templateStream, Stream rawStream, string? author, string? previousVersion = null)
+    public MergeResult Merge(
+        Stream templateStream,
+        Stream rawStream,
+        string? author,
+        string? previousVersion = null,
+        IReadOnlyList<RunHistoryEntry>? succeededHistory = null,
+        string? rawUiVersion = null,
+        DateTimeOffset? rawLastModifiedUtc = null)
     {
         // Use temporary file to ensure proper document saving
         var tempFile = Path.Combine(Path.GetTempPath(), $"merge_{Guid.NewGuid():N}.docx");
@@ -80,6 +88,10 @@ public sealed class MergeService
         IDictionary<string, string> metadataValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         
         string effectiveVersion = "1.0";
+        string sectionSummary = "Content";
+        string changeDescription = "Updated content based on latest raw document";
+        Dictionary<string, string> currentFingerprints = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> currentTitles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
         {
             // Copy template to temp file
@@ -108,8 +120,18 @@ public sealed class MergeService
                 // Determine the effective VERSION_NUMBER for this run, supporting auto-bump
                 // behavior across enrichments. We combine the version detected from the raw
                 // document (metadataValues["VERSION_NUMBER"]) with any previously-used
-                // version from the tracking list (previousVersion).
-                effectiveVersion = ComputeEffectiveVersion(metadataValues, previousVersion);
+                // If we have run history, compute the next version deterministically from it.
+                // This avoids relying on "latest succeeded" tracking reads in tenants where filtering is constrained.
+                if (succeededHistory != null && succeededHistory.Any())
+                {
+                    effectiveVersion = ComputeNextVersionFromHistory(succeededHistory);
+                    metadataValues["VERSION_NUMBER"] = effectiveVersion;
+                }
+                else
+                {
+                    // Otherwise, use the classic behavior: version from raw doc metadata + previousVersion (tracking).
+                    effectiveVersion = ComputeEffectiveVersion(metadataValues, previousVersion);
+                }
 
                 var tokens = _tokens.GetTokens(templateDoc);
                 var sections = _extractor.Extract(rawDoc);
@@ -259,12 +281,64 @@ public sealed class MergeService
                     .Where(h => !string.IsNullOrWhiteSpace(h))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
-                var sectionSummary = sectionNames.Count == 0
+                sectionSummary = sectionNames.Count == 0
                     ? "Content"
                     : string.Join(", ", sectionNames);
 
-                _tables.AppendVersionHistory(templateDoc, author, effectiveVersion);
-                _tables.AppendChangeLog(templateDoc, author, sectionSummary);
+                // Keep this short so it fits comfortably in tables and tracking.
+                var shortSection = sectionNames.Count == 0 ? "Content" : string.Join(", ", sectionNames.Take(3));
+                if (sectionNames.Count > 3) shortSection += $" (+{sectionNames.Count - 3})";
+
+                // Compute fingerprints for raw sections and generate a simple Added/Updated/Removed summary
+                // relative to the previous succeeded run (if available).
+                (currentFingerprints, currentTitles) = ComputeSectionFingerprintsAndTitles(sections);
+                var prevFingerprints = succeededHistory?
+                    .OrderBy(h => h.TimestampUtc)
+                    .LastOrDefault()?
+                    .SectionFingerprints;
+                var prevTitles = succeededHistory?
+                    .OrderBy(h => h.TimestampUtc)
+                    .LastOrDefault()?
+                    .SectionTitles;
+
+                var (humanChangeDescription, humanSectionSummary) = BuildHumanChangeSummary(prevFingerprints, prevTitles, currentFingerprints, currentTitles);
+                var effectiveSectionSummary = string.IsNullOrWhiteSpace(humanSectionSummary) ? shortSection : humanSectionSummary;
+
+                // Keep the description simple and human-friendly (like the example tables),
+                // and avoid embedding raw UI versions or timestamps in the description.
+                changeDescription = string.IsNullOrWhiteSpace(humanChangeDescription)
+                    ? BuildChangeDescription(effectiveSectionSummary, rawUiVersion, rawLastModifiedUtc, diffSummary: null)
+                    : humanChangeDescription;
+
+                // Rebuild history tables deterministically from persisted SMEPilotRuns history (preferred),
+                // falling back to legacy append behavior if history wasn't provided.
+                if (succeededHistory != null)
+                {
+                    var runs = succeededHistory
+                        .Where(r => r != null)
+                        .OrderBy(r => r.TimestampUtc)
+                        .ToList();
+
+                    // Append "this run" at merge time so the output document always includes the latest run.
+                    runs.Add(new RunHistoryEntry
+                    {
+                        Version = effectiveVersion,
+                        TimestampUtc = DateTimeOffset.UtcNow,
+                        Author = string.IsNullOrWhiteSpace(author) ? "System Generated" : author!,
+                        SectionSummary = string.IsNullOrWhiteSpace(effectiveSectionSummary) ? "Content" : effectiveSectionSummary,
+                        ChangeDescription = changeDescription,
+                        SectionFingerprints = currentFingerprints,
+                        SectionTitles = currentTitles
+                    });
+
+                    _tables.RebuildVersionHistoryFromRuns(templateDoc, runs);
+                    _tables.RebuildChangeLogFromRuns(templateDoc, runs);
+                }
+                else
+                {
+                    _tables.AppendVersionHistory(templateDoc, author, effectiveVersion);
+                    _tables.AppendChangeLog(templateDoc, author, sectionSummary);
+                }
 
                 // Ensure that the standard confidentiality disclaimer, if present,
                 // always appears as the last paragraph in the document regardless
@@ -306,7 +380,7 @@ public sealed class MergeService
             
             Console.WriteLine($"Document size: {mergedBytes.Length} bytes");
             
-            return new MergeResult(mergedBytes, outputFileName, effectiveVersion);
+            return new MergeResult(mergedBytes, outputFileName, effectiveVersion, sectionSummary, changeDescription, currentFingerprints, currentTitles);
         }
         finally
         {
@@ -404,6 +478,370 @@ public sealed class MergeService
 
         metadata["VERSION_NUMBER"] = chosen;
         return chosen;
+    }
+
+    private static string ComputeNextVersionFromHistory(IReadOnlyList<RunHistoryEntry> history)
+    {
+        static bool TryParseVersion(string? input, out int major, out int minor)
+        {
+            major = 0;
+            minor = 0;
+            if (string.IsNullOrWhiteSpace(input)) return false;
+            var parts = input.Trim().Split('.', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 2) return false;
+            return int.TryParse(parts[0], out major) && int.TryParse(parts[1], out minor);
+        }
+
+        // Prefer max parsed version; fallback to (1, count-1).
+        int maxMajor = 1, maxMinor = 0;
+        var any = false;
+        foreach (var r in history.Where(h => h != null))
+        {
+            if (TryParseVersion(r.Version, out var maj, out var min))
+            {
+                if (!any || maj > maxMajor || (maj == maxMajor && min > maxMinor))
+                {
+                    maxMajor = maj;
+                    maxMinor = min;
+                    any = true;
+                }
+            }
+        }
+
+        if (any)
+        {
+            return $"{maxMajor}.{maxMinor + 1}";
+        }
+
+        var count = history.Count(h => h != null);
+        if (count <= 0) return "1.0";
+        return $"1.{Math.Max(0, count)}";
+    }
+
+    private static string BuildChangeDescription(string sectionSummary, string? rawUiVersion, DateTimeOffset? rawLastModifiedUtc, string? diffSummary)
+    {
+        // Fallback when we don't have diff information.
+        // Keep it short and table-friendly.
+        if (string.IsNullOrWhiteSpace(sectionSummary) || sectionSummary.Equals("Content", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Updated content";
+        }
+
+        return $"Updated {sectionSummary} section";
+    }
+
+    private static (Dictionary<string, string> Fingerprints, Dictionary<string, string> Titles) ComputeSectionFingerprintsAndTitles(IList<RawSection> sections)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var titles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in sections)
+        {
+            var key = NormalizeHeadingText(s.HeadingText);
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                key = $"section_{s.Key}";
+            }
+
+            var displayTitle = string.IsNullOrWhiteSpace(s.HeadingText) ? key : s.HeadingText.Trim();
+            titles[key] = displayTitle;
+
+            var text = string.Concat(s.Elements.SelectMany(e => e.Descendants<DocumentFormat.OpenXml.Wordprocessing.Text>()).Select(t => t.Text ?? string.Empty));
+            text = NormalizeContentText(text);
+
+            dict[key] = Sha256Hex(text);
+        }
+        return (dict, titles);
+    }
+
+    private static string NormalizeContentText(string text) =>
+        string.Join(' ', (text ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+    private static string Sha256Hex(string input)
+    {
+        var bytes = Encoding.UTF8.GetBytes(input ?? string.Empty);
+        var hash = SHA256.HashData(bytes);
+        var sb = new StringBuilder(hash.Length * 2);
+        foreach (var b in hash) sb.Append(b.ToString("x2"));
+        return sb.ToString();
+    }
+
+    private static (string? ChangeDescription, string? SectionSummary) BuildHumanChangeSummary(
+        IReadOnlyDictionary<string, string>? previous,
+        IReadOnlyDictionary<string, string>? previousTitles,
+        IReadOnlyDictionary<string, string> current,
+        IReadOnlyDictionary<string, string> currentTitles)
+    {
+        if (previous == null || previous.Count == 0)
+        {
+            return (null, null);
+        }
+
+        var numberToTextCurrent = BuildNumberToTextMap(currentTitles);
+        var numberToTextPrevious = previousTitles != null ? BuildNumberToTextMap(previousTitles) : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // IMPORTANT:
+        // Fingerprint keys have evolved over time (previous versions normalized headings differently).
+        // To keep diffs stable across runs, match sections using a canonical title key derived from the title,
+        // rather than relying on the stored fingerprint key.
+        var prevCanon = BuildCanonicalTitleIndex(previous, previousTitles);
+        var curCanon = BuildCanonicalTitleIndex(current, currentTitles);
+
+        var added = new List<string>();   // keys from current
+        var removed = new List<string>(); // keys from previous
+        var updated = new List<string>(); // keys from current
+
+        foreach (var kv in curCanon)
+        {
+            if (!prevCanon.TryGetValue(kv.Key, out var prevEntry))
+            {
+                added.Add(kv.Value.Key);
+                continue;
+            }
+            if (!string.Equals(prevEntry.Hash, kv.Value.Hash, StringComparison.OrdinalIgnoreCase))
+            {
+                updated.Add(kv.Value.Key);
+            }
+        }
+
+        foreach (var kv in prevCanon)
+        {
+            if (!curCanon.ContainsKey(kv.Key))
+            {
+                removed.Add(kv.Value.Key);
+            }
+        }
+
+        string ResolveTitle(string key, bool fromCurrent)
+        {
+            string? rawTitle = null;
+            if (fromCurrent && currentTitles.TryGetValue(key, out var ct) && !string.IsNullOrWhiteSpace(ct)) rawTitle = ct;
+            else if (!fromCurrent && previousTitles != null && previousTitles.TryGetValue(key, out var pt) && !string.IsNullOrWhiteSpace(pt)) rawTitle = pt;
+            else if (currentTitles.TryGetValue(key, out var ct2) && !string.IsNullOrWhiteSpace(ct2)) rawTitle = ct2;
+            else if (previousTitles != null && previousTitles.TryGetValue(key, out var pt2) && !string.IsNullOrWhiteSpace(pt2)) rawTitle = pt2;
+
+            if (string.IsNullOrWhiteSpace(rawTitle)) return key;
+
+            var map = fromCurrent ? numberToTextCurrent : (numberToTextPrevious.Count > 0 ? numberToTextPrevious : numberToTextCurrent);
+            return BuildHeadingPath(rawTitle!, map) ?? rawTitle!;
+        }
+
+        static List<string> FilterMostSpecificPaths(List<string> items)
+        {
+            // If we have both "A" and "A - B", keep only the most specific ("A - B").
+            // This removes noisy parent headings when a child heading is also present.
+            var normalized = items
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            bool IsPrefix(string a, string b)
+            {
+                if (a.Equals(b, StringComparison.OrdinalIgnoreCase)) return false;
+                if (!b.StartsWith(a, StringComparison.OrdinalIgnoreCase)) return false;
+                // Must be a proper hierarchy delimiter.
+                return b.Length > a.Length && b.Substring(a.Length).StartsWith(" - ", StringComparison.Ordinal);
+            }
+
+            return normalized
+                .Where(a => !normalized.Any(b => IsPrefix(a, b)))
+                .ToList();
+        }
+
+        string FormatList(string label, List<string> items, bool fromCurrent)
+        {
+            if (items.Count == 0) return string.Empty;
+            var resolved = items.Select(k => ResolveTitle(k, fromCurrent)).ToList();
+            resolved = FilterMostSpecificPaths(resolved);
+            var take = resolved.Take(3).ToList();
+            var suffix = resolved.Count > take.Count ? $" (+{resolved.Count - take.Count})" : string.Empty;
+            return $"{label}: {string.Join(", ", take)}{suffix}";
+        }
+
+        var updatedResolved = FilterMostSpecificPaths(updated.Select(k => ResolveTitle(k, true)).ToList());
+        var addedResolved = FilterMostSpecificPaths(added.Select(k => ResolveTitle(k, true)).ToList());
+        var removedResolved = FilterMostSpecificPaths(removed.Select(k => ResolveTitle(k, false)).ToList());
+
+        static string LeafOf(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+            var parts = path.Split(" - ", StringSplitOptions.None);
+            return (parts.Length > 0 ? parts[^1] : path).Trim();
+        }
+
+        // Section column: show the full hierarchy path of the primary change.
+        var primaryPath = updatedResolved.FirstOrDefault() ?? addedResolved.FirstOrDefault() ?? removedResolved.FirstOrDefault();
+        var sectionSummary = string.IsNullOrWhiteSpace(primaryPath) ? "Content" : primaryPath.Trim();
+
+        // Description/Changes column: keep it similar to the example (short, human friendly).
+        // Prefer leaf nodes to avoid repeating parents in text.
+        var updatedLeafs = updatedResolved.Select(LeafOf).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var addedLeafs = addedResolved.Select(LeafOf).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var removedLeafs = removedResolved.Select(LeafOf).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        string JoinLeafs(List<string> leafs)
+        {
+            if (leafs.Count == 0) return sectionSummary;
+            var take = leafs.Take(2).ToList();
+            if (take.Count == 1) return take[0];
+            return string.Join(" & ", take);
+        }
+
+        string? changeDescription = null;
+
+        if (addedLeafs.Count > 0 && updatedLeafs.Count == 0 && removedLeafs.Count == 0)
+        {
+            changeDescription = $"Added {JoinLeafs(addedLeafs)}";
+        }
+        else if (updatedLeafs.Count > 0 && addedLeafs.Count == 0 && removedLeafs.Count == 0)
+        {
+            // If the leaf equals the section itself, phrase it as "Updated {Section} section"
+            var leaf = JoinLeafs(updatedLeafs);
+            changeDescription = leaf.Equals(sectionSummary, StringComparison.OrdinalIgnoreCase)
+                ? $"Updated {sectionSummary} section"
+                : $"Updated {leaf}";
+        }
+        else if (updatedLeafs.Count > 0 || addedLeafs.Count > 0 || removedLeafs.Count > 0)
+        {
+            // Mixed changes – keep generic but still anchored.
+            changeDescription = $"Revised {sectionSummary} content";
+        }
+
+        return (changeDescription, sectionSummary);
+    }
+
+    private static readonly Regex HeadingNumberPrefixRegex =
+        new(@"^\s*(?<number>\d+(?:\.\d+)*)(?:\.)?\s+(?<text>.+)$", RegexOptions.Compiled);
+
+    private static Dictionary<string, string> BuildNumberToTextMap(IReadOnlyDictionary<string, string> titles)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var t in titles.Values)
+        {
+            if (string.IsNullOrWhiteSpace(t)) continue;
+            var m = HeadingNumberPrefixRegex.Match(t);
+            if (!m.Success) continue;
+            var num = m.Groups["number"].Value.Trim();
+            var txt = HumanizeHeadingText(m.Groups["text"].Value.Trim());
+            if (string.IsNullOrWhiteSpace(num) || string.IsNullOrWhiteSpace(txt)) continue;
+            // First win is fine; we just need a stable parent chain.
+            if (!map.ContainsKey(num)) map[num] = txt;
+        }
+        return map;
+    }
+
+    private static string? BuildHeadingPath(string title, IReadOnlyDictionary<string, string> numberToText)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return null;
+        var m = HeadingNumberPrefixRegex.Match(title);
+        if (!m.Success) return null;
+
+        var num = m.Groups["number"].Value.Trim();
+        if (string.IsNullOrWhiteSpace(num)) return null;
+
+        var parts = num.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return null;
+
+        var path = new List<string>();
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var prefix = string.Join('.', parts.Take(i + 1));
+            if (numberToText.TryGetValue(prefix, out var txt) && !string.IsNullOrWhiteSpace(txt))
+            {
+                path.Add(txt.Trim());
+            }
+        }
+
+        if (path.Count == 0) return null;
+        // User requested format: "Heading - Sub heading1 - Sub heading2"
+        return string.Join(" - ", path);
+    }
+
+    private static string HumanizeHeadingText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        var trimmed = text.Trim();
+
+        // If it's mostly ALL CAPS, convert to Title Case while preserving acronyms in parentheses like "(FSD)".
+        var letters = trimmed.Count(char.IsLetter);
+        var upper = trimmed.Count(c => char.IsLetter(c) && char.IsUpper(c));
+        var ratio = letters == 0 ? 0 : (double)upper / letters;
+        if (ratio < 0.85) return trimmed;
+
+        var words = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var result = new List<string>(words.Length);
+        foreach (var w in words)
+        {
+            // Preserve acronyms in parentheses: "(FSD)" "(API)"
+            if (w.StartsWith("(", StringComparison.Ordinal) && w.EndsWith(")", StringComparison.Ordinal))
+            {
+                result.Add(w);
+                continue;
+            }
+
+            // Preserve all-caps short acronyms like "API", "FSD".
+            var wordLetters = w.Count(char.IsLetter);
+            var wordUpper = w.Count(c => char.IsLetter(c) && char.IsUpper(c));
+            if (wordLetters > 0 && wordUpper == wordLetters && wordLetters <= 4)
+            {
+                result.Add(w);
+                continue;
+            }
+
+            var lower = w.ToLowerInvariant();
+            result.Add(char.ToUpperInvariant(lower[0]) + lower.Substring(1));
+        }
+
+        return string.Join(' ', result);
+    }
+
+    private sealed record CanonEntry(string Key, string Hash);
+
+    private static Dictionary<string, CanonEntry> BuildCanonicalTitleIndex(
+        IReadOnlyDictionary<string, string> fingerprints,
+        IReadOnlyDictionary<string, string>? titles)
+    {
+        var map = new Dictionary<string, CanonEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in fingerprints)
+        {
+            var key = kv.Key;
+            var hash = kv.Value;
+            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(hash)) continue;
+
+            string? title = null;
+            if (titles != null && titles.TryGetValue(key, out var t) && !string.IsNullOrWhiteSpace(t))
+            {
+                title = t;
+            }
+
+            var canon = CanonicalizeTitleKey(title ?? key);
+            if (string.IsNullOrWhiteSpace(canon)) continue;
+
+            // If duplicates collide, keep the first; this is best-effort and should be stable for typical docs.
+            if (!map.ContainsKey(canon))
+            {
+                map[canon] = new CanonEntry(key, hash);
+            }
+        }
+        return map;
+    }
+
+    private static string CanonicalizeTitleKey(string titleOrKey)
+    {
+        if (string.IsNullOrWhiteSpace(titleOrKey)) return string.Empty;
+        // Strip leading numbering ("1.1.2 Foo" -> "Foo") so canonical matching survives numbering changes.
+        var m = HeadingNumberPrefixRegex.Match(titleOrKey);
+        var core = m.Success ? m.Groups["text"].Value : titleOrKey;
+
+        var sb = new StringBuilder(core.Length);
+        foreach (var ch in core)
+        {
+            if (char.IsLetter(ch))
+            {
+                sb.Append(char.ToUpperInvariant(ch));
+            }
+        }
+        return sb.ToString();
     }
 
     private void ApplyMetadata(IEnumerable<TokenOccurrence> tokens, IReadOnlyDictionary<TokenOccurrence, RawSection?> matches, IDictionary<string, string> metadata)
@@ -504,7 +942,8 @@ public sealed class MergeService
         var builder = new StringBuilder(text.Length);
         foreach (var ch in text)
         {
-            if (char.IsLetter(ch))
+            // Keep digits too so "1.1 Project" and "1.2 Project" don't collide in diff keys.
+            if (char.IsLetterOrDigit(ch))
             {
                 builder.Append(char.ToUpperInvariant(ch));
             }

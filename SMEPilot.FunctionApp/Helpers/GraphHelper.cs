@@ -113,6 +113,102 @@ namespace SMEPilot.FunctionApp.Helpers
         }
 
         #region Tracking (SMEPilotRuns) – processing status & idempotency
+        // NOTE:
+        // - SharePoint has a built-in read-only field named "Author". Writing to fields["Author"] will fail.
+        // - In some tenants, the app may not have permission to create custom columns on SMEPilotRuns.
+        // To keep history working reliably, we store per-run author + section summary in the existing
+        // ErrorMessage text field for *Succeeded* runs, using a recognizable prefix.
+        private const string TrackingMetaPrefix = "SMEPilotMeta:";
+
+        private static string ODataStringLiteral(string value) =>
+            (value ?? string.Empty).Replace("'", "''");
+
+        private static string BuildSucceededMeta(
+            string? author,
+            string? sectionSummary,
+            string? changeDescription,
+            string? rawUiVersion,
+            DateTimeOffset? rawLastModifiedUtc,
+            Dictionary<string, string>? sectionFingerprints,
+            Dictionary<string, string>? sectionTitles)
+        {
+            var obj = new JObject();
+            if (!string.IsNullOrWhiteSpace(author)) obj["author"] = author;
+            if (!string.IsNullOrWhiteSpace(sectionSummary)) obj["sectionSummary"] = sectionSummary;
+            if (!string.IsNullOrWhiteSpace(changeDescription)) obj["changeDescription"] = changeDescription;
+            if (!string.IsNullOrWhiteSpace(rawUiVersion)) obj["rawUiVersion"] = rawUiVersion;
+            if (rawLastModifiedUtc.HasValue) obj["rawLastModifiedUtc"] = rawLastModifiedUtc.Value.ToString("O");
+            if (sectionFingerprints != null && sectionFingerprints.Count > 0)
+            {
+                // Store as JSON object: normalizedHeading -> hash
+                obj["sectionFingerprints"] = JObject.FromObject(sectionFingerprints);
+            }
+            if (sectionTitles != null && sectionTitles.Count > 0)
+            {
+                // Store as JSON object: normalizedHeading -> display title
+                obj["sectionTitles"] = JObject.FromObject(sectionTitles);
+            }
+            return TrackingMetaPrefix + obj.ToString(Newtonsoft.Json.Formatting.None);
+        }
+
+        private static void TryExtractSucceededMeta(ProcessingRunRecord record)
+        {
+            if (!string.Equals(record.Status, "Succeeded", StringComparison.OrdinalIgnoreCase))
+                return;
+            if (string.IsNullOrWhiteSpace(record.ErrorMessage))
+                return;
+            if (!record.ErrorMessage.StartsWith(TrackingMetaPrefix, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var json = record.ErrorMessage.Substring(TrackingMetaPrefix.Length);
+            try
+            {
+                var obj = JObject.Parse(json);
+                record.Author = obj["author"]?.ToString();
+                record.SectionSummary = obj["sectionSummary"]?.ToString();
+                record.ChangeDescription = obj["changeDescription"]?.ToString();
+                record.RawUiVersion = obj["rawUiVersion"]?.ToString();
+                if (DateTimeOffset.TryParse(obj["rawLastModifiedUtc"]?.ToString(), out var lm))
+                {
+                    record.RawLastModifiedUtc = lm;
+                }
+
+                if (obj["sectionFingerprints"] is JObject fpObj)
+                {
+                    var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var prop in fpObj.Properties())
+                    {
+                        var v = prop.Value?.ToString();
+                        if (!string.IsNullOrWhiteSpace(prop.Name) && !string.IsNullOrWhiteSpace(v))
+                        {
+                            dict[prop.Name] = v!;
+                        }
+                    }
+                    record.SectionFingerprints = dict;
+                }
+
+                if (obj["sectionTitles"] is JObject titleObj)
+                {
+                    var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var prop in titleObj.Properties())
+                    {
+                        var v = prop.Value?.ToString();
+                        if (!string.IsNullOrWhiteSpace(prop.Name) && !string.IsNullOrWhiteSpace(v))
+                        {
+                            dict[prop.Name] = v!;
+                        }
+                    }
+                    record.SectionTitles = dict;
+                }
+                // Hide internal payload from consumers that treat ErrorMessage as an error string.
+                record.ErrorMessage = null;
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
 
         /// <summary>
         /// Logical name of the SharePoint list used to track processing runs.
@@ -144,10 +240,16 @@ namespace SMEPilot.FunctionApp.Helpers
 
                 _logger?.LogInformation("🔍 [Tracking] Querying latest run for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}", rawDriveId, rawItemId, tenantId ?? "default");
 
+                var d = ODataStringLiteral(rawDriveId);
+                var i = ODataStringLiteral(rawItemId);
                 var items = await client.Sites[siteId].Lists[listId].Items.GetAsync(requestConfig =>
                 {
                     requestConfig.QueryParameters.Expand = new[] { "fields" };
-                    requestConfig.QueryParameters.Top = 200;
+                    requestConfig.QueryParameters.Top = 1;
+                    requestConfig.QueryParameters.Filter = $"fields/RawDriveId eq '{d}' and fields/RawItemId eq '{i}'";
+                    requestConfig.QueryParameters.Orderby = new[] { "createdDateTime desc" };
+                    // Graph requires this exact Prefer token when filtering by non-indexed fields.
+                    requestConfig.Headers.Add("Prefer", "HonorNonIndexedQueriesWarningMayFailRandomly");
                 });
 
                 if (items?.Value == null || items.Value.Count == 0)
@@ -156,33 +258,9 @@ namespace SMEPilot.FunctionApp.Helpers
                     return null;
                 }
 
-                ProcessingRunRecord? latest = null;
-                foreach (var item in items.Value)
-                {
-                    var fields = item.Fields?.AdditionalData;
-                    if (fields == null || fields.Count == 0)
-                        continue;
-
-                    if (!fields.TryGetValue("RawDriveId", out var dObj) ||
-                        !fields.TryGetValue("RawItemId", out var iObj))
-                    {
-                        continue;
-                    }
-
-                    var d = dObj?.ToString();
-                    var i = iObj?.ToString();
-                    if (!string.Equals(d, rawDriveId, StringComparison.OrdinalIgnoreCase) ||
-                        !string.Equals(i, rawItemId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    var record = MapFieldsToProcessingRunRecord(fields);
-                    if (latest == null || record.LastUpdatedUtc > latest.LastUpdatedUtc)
-                    {
-                        latest = record;
-                    }
-                }
+                var first = items.Value.FirstOrDefault();
+                var latest = first?.Fields?.AdditionalData != null ? MapFieldsToProcessingRunRecord(first.Fields.AdditionalData) : null;
+                if (latest != null) TryExtractSucceededMeta(latest);
 
                 if (latest == null)
                 {
@@ -233,7 +311,7 @@ namespace SMEPilot.FunctionApp.Helpers
             try
             {
                 var client = GetClientForTenant(tenantId);
-                var listId = await EnsureProcessingRunsListExistsAsync(siteId);
+                var listId = await EnsureProcessingRunsListExistsAsync(siteId, tenantId);
                 if (string.IsNullOrWhiteSpace(listId))
                 {
                     _logger?.LogWarning("⚠️ [Tracking] {ListName} list not available on site {SiteId} for tenant {TenantId}.", ProcessingRunsListName, siteId, tenantId ?? "default");
@@ -242,13 +320,28 @@ namespace SMEPilot.FunctionApp.Helpers
 
                 _logger?.LogInformation("🔍 [Tracking] Querying latest *succeeded* run for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}", rawDriveId, rawItemId, tenantId ?? "default");
 
+                var d = ODataStringLiteral(rawDriveId);
+                var i = ODataStringLiteral(rawItemId);
                 var itemsResponse = await client.Sites[siteId].Lists[listId].Items.GetAsync(requestConfig =>
                 {
                     requestConfig.QueryParameters.Expand = new[] { "fields" };
-                    requestConfig.QueryParameters.Top = 200;
+                    requestConfig.QueryParameters.Top = 1;
+                    requestConfig.QueryParameters.Filter = $"fields/RawDriveId eq '{d}' and fields/RawItemId eq '{i}' and fields/Status eq 'Succeeded'";
+                    requestConfig.QueryParameters.Orderby = new[] { "createdDateTime desc" };
+                    requestConfig.Headers.Add("Prefer", "HonorNonIndexedQueriesWarningMayFailRandomly");
                 });
 
-                var latestSucceeded = FilterLatestSucceededRun(itemsResponse?.Value, siteId, rawDriveId, rawItemId, tenantId);
+                var first = itemsResponse?.Value?.FirstOrDefault();
+                if (first?.Fields?.AdditionalData == null)
+                {
+                    _logger?.LogInformation("ℹ️ [Tracking] No succeeded tracking records for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}", rawDriveId, rawItemId, tenantId ?? "default");
+                    return null;
+                }
+
+                var latestSucceeded = MapFieldsToProcessingRunRecord(first.Fields.AdditionalData);
+                TryExtractSucceededMeta(latestSucceeded);
+                _logger?.LogInformation("📋 [Tracking] Latest *succeeded* run for RawDriveId={DriveId}, RawItemId={ItemId} in tenant {TenantId}: Status={Status}, Hash={Hash}, LastUpdated={LastUpdated:o}",
+                    latestSucceeded.RawDriveId, latestSucceeded.RawItemId, tenantId ?? "default", latestSucceeded.Status, latestSucceeded.ContentHash, latestSucceeded.LastUpdatedUtc);
                 return latestSucceeded;
             }
             catch (ODataError odataError)
@@ -261,6 +354,71 @@ namespace SMEPilot.FunctionApp.Helpers
             {
                 _logger?.LogWarning(ex, "⚠️ [Tracking] Unexpected error querying latest succeeded run for RawDriveId={DriveId}, RawItemId={ItemId}: {Error}", rawDriveId, rawItemId, ex.Message);
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Retrieves all *Succeeded* ProcessingRunRecord entries for a given raw file (by RawDriveId + RawItemId),
+        /// ordered by LastUpdatedUtc ascending. This is used to rebuild Version History and Change Log tables
+        /// deterministically on every enrichment run.
+        /// </summary>
+        public async Task<List<ProcessingRunRecord>> GetSucceededProcessingRunsAsync(
+            string siteId,
+            string rawDriveId,
+            string rawItemId,
+            string? tenantId = null)
+        {
+            var results = new List<ProcessingRunRecord>();
+
+            if (!_hasCredentials)
+            {
+                _logger?.LogWarning("⚠️ [Tracking] Graph credentials not configured; cannot read {ListName} list.", ProcessingRunsListName);
+                return results;
+            }
+
+            try
+            {
+                var client = GetClientForTenant(tenantId);
+                var listId = await EnsureProcessingRunsListExistsAsync(siteId, tenantId);
+                if (string.IsNullOrWhiteSpace(listId))
+                {
+                    return results;
+                }
+
+                var d = ODataStringLiteral(rawDriveId);
+                var i = ODataStringLiteral(rawItemId);
+                var itemsResponse = await client.Sites[siteId].Lists[listId].Items.GetAsync(requestConfig =>
+                {
+                    requestConfig.QueryParameters.Expand = new[] { "fields" };
+                    requestConfig.QueryParameters.Top = 200;
+                    requestConfig.QueryParameters.Filter = $"fields/RawDriveId eq '{d}' and fields/RawItemId eq '{i}' and fields/Status eq 'Succeeded'";
+                    requestConfig.QueryParameters.Orderby = new[] { "createdDateTime asc" };
+                    requestConfig.Headers.Add("Prefer", "HonorNonIndexedQueriesWarningMayFailRandomly");
+                });
+
+                if (itemsResponse?.Value == null)
+                {
+                    return results;
+                }
+
+                foreach (var item in itemsResponse.Value)
+                {
+                    var fields = item.Fields?.AdditionalData;
+                    if (fields == null || fields.Count == 0)
+                        continue;
+
+                    var r = MapFieldsToProcessingRunRecord(fields);
+                    TryExtractSucceededMeta(r);
+                    results.Add(r);
+                }
+
+                return results.OrderBy(r => r.LastUpdatedUtc).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "⚠️ [Tracking] Failed to query succeeded run history for RawDriveId={DriveId}, RawItemId={ItemId}: {Error}",
+                    rawDriveId, rawItemId, ex.Message);
+                return results;
             }
         }
 
@@ -415,68 +573,23 @@ namespace SMEPilot.FunctionApp.Helpers
                         ["EnrichedDriveId"] = record.EnrichedDriveId ?? string.Empty,
                         ["EnrichedItemId"] = record.EnrichedItemId ?? string.Empty,
                         ["Status"] = record.Status,
-                        ["ErrorMessage"] = record.ErrorMessage ?? string.Empty,
+                        ["ErrorMessage"] = string.Equals(record.Status, "Succeeded", StringComparison.OrdinalIgnoreCase)
+                            ? BuildSucceededMeta(record.Author, record.SectionSummary, record.ChangeDescription, record.RawUiVersion, record.RawLastModifiedUtc, record.SectionFingerprints, record.SectionTitles)
+                            : (record.ErrorMessage ?? string.Empty),
                         ["LastUpdatedUtc"] = record.LastUpdatedUtc.ToString("O")
                     }
                 };
 
-                // Try to find an existing item for this RawDriveId + RawItemId so we can update
-                // in-place instead of creating multiple rows per file.
-                string? existingItemId = null;
-                try
-                {
-                    var existingItems = await client.Sites[siteId].Lists[listId].Items.GetAsync(requestConfig =>
-                    {
-                        requestConfig.QueryParameters.Expand = new[] { "fields" };
-                        requestConfig.QueryParameters.Top = 200;
-                    });
+                // IMPORTANT: We always append a new row per run, so that we can reconstruct
+                // Version History and Change Log tables deterministically from SMEPilotRuns.
+                // Idempotency uses "latest succeeded" and in-memory locks; history is derived
+                // from all succeeded records.
+                var listItem = new ListItem { Fields = fields };
 
-                    if (existingItems?.Value != null)
-                    {
-                        foreach (var item in existingItems.Value)
-                        {
-                            var f = item.Fields?.AdditionalData;
-                            if (f == null || f.Count == 0)
-                                continue;
+                _logger?.LogInformation("📝 [Tracking] Writing new run record to {ListName} for RawDriveId={DriveId}, RawItemId={ItemId}, Status={Status} in tenant {TenantId}",
+                    ProcessingRunsListName, record.RawDriveId, record.RawItemId, record.Status, tenantId ?? "default");
 
-                            if (!f.TryGetValue("RawDriveId", out var dObj) ||
-                                !f.TryGetValue("RawItemId", out var iObj))
-                            {
-                                continue;
-                            }
-
-                            var d = dObj?.ToString();
-                            var i = iObj?.ToString();
-                            if (string.Equals(d, record.RawDriveId, StringComparison.OrdinalIgnoreCase) &&
-                                string.Equals(i, record.RawItemId, StringComparison.OrdinalIgnoreCase))
-                            {
-                                existingItemId = item.Id;
-                                break;
-                            }
-                        }
-                    }
-                }
-                catch (Exception lookupEx)
-                {
-                    _logger?.LogWarning(lookupEx, "⚠️ [Tracking] Failed to look up existing SMEPilotRuns item for RawDriveId={DriveId}, RawItemId={ItemId}. Will append a new row.", record.RawDriveId, record.RawItemId);
-                }
-
-                if (!string.IsNullOrWhiteSpace(existingItemId))
-                {
-                    _logger?.LogInformation("📝 [Tracking] Updating existing run record in {ListName} for RawDriveId={DriveId}, RawItemId={ItemId}, Status={Status} in tenant {TenantId}",
-                        ProcessingRunsListName, record.RawDriveId, record.RawItemId, record.Status, tenantId ?? "default");
-
-                    await client.Sites[siteId].Lists[listId].Items[existingItemId].Fields.PatchAsync(fields);
-                }
-                else
-                {
-                    var listItem = new ListItem { Fields = fields };
-
-                    _logger?.LogInformation("📝 [Tracking] Writing new run record to {ListName} for RawDriveId={DriveId}, RawItemId={ItemId}, Status={Status} in tenant {TenantId}",
-                        ProcessingRunsListName, record.RawDriveId, record.RawItemId, record.Status, tenantId ?? "default");
-
-                    await client.Sites[siteId].Lists[listId].Items.PostAsync(listItem);
-                }
+                await client.Sites[siteId].Lists[listId].Items.PostAsync(listItem);
 
                 _logger?.LogInformation("✅ [Tracking] Tracking record written/updated successfully in {ListName} for tenant {TenantId}.", ProcessingRunsListName, tenantId ?? "default");
             }
@@ -644,6 +757,9 @@ namespace SMEPilot.FunctionApp.Helpers
                     record.LastUpdatedUtc = parsed;
                 }
             }
+
+            // Extract per-run metadata (author + section summary) from our safe meta payload if present.
+            TryExtractSucceededMeta(record);
 
             return record;
         }

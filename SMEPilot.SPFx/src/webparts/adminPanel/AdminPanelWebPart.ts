@@ -14,6 +14,11 @@ class AdminPanelWebPart extends BaseClientSideWebPart<IAdminPanelWebPartProps> {
 
   public render(): void {
     try {
+      // Defensive: ensure we don't accidentally leave multiple React roots in the DOM
+      // if SPFx triggers multiple renders (property pane changes, page edits, etc.).
+      ReactDom.unmountComponentAtNode(this.domElement);
+      this.domElement.innerHTML = '';
+
       const element: React.ReactElement<IAdminPanelProps> = React.createElement(
         AdminPanel,
         {

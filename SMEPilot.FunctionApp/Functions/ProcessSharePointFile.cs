@@ -20,6 +20,7 @@ using System.Text.RegularExpressions;
 using SMEPilot.FunctionApp.Models;
 using SMEPilot.FunctionApp.Services;
 using DocumentMergeApi.Services;
+using DocumentMergeApi.Models;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
@@ -195,8 +196,13 @@ namespace SMEPilot.FunctionApp.Functions
                     if (!text.Equals("Table of Contents", StringComparison.OrdinalIgnoreCase))
                         continue;
 
-                    // Scan a few paragraphs after the heading for real content.
-                    for (int j = i + 1; j < paragraphs.Count && j <= i + 20; j++)
+                    // Scan a few paragraphs after the heading for real TOC entries.
+                    // IMPORTANT:
+                    // - A dynamic TOC field paragraph may exist but still be un-populated ("TOC will appear here").
+                    // - The actual document content headings (Heading1/2/3) immediately after the TOC block
+                    //   should NOT be treated as "existing TOC content".
+                    // We only return true when we see non-heading paragraphs (static TOC lines) under the TOC heading.
+                    for (int j = i + 1; j < paragraphs.Count && j <= i + 40; j++)
                     {
                         var p = paragraphs[j];
                         var pText = p.InnerText?.Trim() ?? string.Empty;
@@ -206,7 +212,21 @@ namespace SMEPilot.FunctionApp.Functions
                         if (pText.StartsWith("TOC will appear here", StringComparison.OrdinalIgnoreCase))
                             return false;
 
-                        // Any non-placeholder text directly under the heading counts as existing TOC content.
+                        // Ignore the dynamic TOC field paragraph itself (it may contain placeholder text until updated).
+                        var hasTocFieldCode = p.Descendants<FieldCode>().Any(fc => (fc.Text ?? string.Empty).Contains("TOC", StringComparison.OrdinalIgnoreCase));
+                        if (hasTocFieldCode)
+                            continue;
+
+                        // If we hit real document headings, the TOC is not populated yet.
+                        var styleId = p.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+                        if (string.Equals(styleId, "Heading1", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(styleId, "Heading2", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(styleId, "Heading3", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return false;
+                        }
+
+                        // Any non-heading text directly under the TOC heading counts as existing static TOC content.
                         return true;
                     }
                 }
@@ -225,6 +245,48 @@ namespace SMEPilot.FunctionApp.Functions
         /// </summary>
         private static byte[] InsertStaticToc(byte[] docBytes)
         {
+            static bool TryGetHeadingLevel(Paragraph p, out int level)
+            {
+                level = 0;
+                if (p == null) return false;
+
+                var text = p.InnerText?.Trim() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(text)) return false;
+
+                var styleId = p.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+                if (!string.IsNullOrWhiteSpace(styleId))
+                {
+                    // Handle common style IDs: "Heading1", "Heading 1", "heading1", etc.
+                    var sid = styleId.Replace(" ", string.Empty);
+                    if (sid.Equals("Heading1", StringComparison.OrdinalIgnoreCase)) { level = 1; return true; }
+                    if (sid.Equals("Heading2", StringComparison.OrdinalIgnoreCase)) { level = 2; return true; }
+                    if (sid.Equals("Heading3", StringComparison.OrdinalIgnoreCase)) { level = 3; return true; }
+                    // Title styles can be treated as Heading1 for TOC purposes.
+                    if (sid.Equals("Title", StringComparison.OrdinalIgnoreCase)) { level = 1; return true; }
+                }
+
+                // OutlineLevel (if present) is a strong indicator of TOC eligibility.
+                var outline = p.ParagraphProperties?.OutlineLevel?.Val?.Value;
+                if (outline.HasValue)
+                {
+                    // OutlineLevel: 0-based where 0 is highest.
+                    level = Math.Clamp(outline.Value + 1, 1, 3);
+                    return true;
+                }
+
+                // Fallback: infer from numbered heading text like "1.", "1.1", "2.3.4".
+                // This covers templates where headings aren't actually styled as Heading1/2/3.
+                var m = System.Text.RegularExpressions.Regex.Match(text, @"^\s*(\d+(?:\.\d+)*)\.?\s+");
+                if (m.Success)
+                {
+                    var dots = m.Groups[1].Value.Count(c => c == '.');
+                    level = Math.Clamp(dots + 1, 1, 3);
+                    return true;
+                }
+
+                return false;
+            }
+
             using var ms = new MemoryStream();
             ms.Write(docBytes, 0, docBytes.Length);
             ms.Position = 0;
@@ -236,31 +298,70 @@ namespace SMEPilot.FunctionApp.Functions
                 if (body == null)
                     return docBytes;
 
-                var paragraphs = body.Elements<Paragraph>().ToList();
-
-                // 1. Collect headings (H1-H3) from the document, excluding the TOC heading itself.
+                // 1. Collect headings in document order.
+                // IMPORTANT: many sections are inserted via AltChunk; those headings are not present as Paragraphs
+                // in the main document body until Word expands the chunks. For static TOC generation we need to
+                // read headings from AltChunk parts as well.
                 var headings = new List<(string Text, int Level)>();
-                foreach (var p in paragraphs)
+
+                void CollectFromDoc(WordprocessingDocument sourceDoc)
                 {
-                    var text = p.InnerText?.Trim();
-                    if (string.IsNullOrWhiteSpace(text))
-                        continue;
-
-                    var styleId = p.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
-                    if (string.Equals(styleId, "Heading1", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(styleId, "Heading2", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(styleId, "Heading3", StringComparison.OrdinalIgnoreCase))
+                    var sourceBody = sourceDoc.MainDocumentPart?.Document?.Body;
+                    if (sourceBody == null) return;
+                    foreach (var p in sourceBody.Elements<Paragraph>())
                     {
-                        if (text.Equals("Table of Contents", StringComparison.OrdinalIgnoreCase))
-                            continue;
+                        var text = p.InnerText?.Trim();
+                        if (string.IsNullOrWhiteSpace(text)) continue;
+                        if (text.Equals("Table of Contents", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (TryGetHeadingLevel(p, out var level))
+                        {
+                            headings.Add((text, level));
+                        }
+                    }
+                }
 
-                        var level = styleId!.EndsWith("1") ? 1 : styleId.EndsWith("2") ? 2 : 3;
-                        headings.Add((text, level));
+                foreach (var element in body.Elements())
+                {
+                    if (element is Paragraph p)
+                    {
+                        var text = p.InnerText?.Trim();
+                        if (string.IsNullOrWhiteSpace(text)) continue;
+                        if (text.Equals("Table of Contents", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (TryGetHeadingLevel(p, out var level))
+                        {
+                            headings.Add((text!, level));
+                        }
+                        continue;
+                    }
+
+                    if (element is AltChunk alt && mainPart != null && !string.IsNullOrWhiteSpace(alt.Id))
+                    {
+                        try
+                        {
+                            if (mainPart.GetPartById(alt.Id!) is AlternativeFormatImportPart chunkPart)
+                            {
+                                using var chunkStream = chunkPart.GetStream(FileMode.Open, FileAccess.Read);
+                                using var chunkMs = new MemoryStream();
+                                chunkStream.CopyTo(chunkMs);
+                                chunkMs.Position = 0;
+
+                                // The chunk payload is a DOCX package produced by our AltChunkInserter.
+                                using var chunkDoc = WordprocessingDocument.Open(chunkMs, false);
+                                CollectFromDoc(chunkDoc);
+                            }
+                        }
+                        catch
+                        {
+                            // ignore chunk parse errors; fallback will still include whatever we can detect.
+                        }
                     }
                 }
 
                 if (headings.Count == 0)
                     return docBytes; // Nothing to build a TOC from.
+
+                // Refresh paragraph list for locating TOC heading and inserting entries.
+                var paragraphs = body.Elements<Paragraph>().ToList();
 
                 // 2. Locate the TOC heading.
                 Paragraph? tocHeading = null;
@@ -277,7 +378,26 @@ namespace SMEPilot.FunctionApp.Functions
                 }
 
                 if (tocHeading == null)
-                    return docBytes;
+                {
+                    // If the document doesn't contain a "Table of Contents" heading (template may have used [TOC] token),
+                    // insert one at the start so static TOC generation can proceed.
+                    var headingPara = new Paragraph(
+                        new ParagraphProperties(new ParagraphStyleId { Val = "TOCHeading" }),
+                        new Run(new Text("Table of Contents") { Space = SpaceProcessingModeValues.Preserve }));
+
+                    var first = body.Elements<Paragraph>().FirstOrDefault();
+                    if (first != null)
+                    {
+                        body.InsertBefore(headingPara, first);
+                    }
+                    else
+                    {
+                        body.AppendChild(headingPara);
+                    }
+
+                    tocHeading = headingPara;
+                    tocIndex = body.Elements<Paragraph>().ToList().IndexOf(headingPara);
+                }
 
                 // 3. Remove existing TOC content directly under the heading (field codes, placeholder text, old static TOC),
                 // stopping when we hit a likely non-TOC section (blank line + next content, or another Heading1).
@@ -1084,6 +1204,27 @@ namespace SMEPilot.FunctionApp.Functions
                             bool shouldSkip = false;
                             try
                             {
+                                // Ensure we have a siteId as early as possible.
+                                // Graph webhook payloads often omit siteId; without it, tracking-based dedup (SMEPilotRuns)
+                                // can't work and we may process the same edit multiple times.
+                                if (string.IsNullOrWhiteSpace(siteId))
+                                {
+                                    try
+                                    {
+                                        var diForSite = await _graph.GetDriveItemAsync(driveId, itemId, tenantId);
+                                        var resolvedSiteId = diForSite?.ParentReference?.SiteId;
+                                        if (!string.IsNullOrWhiteSpace(resolvedSiteId))
+                                        {
+                                            siteId = resolvedSiteId!;
+                                            _logger.LogInformation("✅ [SITE_ID] Resolved site ID early for tracking/dedup: {SiteId}", siteId);
+                                        }
+                                    }
+                                    catch
+                                    {
+                                        // ignore
+                                    }
+                                }
+
                                 // New: consult tracking list first (SMEPilotRuns) for latest run status.
                                 if (!string.IsNullOrWhiteSpace(siteId))
                                 {
@@ -1143,6 +1284,55 @@ namespace SMEPilot.FunctionApp.Functions
                                 if (existingMetadata != null)
                                 {
                                     _logger.LogInformation("📋 [IDEMPOTENCY] Metadata found for {FileName}. Keys: {Keys}", fileName, string.Join(", ", existingMetadata.Keys));
+
+                                // Strong dedup for Graph webhook "echo" notifications:
+                                // If we already successfully processed this exact SharePoint UI version / LastModified,
+                                // skip without re-enriching.
+                                if (!string.IsNullOrWhiteSpace(siteId))
+                                {
+                                    var currentUiVersion = existingMetadata.TryGetValue("_UIVersionString", out var uiVerObj) ? uiVerObj?.ToString() : null;
+                                    DateTimeOffset? currentLastModifiedUtc = null;
+                                    try
+                                    {
+                                        var di = await _graph.GetDriveItemAsync(driveId, itemId, tenantId);
+                                        currentLastModifiedUtc = di?.LastModifiedDateTime?.ToUniversalTime();
+                                    }
+                                    catch
+                                    {
+                                        // ignore - dedup will fall back to other checks
+                                    }
+
+                                    try
+                                    {
+                                        var latestSucceeded = await _graph.GetLatestSucceededProcessingRunAsync(siteId, driveId, itemId, tenantId);
+                                        if (latestSucceeded != null)
+                                        {
+                                            if (!string.IsNullOrWhiteSpace(currentUiVersion) &&
+                                                !string.IsNullOrWhiteSpace(latestSucceeded.RawUiVersion) &&
+                                                string.Equals(currentUiVersion, latestSucceeded.RawUiVersion, StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                _logger.LogInformation("⏭️ [DEDUP] Skipping {FileName} because the latest succeeded run already processed UI version {UiVersion}.",
+                                                    fileName, currentUiVersion);
+                                                continue;
+                                            }
+
+                                            if (currentLastModifiedUtc.HasValue && latestSucceeded.RawLastModifiedUtc.HasValue)
+                                            {
+                                                var diffSeconds = Math.Abs((currentLastModifiedUtc.Value - latestSucceeded.RawLastModifiedUtc.Value).TotalSeconds);
+                                                if (diffSeconds <= 2)
+                                                {
+                                                    _logger.LogInformation("⏭️ [DEDUP] Skipping {FileName} because the latest succeeded run already processed LastModifiedUtc {LastModified:o}.",
+                                                        fileName, currentLastModifiedUtc.Value);
+                                                    continue;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    catch (Exception dedupEx)
+                                    {
+                                        _logger.LogWarning(dedupEx, "⚠️ [DEDUP] Failed to apply UI-version dedup for {FileName}. Continuing.", fileName);
+                                    }
+                                }
                                     
                                     // Check if already enriched - with versioning detection
                                     if (existingMetadata.ContainsKey("SMEPilot_Enriched"))
@@ -1656,6 +1846,13 @@ namespace SMEPilot.FunctionApp.Functions
             string? enrichedUrl = null;
             string? processingContentHash = null;
             string? logicalVersionForThisRun = null;
+            string? authorForThisRun = null;
+            string? sectionSummaryForThisRun = null;
+            string? changeDescriptionForThisRun = null;
+            string? rawUiVersionForThisRun = null;
+            DateTimeOffset? rawLastModifiedUtcForThisRun = null;
+            IReadOnlyDictionary<string, string>? sectionFingerprintsForThisRun = null;
+            IReadOnlyDictionary<string, string>? sectionTitlesForThisRun = null;
             
             try
             {
@@ -1703,6 +1900,8 @@ namespace SMEPilot.FunctionApp.Functions
                         RawDriveId = driveId,
                         RawItemId = itemId,
                         ContentHash = string.Empty,
+                        Author = uploaderEmail,
+                        SectionSummary = null,
                         Status = "Processing",
                         ErrorMessage = null,
                         EnrichedUrl = null,
@@ -1773,6 +1972,9 @@ namespace SMEPilot.FunctionApp.Functions
                     _logger.LogDebug("⏭️ Skipping folder: {FileName}", fileName);
                     return (false, null, "Item is a folder, not a file");
                 }
+
+                // Best-effort capture of last modified timestamp (used in change descriptions)
+                rawLastModifiedUtcForThisRun = driveItem.LastModifiedDateTime?.ToUniversalTime();
                 
                 // Extract site ID from source file's drive item for destination folder resolution
                 sourceSiteId = driveItem.ParentReference?.SiteId;
@@ -1794,6 +1996,20 @@ namespace SMEPilot.FunctionApp.Functions
                     {
                         _logger.LogWarning(configEx, "⚠️ [CONFIG] Failed to load SharePoint configuration with captured site ID. Using cached/defaults. Error: {Error}", configEx.Message);
                         // Continue with cached/default config - don't fail processing
+                    }
+
+                    // Best-effort capture of SharePoint UI version string for change descriptions.
+                    try
+                    {
+                        var meta = await _graph.GetListItemFieldsAsync(driveId, itemId, tenantId);
+                        if (meta != null && meta.TryGetValue("_UIVersionString", out var uiVer) && uiVer != null)
+                        {
+                            rawUiVersionForThisRun = uiVer.ToString();
+                        }
+                    }
+                    catch
+                    {
+                        // ignore
                     }
                 }
                 else
@@ -2221,6 +2437,38 @@ namespace SMEPilot.FunctionApp.Functions
                     }
 
                     mergeAuthor ??= "SMEPilot";
+                    authorForThisRun = mergeAuthor;
+
+                    // Load succeeded run history so the merge engine can rebuild Version History / Change Log tables
+                    // deterministically from SMEPilotRuns.
+                    var succeededHistory = new List<RunHistoryEntry>();
+                    try
+                    {
+                        if (!string.IsNullOrWhiteSpace(siteId))
+                        {
+                            var succeededRuns = await _graph.GetSucceededProcessingRunsAsync(siteId, driveId, itemId, tenantId);
+                            succeededHistory = (succeededRuns ?? new List<ProcessingRunRecord>())
+                                .Where(r => !string.IsNullOrWhiteSpace(r.Version))
+                                .Select(r => new RunHistoryEntry
+                                {
+                                    Version = r.Version ?? "1.0",
+                                    TimestampUtc = r.LastUpdatedUtc,
+                                    Author = string.IsNullOrWhiteSpace(r.Author) ? "System Generated" : r.Author!,
+                                    SectionSummary = string.IsNullOrWhiteSpace(r.SectionSummary) ? "Content" : r.SectionSummary!,
+                                    ChangeDescription = string.IsNullOrWhiteSpace(r.ChangeDescription)
+                                        ? "Updated content based on latest raw document"
+                                        : r.ChangeDescription!,
+                                    SectionFingerprints = r.SectionFingerprints ?? new Dictionary<string, string>(),
+                                    SectionTitles = r.SectionTitles ?? new Dictionary<string, string>()
+                                })
+                                .ToList();
+                        }
+                    }
+                    catch (Exception historyEx)
+                    {
+                        _logger.LogWarning(historyEx, "⚠️ [Tracking] Failed to load succeeded run history for table rebuild. Falling back to single-row append behavior.");
+                        succeededHistory = new List<RunHistoryEntry>();
+                    }
 
                     await using var templateStream = File.OpenRead(templatePath);
                     await using var rawStream = File.OpenRead(tempInputPath);
@@ -2235,8 +2483,19 @@ namespace SMEPilot.FunctionApp.Functions
                         new TocManager(),
                         new TableUpdater());
 
-                    var mergeResult = mergeService.Merge(templateStream, rawStream, mergeAuthor, previousVersionForAutoBump);
+                    var mergeResult = mergeService.Merge(
+                        templateStream,
+                        rawStream,
+                        mergeAuthor,
+                        previousVersionForAutoBump,
+                        succeededHistory,
+                        rawUiVersionForThisRun,
+                        rawLastModifiedUtcForThisRun);
                     logicalVersionForThisRun = mergeResult.Version;
+                    sectionSummaryForThisRun = mergeResult.SectionSummary;
+                    changeDescriptionForThisRun = mergeResult.ChangeDescription;
+                    sectionFingerprintsForThisRun = mergeResult.SectionFingerprints;
+                    sectionTitlesForThisRun = mergeResult.SectionTitles;
 
                     // Use the same name as the uploaded file (no extra naming logic)
                     enrichedBytes = mergeResult.Content;
@@ -2344,6 +2603,9 @@ namespace SMEPilot.FunctionApp.Functions
                     var revisionAuthor = metadataOverrides.TryGetValue("Author", out var authorOverride) && !string.IsNullOrWhiteSpace(authorOverride)
                         ? authorOverride
                         : "SMEPilot";
+
+                    authorForThisRun = revisionAuthor;
+                    sectionSummaryForThisRun = sectionSummary;
 
                     var revisions = new List<(string version, string date, string author, string changes)>
                     {
@@ -2757,6 +3019,13 @@ namespace SMEPilot.FunctionApp.Functions
                         RawItemId = itemId,
                         ContentHash = hashForTracking,
                         Version = logicalVersionForThisRun,
+                        Author = authorForThisRun,
+                        SectionSummary = sectionSummaryForThisRun,
+                        ChangeDescription = changeDescriptionForThisRun,
+                        RawUiVersion = rawUiVersionForThisRun,
+                        RawLastModifiedUtc = rawLastModifiedUtcForThisRun,
+                        SectionFingerprints = sectionFingerprintsForThisRun?.ToDictionary(k => k.Key, v => v.Value, StringComparer.OrdinalIgnoreCase),
+                        SectionTitles = sectionTitlesForThisRun?.ToDictionary(k => k.Key, v => v.Value, StringComparer.OrdinalIgnoreCase),
                         Status = "Succeeded",
                         ErrorMessage = null,
                         EnrichedUrl = trackedEnrichedUrl,
@@ -2809,6 +3078,8 @@ namespace SMEPilot.FunctionApp.Functions
                         RawItemId = itemId,
                         ContentHash = hashForTracking,
                         Version = logicalVersionForThisRun,
+                        Author = uploaderEmail,
+                        SectionSummary = null,
                         Status = "Failed",
                         ErrorMessage = errorMessage,
                         EnrichedUrl = null,
